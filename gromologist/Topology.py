@@ -10,19 +10,14 @@ class Top:
         :param filename: str, path to the .top file
         :param gmx_dir: str, Gromacs FF directory
         """
-        # TODO : we need to split this into several subclasses:
-        # TODO : one instance for each molecule in the topology, and then
-        # TODO : additional instances for force field parameters and
-        # TODO : (possibly) system setup
         self.fname = filename
         self.top = self.fname.split('/')[-1]
         self.dir = '/' + '/'.join(self.fname.split('/')[:-1])
         self.contents = open(self.fname).readlines()
         self.gromacs_dir = gmx_dir
         self.include_all()
-        # TODO : the two methods below shoud actually be Mol() methods
-        self.sections = self.get_sections()
-        self.mols = self.def_molecules()
+        self.sections = []
+        self.get_sections()
     
     def include_all(self):
         """
@@ -63,22 +58,24 @@ class Top:
         raise ValueError('file {} not found in neither local nor Gromacs directory'.format(filename))
     
     def get_sections(self):
-        # TODO this fn will have to be repurposed now
-        sections = []
-        section_startlines = [0]
-        for l, line in enumerate(self.contents):
-            line = line.strip()
-            if line.startswith('['):
-                section_startlines.append(l)
-        section_startlines.append(len(self.contents))
-        for s in range(len(section_startlines) - 1):
-            sections.append(Subsection(self.contents[section_startlines[s]:section_startlines[s + 1]], self))
-        return sections
+        special_sections = {'defaults', 'moleculetype', 'system'}
+        special_lines = [n for n, l in enumerate(self.contents) if l.strip().strip('[]').strip() in special_sections]
+        special_lines.append(len(self.contents) - 1)
+        for beg, end in zip(special_lines[:-1], special_lines[1:]):
+            self.sections.append(self.yield_sec(self.contents[beg:end]))
+    
+    def yield_sec(self, content):
+        if 'defaults' in content[0]:
+            return SectionParam(content, self)
+        elif 'moleculetype' in content[0]:
+            return SectionMol(content, self)
+        else:
+            return Section(content, self)
     
     def select_sections(self, section_name):
         return [s for s in self.sections if s.header == section_name]
     
-    def def_molecules(self):
+    def parse_molecules(self):
         """
         Extracts individual molecules from topology, creating a dict that binds
         the moleculename to a list of numbers of sections that contain its bonded params
@@ -100,6 +97,7 @@ class Top:
         return mols
     
     def save_mod(self, outname):
+        # TODO this also needs to be rewritten
         with open(outname, 'w') as outfile:
             for section in self.sections:
                 for line in section:

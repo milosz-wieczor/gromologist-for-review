@@ -1,7 +1,7 @@
 class Subsection:
     counter = {}
     
-    def __init__(self, content, topology):
+    def __init__(self, content, section):
         """
         Here we want to have:
           - a unique representation of the section (header/ID)
@@ -10,7 +10,7 @@ class Subsection:
 
         :param content: list of strings, entire content of the section
         """
-        self.top = topology
+        self.sect = section
         self.header = content[0].strip().strip('[]').strip() if '[' in content[0] else 'header'
         if self.header in Subsection.counter.keys():
             Subsection.counter[self.header] += 1
@@ -41,17 +41,53 @@ class Subsection:
         n = self.n
         self.n += 1
         return self.entries[n]
+    
+    def add_entry(self, new_entry):
+        self.entries.append(new_entry)
 
 
 class SubsectionBonded(Subsection):
-    n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'cmap': 5}
+    """
+    SubsectionBonded contains a subsection with entries corresponding to bonded terms,
+    e.g., bonds or dihedrals; should be included in SectionMol
+    """
+    n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'cmap': 5, 'settles': 2, 'exclusions': 0}
     
-    def __init__(self, content, topology):
-        super().__init__(content, topology)
-        try:
-            self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
-        except KeyError:
-            self.atoms_per_entry = None
+    def __init__(self, content, section):
+        super().__init__(content, section)
+        self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
     
-    def find_entry(self, atom):
+    def sort(self):
+        """
+        In case we want to sort entries after some are added at the end of the section
+        :return: None
+        """
+        self.entries.sort(key=self.sorting_fn)
+    
+    def sorting_fn(self, line):
+        """
+        Comments should go first, then we sort based on first, second,
+        ... column of the section
+        :param line: str, line to be sorted
+        :return: int, ordering number
+        """
+        if line.strip().startswith(';'):
+            return -1
+        lspl = [int(x) for x in line.split()[:self.atoms_per_entry]]
+        return sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(lspl)])
+            
+    def add_ff_params_to_entry(self, atom_list, sect_params):
+        """
+        Given a bonded term (e.g. "21     24     26    5") converts it to atomtypes,
+        finds the respective FF parameters and adds them to the bonded entry
+        :param atom_list: iterable, contains atom numbers for the entry in question
+        :param sect_params: a SectionParam instance that holds all FF params
+        :return: None
+        """
+        # TODO
         pass
+
+
+class SubsectionParam(Subsection):
+    def __init__(self, content, section):
+        super().__init__(content, section)

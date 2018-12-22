@@ -11,7 +11,9 @@ class Subsection:
         :param content: list of strings, entire content of the section
         """
         self.section = section
-        self.header = content[0].strip().strip('[]').strip() if '[' in content[0] else 'header'
+        # TODO header should read 'impropers', write_header should read 'dihedrals'
+        self.header = content[0].strip().strip('[]').strip()
+        self.write_header = self.header if self.header != 'impropers' else 'dihedrals'
         if self.header in Subsection.counter.keys():
             Subsection.counter[self.header] += 1
         else:

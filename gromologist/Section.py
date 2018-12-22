@@ -11,6 +11,7 @@ class Section:
     
     def __init__(self, content, top):
         self.top = top
+        self.dih_processed = False
         self.subsections = [self.yield_sub(content) for content in self.split_content(content)]
     
     @staticmethod
@@ -23,18 +24,28 @@ class Section:
         :return: list of lists of strings, contents of individual subsections
         """
         # TODO second "dihedral" should be renamed as "improper" to avoid confusion
+        # TODO see also Subsection constructor
         special_lines = [n for n, l in content if l.strip().startswith('[')] + [len(content) - 1]
         return [content[beg:end] for beg, end in zip(special_lines[:-1], special_lines[1:])]
         
     def yield_sub(self, content):
         """
         A wrapper that will select which kind of subsection
-        should be instantiated (generic, bonded, or params)
+        should be instantiated (generic, bonded, or params);
+        the [ dihedrals ] section gets special treatment as
+        first occurrence contains 'proper' and second contains
+        'improper' dihedrals, hence we replace to avoid confusion
         :param content: list of strings, content of the subsection
         :return: a Subsection instance (or a derived class)
         """
         header = content[0].strip().strip('[]').strip()
-        if header in {'atoms', 'bonds', 'pairs', 'angles', 'dihedrals', 'settles', 'exclusions', 'cmap'}:
+        if header == 'dihedrals':
+            if not self.dih_processed:
+                self.dih_processed = True
+                return SubsectionBonded(content, self)
+            else:
+                return SubsectionBonded([l.replace('dihedrals', 'impropers') for l in content], self)
+        if header in {'atoms', 'bonds', 'pairs', 'angles', 'settles', 'exclusions', 'cmap'}:
             return SubsectionBonded(content, self)
         elif header == 'atoms':
             return SubsectionAtom(content, self)

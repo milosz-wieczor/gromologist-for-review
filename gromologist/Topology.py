@@ -89,7 +89,7 @@ class Top:
         system_subsection = [s.get_subsection('molecules') for s in self.sections if isinstance(s, Section)
                              and 'molecules' in [ss.header for ss in s.subsections]]
         molecules = {}
-        natoms, charge = 0
+        natoms, charge = 0, 0
         if len(system_subsection) == 0:
             raise KeyError
         elif len(system_subsection) > 1:
@@ -129,16 +129,9 @@ class Top:
         pass
     
     def save_mod(self, outname):
-        # TODO this also needs to be rewritten
         with open(outname, 'w') as outfile:
             for section in self.sections:
-                for line in section:
-                    outfile.write(line)
-                outfile.write('\n')
-
-
-def check_unique(query_list, msg, err=RuntimeError):
-    if len(query_list) == 0:
-        raise KeyError
-    elif len(query_list) > 1:
-        raise err(msg)
+                for subsection in section.subsections:
+                    outfile.write('\n[ {} ]\n'.format(subsection.write_header))
+                    for line in subsection:
+                        outfile.write(line)

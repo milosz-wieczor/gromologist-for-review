@@ -42,16 +42,25 @@ class Subsection:
         self.n += 1
         return self.entries[n]
     
-    def add_entry(self, new_entry):
-        self.entries.append(new_entry)
-
-
+    def add_entry(self, new_entry, position=-1):
+        if position:
+            self.entries.insert(position, new_entry)
+        else:
+            self.entries.append(new_entry)
+    
+    def set_entry(self, line_number, new_line):
+        self.entries[line_number] = new_line
+    
+    def get_entry(self, line_number):
+        return self.entries[line_number]
+        
+        
 class SubsectionBonded(Subsection):
     """
     SubsectionBonded contains a subsection with entries corresponding to bonded terms,
     e.g., bonds or dihedrals; should be included in SectionMol
     """
-    n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'cmap': 5, 'settles': 2, 'exclusions': 0}
+    n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'cmap': 5, 'settles': 2, 'exclusions': 3}
     
     def __init__(self, content, section):
         super().__init__(content, section)

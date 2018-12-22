@@ -17,13 +17,15 @@ class Top:
         self.gromacs_dir = gmx_dir
         self.include_all()
         self.sections = []
-        self.get_sections()
+        self.parse_sections()
+        self.system, self.charge, self.natoms = self.read_system_properties
     
     def include_all(self):
         """
         includes all .itp files in the .top file to facilitate processing
         :return: None
         """
+        # TODO do we want to add #ifdef support + .mdp processing?
         lines = [i for i in range(len(self.contents)) if self.contents[i].startswith("#include")]
         while len(lines) > 0:
             lnum = lines[0]
@@ -57,7 +59,12 @@ class Top:
                 return self.gromacs_dir + '/' + pref + '/' + suff
         raise ValueError('file {} not found in neither local nor Gromacs directory'.format(filename))
     
-    def get_sections(self):
+    def parse_sections(self):
+        """
+        Cuts the content in sections as defined by the position
+        of special headers, and builds the self.sections list
+        :return: None
+        """
         special_sections = {'defaults', 'moleculetype', 'system'}
         special_lines = [n for n, l in enumerate(self.contents) if l.strip().strip('[]').strip() in special_sections]
         special_lines.append(len(self.contents) - 1)
@@ -65,36 +72,61 @@ class Top:
             self.sections.append(self.yield_sec(self.contents[beg:end]))
     
     def yield_sec(self, content):
+        """
+        Chooses which class (Section or derived classes)
+        should be used for the particular set of entries
+        :param content: list of str, slice of self.content
+        :return: Section (or its subclass) instance
+        """
         if 'defaults' in content[0]:
             return SectionParam(content, self)
         elif 'moleculetype' in content[0]:
             return SectionMol(content, self)
         else:
             return Section(content, self)
-    
-    def select_sections(self, section_name):
-        return [s for s in self.sections if s.header == section_name]
-    
-    def parse_molecules(self):
+        
+    def read_system_properties(self):
+        system_subsection = [s.get_subsection('molecules') for s in self.sections if isinstance(s, Section)
+                             and 'molecules' in [ss.header for ss in s.subsections]]
+        molecules = {}
+        natoms, charge = 0
+        if len(system_subsection) == 0:
+            raise KeyError
+        elif len(system_subsection) > 1:
+            print("Section 'molecules' not present in the topology")
+            return None, None, None
+        for e in system_subsection:
+            if not e.startswith(';'):
+                molecules[e.split()[0]] = int(e.split()[1])
+        for mol in molecules.keys():
+            sect_mol = self.get_molecule(mol)
+            natoms += molecules[mol] * sect_mol.natoms
+            charge += molecules[mol] * sect_mol.charge
+        return molecules, charge, natoms
+        
+    def get_molecule(self, mol_name):
         """
-        Extracts individual molecules from topology, creating a dict that binds
-        the moleculename to a list of numbers of sections that contain its bonded params
-        :return: dict containing molname:[section_numbers] bindings
+        Finds a molecule (SectionMol instance) whose mol_name
+        matches the query name
+        :param mol_name: name of the molecule
+        :return: SectionMol instance
         """
-        mols = {}
-        # TODO this still needs some love
-        # TODO need to rewrite so that mols collects SectionMol objects
-        moltypes = self.select_sections('moleculetype')
-        t, b, p, a, d = [self.select_sections(x) for x in ['atoms', 'bonds', 'pairs', 'angles', 'dihedrals']]
-        bondeds = t + b + p + a + d
-        moltypes.append(len(self.sections) - 1)
-        for m, mnext in zip(moltypes[:-1], moltypes[1:]):
-            sect = self.sections[m]
-            molname = [x.split()[0] for x in sect if len(x.split()) > 1
-                       and not x.startswith('[') and not x.startswith(';')][0]
-            mols[molname] = [x for x in bondeds if m < x < mnext]
-            mols[molname].sort()
-        return mols
+        mol = [s for s in self.sections if isinstance(s, SectionMol) and s.mol_name == mol_name]
+        if len(mol) == 0:
+            raise KeyError
+        elif len(mol) > 1:
+            raise RuntimeError("Molecule {} is duplicated in topology".format(mol_name))
+        return mol[0]
+    
+    def check_pdb(self, pdb_object):
+        """
+        Compares the topology with a PDB object to check
+        for consistency, just as gmx grompp does;
+        if inconsistencies are found, prints a report
+        :param pdb_object: a PDB instance # TODO either make our own or import from mdtraj, or make optional
+        :return: int, 1 is consistent, 0 is not, -1 means naming incostistencies within the same element (C5T/C7 etc.)
+        """
+        pass
     
     def save_mod(self, outname):
         # TODO this also needs to be rewritten
@@ -105,3 +137,8 @@ class Top:
                 outfile.write('\n')
 
 
+def check_unique(query_list, msg, err=RuntimeError):
+    if len(query_list) == 0:
+        raise KeyError
+    elif len(query_list) > 1:
+        raise err(msg)

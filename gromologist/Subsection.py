@@ -134,7 +134,7 @@ class SubsectionAtom(Subsection):
         self.fstring = "{:6}{:11}{:7}{:7}{:7}{:7}{:11}{:11}   ; " + '\n'
         self.nat = len([e for e in self.entries if len(e.split()) > 6 and not e.strip().startswith(';')])
         self.section.natoms = self.nat
-        self.charge = self.calc_charge()
+        self.charge = self.section.charge = self.calc_charge()
     
     def calc_charge(self):
         charge = 0

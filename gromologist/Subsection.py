@@ -10,7 +10,7 @@ class Subsection:
 
         :param content: list of strings, entire content of the section
         """
-        self.sect = section
+        self.section = section
         self.header = content[0].strip().strip('[]').strip() if '[' in content[0] else 'header'
         if self.header in Subsection.counter.keys():
             Subsection.counter[self.header] += 1
@@ -42,11 +42,21 @@ class Subsection:
         self.n += 1
         return self.entries[n]
     
-    def add_entry(self, new_entry, position=-1):
+    def add_entry(self, new_entry, position=None):
         if position:
+            position = int(position)
             self.entries.insert(position, new_entry)
         else:
             self.entries.append(new_entry)
+    
+    def add_entries(self, new_entries_list, position=None):
+        if position:
+            position = int(position)
+            for new_entry in new_entries_list:
+                self.entries.insert(position, new_entry)
+                position += 1
+        else:
+            self.entries.extend(new_entries_list)
     
     def set_entry(self, line_number, new_line):
         self.entries[line_number] = new_line
@@ -60,11 +70,14 @@ class SubsectionBonded(Subsection):
     SubsectionBonded contains a subsection with entries corresponding to bonded terms,
     e.g., bonds or dihedrals; should be included in SectionMol
     """
-    n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'cmap': 5, 'settles': 2, 'exclusions': 3}
+    n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'impropers': 4,
+               'cmap': 5, 'settles': 2, 'exclusions': 3}
+    fstrings = {"{:5} " * n_atoms[x] + '\n' for x in ['bonds', 'pairs', 'angles', 'dihedrals', 'impropers']}
     
     def __init__(self, content, section):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
+        self.prmtype = self.check_parm_type()
     
     def sort(self):
         """
@@ -95,8 +108,38 @@ class SubsectionBonded(Subsection):
         """
         # TODO
         pass
+    
+    def check_parm_type(self):
+        """
+        Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
+        while Amber uses angletype '1' (simple harmonic)
+        :param parmtype: str, name of the parameter
+        :return: str, interaction type
+        """
+        npar = self.atoms_per_entry
+        for line in self:
+            lspl = line.split()
+            if len(lspl) > npar and not line.strip().startswith(';') and not line.strip().startswith('['):
+                return lspl[npar]
 
 
 class SubsectionParam(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
+
+
+class SubsectionAtom(Subsection):
+    def __init__(self, content, section):
+        super().__init__(content, section)
+        self.fstring = "{:6}{:11}{:7}{:7}{:7}{:7}{:11}{:11}   ; " + '\n'
+        self.nat = len([e for e in self.entries if len(e.split()) > 6 and not e.strip().startswith(';')])
+        self.section.natoms = self.nat
+        self.charge = self.calc_charge()
+    
+    def calc_charge(self):
+        charge = 0
+        for line in self.entries:
+            lspl = line.split()
+            if len(lspl) > 6 and not lspl[0].startswith(';'):
+                charge += float(lspl[6])
+        return charge

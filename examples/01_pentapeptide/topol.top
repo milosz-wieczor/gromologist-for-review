@@ -1,0 +1,45 @@
+;
+;	File 'topol.top' was generated
+;	By user: cyprian (1000)
+;	On host: Cyprian-ultrabook
+;	At date: Tue Jul 31 10:42:24 2018
+;
+;	This is a standalone topology file
+;
+;	Created by:
+;	                    :-) GROMACS - gmx pdb2gmx, 2018.1 (-:
+;	
+;	Executable:   /usr/bin/gmx
+;	Data prefix:  /usr
+;	Working dir:  /home/cyprian/Symulacje/Mutacje_aminokwasów
+;	Command line:
+;	  gmx pdb2gmx -f random.pdb -ignh -o conf.pdb
+;	Force field was read from the standard GROMACS share directory.
+;
+
+; Include forcefield parameters
+#include "charmm36-jul2017.ff/forcefield.itp"
+
+; Include molecule top
+#include "topol_Protein_chain_A.itp"
+  
+; Include water topology
+#include "charmm36-jul2017.ff/tip3p.itp"
+
+#ifdef POSRES_WATER
+; Position restraint for each water oxygen
+[ position_restraints ]
+;  i funct       fcx        fcy        fcz
+   1    1       1000       1000       1000
+#endif
+
+; Include topology for ions
+#include "charmm36-jul2017.ff/ions.itp"
+
+[ system ]
+; Name
+pentapeptide
+
+[ molecules ]
+; Compound        #mols
+Protein_chain_A     1

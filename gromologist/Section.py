@@ -74,9 +74,12 @@ class SectionMol(Section):
     
     def __init__(self, content_list, top):
         self.natoms = None
+        self.charge = None
         super().__init__(content_list, top)
         self.names_to_nums, self.nums_to_types, self.nums_to_names = None, None, None
         self.bonds = None
+        self.mol_name = [e for e in self.get_subsection('moleculetype')
+                         if e.strip() and not e.strip().startswith(';')][0].split()[0]
         
     def get_dicts(self):
         """

@@ -269,6 +269,7 @@ class SectionParam(Section):
     
     def __init__(self, content_list, top):
         super().__init__(content_list, top)
+        self.merge()
     
     def merge(self):
         """
@@ -277,5 +278,20 @@ class SectionParam(Section):
         searching in all instances
         :return:
         """
-        # TODO
-        pass
+        subsection_headers = [sub.header for sub in self.subsections]
+        duplicated_subsections = list({header for header in subsection_headers if subsection_headers.count(header) > 1})
+        for sub in duplicated_subsections:
+            subsections_to_merge = [s for s in self.subsections if s.header == sub]
+            merged_subsection = self.merge_subsections(subsections_to_merge)
+            position = self.subsections.index(subsections_to_merge[0])
+            self.subsections.insert(position, merged_subsection)
+            for old in subsections_to_merge:
+                self.subsections.remove(old)
+    
+    @staticmethod
+    def merge_subsections(self, sub_list):
+        merged_entries = ["[ {} ]\n".format(sub_list[0].header)]
+        for sub in sub_list:
+            for line in sub:
+                merged_entries.append(line)
+        return merged_entries

@@ -128,7 +128,7 @@ class Top:
         """
         pass
     
-    def save_mod(self, outname):
+    def save_top(self, outname):
         with open(outname, 'w') as outfile:
             for section in self.sections:
                 for subsection in section.subsections:

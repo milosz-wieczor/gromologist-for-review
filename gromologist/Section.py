@@ -285,21 +285,8 @@ class SectionParam(Section):
         duplicated_subsections = list({label for label in subsection_labels if subsection_labels.count(label) > 1})
         for sub in duplicated_subsections:
             subsections_to_merge = [s for s in self.subsections if s.label == sub]
-            merged_subsection = self.merge_subsections(subsections_to_merge)
+            merged_subsection = sum(subsections_to_merge)
             position = self.subsections.index(subsections_to_merge[0])
             self.subsections.insert(position, merged_subsection)
             for old in subsections_to_merge:
                 self.subsections.remove(old)
-    
-    def merge_subsections(self, sub_list):
-        """
-        Merges a number of subsections of the same type into
-        a new subsection by combining all entries
-        :param sub_list: list of SubsectionParam instances, subsections to be merged
-        :return: SubsectionParam instance, merged subsection
-        """
-        merged_entries = ["[ {} ]\n".format(sub_list[0].header)]
-        for sub in sub_list:
-            for line in sub:
-                merged_entries.append(line)
-        return SubsectionParam(merged_entries, self)

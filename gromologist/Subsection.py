@@ -21,7 +21,7 @@ class Subsection:
         else:
             Subsection.counter[self.header] = 1
         self.id = Subsection.counter[self.header]
-        self.entries = [line for line in content if line.strip() and not line.strip().startswith('[')]
+        self._entries = [line for line in content if line.strip() and not line.strip().startswith('[')]
     
     def __str__(self):
         """
@@ -36,7 +36,7 @@ class Subsection:
         return "Subsection {}".format(self.header, self.id)
     
     def __len__(self):
-        return len(self.entries)
+        return len(self._entries)
     
     def __iter__(self):
         self.n = 0
@@ -47,7 +47,7 @@ class Subsection:
             raise StopIteration
         n = self.n
         self.n += 1
-        return self.entries[n]
+        return self._entries[n]
     
     def add_entry(self, new_entry, position=None):
         """
@@ -59,9 +59,9 @@ class Subsection:
         """
         if position:
             position = int(position)
-            self.entries.insert(position, new_entry)
+            self._entries.insert(position, new_entry)
         else:
-            self.entries.append(new_entry)
+            self._entries.append(new_entry)
     
     def add_entries(self, new_entries_list, position=None):
         """
@@ -74,10 +74,10 @@ class Subsection:
         if position:
             position = int(position)
             for new_entry in new_entries_list:
-                self.entries.insert(position, new_entry)
+                self._entries.insert(position, new_entry)
                 position += 1
         else:
-            self.entries.extend(new_entries_list)
+            self._entries.extend(new_entries_list)
     
     def set_entry(self, line_number, new_line):
         """
@@ -86,7 +86,7 @@ class Subsection:
         :param new_line: str, new content of the entry
         :return: None
         """
-        self.entries[line_number] = new_line
+        self._entries[line_number] = new_line
     
     def get_entry(self, line_number):
         """
@@ -94,7 +94,7 @@ class Subsection:
         :param line_number: int, which entry to return
         :return: str, subsection entry
         """
-        return self.entries[line_number]
+        return self._entries[line_number]
         
         
 class SubsectionBonded(Subsection):
@@ -120,7 +120,7 @@ class SubsectionBonded(Subsection):
         In case we want to sort entries after some are added at the end of the section
         :return: None
         """
-        self.entries.sort(key=self.sorting_fn)
+        self._entries.sort(key=self.sorting_fn)
     
     def sorting_fn(self, line):
         """
@@ -178,6 +178,14 @@ class SubsectionParam(Subsection):
         else:
             return "Subsection {}".format(self.header)
     
+    def __add__(self, other):
+        if not isinstance(other, SubsectionParam):
+            raise TypeError("{} is not a SubsectionParam instance".format(other))
+        if self.header != other.header:
+            raise TypeError("Cannot merge subsections with different headers: {} and {}".format(self.header,
+                                                                                                other.header))
+        return SubsectionParam(["[ {} ]\n".format(self.header)] + self._entries + other._entries, self.section)
+    
     def check_parm_type(self):
         """
         Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
@@ -202,7 +210,7 @@ class SubsectionAtom(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.fstring = "{:6}{:11}{:7}{:7}{:7}{:7}{:11}{:11}   ; " + '\n'
-        self.nat = len([e for e in self.entries if len(e.split()) > 6 and not e.strip().startswith(';')])
+        self.nat = len([e for e in self._entries if len(e.split()) > 6 and not e.strip().startswith(';')])
         self.section.natoms = self.nat
         self.charge = self.section.charge = self.calc_charge()
     
@@ -212,7 +220,7 @@ class SubsectionAtom(Subsection):
         :return: float, total charge
         """
         charge = 0
-        for line in self.entries:
+        for line in self._entries:
             lspl = line.split()
             if len(lspl) > 6 and not lspl[0].startswith(';'):
                 charge += float(lspl[6])

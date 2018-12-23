@@ -13,6 +13,9 @@ class Subsection:
         self.section = section
         # TODO header should read 'impropers', write_header should read 'dihedrals'
         self.header = content[0].strip().strip('[]').strip()
+        if ';' in self.header:
+            pos = self.header.index(';')
+            self.header = self.header[:pos].strip().strip('[]').strip()
         self.write_header = self.header if self.header != 'impropers' else 'dihedrals'
         if self.header in Subsection.counter.keys():
             Subsection.counter[self.header] += 1
@@ -29,6 +32,9 @@ class Subsection:
         :return: str, section label
         """
         return "{}-{}".format(self.header, self.id)
+    
+    def __repr__(self):
+        return "Subsection {}".format(self.header, self.id)
     
     def __len__(self):
         return len(self.entries)
@@ -73,13 +79,17 @@ class SubsectionBonded(Subsection):
     e.g., bonds or dihedrals; should be included in SectionMol
     """
     n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'impropers': 4,
-               'cmap': 5, 'settles': 2, 'exclusions': 3}
-    fstrings = {"{:5} " * n_atoms[x] + '\n' for x in ['bonds', 'pairs', 'angles', 'dihedrals', 'impropers']}
+               'cmap': 5, 'settles': 2, 'exclusions': 3, 'position_restraints': 1}
     
     def __init__(self, content, section):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
         self.prmtype = self.check_parm_type()
+        self.label = '{}-{}'.format(self.header, self.prmtype)
+        self.fstring = "{:5} " * SubsectionBonded.n_atoms[self.header] + '\n'
+    
+    def __repr__(self):
+        return "Subsection {} with interaction type {}".format(self.header, self.prmtype)
     
     def sort(self):
         """
@@ -115,7 +125,6 @@ class SubsectionBonded(Subsection):
         """
         Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
         while Amber uses angletype '1' (simple harmonic)
-        :param parmtype: str, name of the parameter
         :return: str, interaction type
         """
         npar = self.atoms_per_entry
@@ -123,11 +132,39 @@ class SubsectionBonded(Subsection):
             lspl = line.split()
             if len(lspl) > npar and not line.strip().startswith(';') and not line.strip().startswith('['):
                 return lspl[npar]
+        return '0'
 
 
 class SubsectionParam(Subsection):
+    n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
+               'nonbond_params': 2}
+    
     def __init__(self, content, section):
         super().__init__(content, section)
+        self.prmtype = self.check_parm_type()
+        self.label = '{}-{}'.format(self.header, self.prmtype)
+        
+    def __repr__(self):
+        if self.prmtype != '0':
+            return "Subsection {} with interaction type {}".format(self.header, self.prmtype)
+        else:
+            return "Subsection {}".format(self.header)
+    
+    def check_parm_type(self):
+        """
+        Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
+        while Amber uses angletype '1' (simple harmonic)
+        :param parmtype: str, name of the parameter
+        :return: str, interaction type
+        """
+        if self.header not in SubsectionParam.n_atoms.keys():
+            return '0'
+        npar = SubsectionParam.n_atoms[self.header]
+        for line in self:
+            lspl = line.split()
+            if len(lspl) > npar and not line.strip().startswith(';') and not line.strip().startswith('['):
+                return lspl[npar]
+        return '0'
 
 
 class SubsectionAtom(Subsection):
@@ -145,3 +182,8 @@ class SubsectionAtom(Subsection):
             if len(lspl) > 6 and not lspl[0].startswith(';'):
                 charge += float(lspl[6])
         return charge
+
+    
+class SubsectionHeader(Subsection):
+    def __init__(self, content, section):
+        super().__init__(content, section)

@@ -12,13 +12,13 @@ class Top:
         """
         self.fname = filename
         self.top = self.fname.split('/')[-1]
-        self.dir = '/' + '/'.join(self.fname.split('/')[:-1])
+        self.dir = os.getcwd() + '/' + '/'.join(self.fname.split('/')[:-1])
         self.contents = open(self.fname).readlines()
         self.gromacs_dir = gmx_dir
         self.include_all()
         self.sections = []
         self.parse_sections()
-        self.system, self.charge, self.natoms = self.read_system_properties
+        self.system, self.charge, self.natoms = self.read_system_properties()
     
     def include_all(self):
         """
@@ -26,11 +26,11 @@ class Top:
         :return: None
         """
         # TODO do we want to add #ifdef support + .mdp processing?
-        lines = [i for i in range(len(self.contents)) if self.contents[i].startswith("#include")]
+        lines = [i for i in range(len(self.contents)) if self.contents[i].strip().startswith("#include")]
         while len(lines) > 0:
             lnum = lines[0]
-            to_include = self.find_in_path(self.contents.pop(lnum).split()[1].strip('"\''))
-            contents = open(to_include).readlines()
+            to_include, extra_prefix = self.find_in_path(self.contents.pop(lnum).split()[1].strip('"\''))
+            contents = self.add_prefix_to_include(open(to_include).readlines(), extra_prefix)
             self.contents[lnum:lnum] = contents
             lines = [i for i in range(len(self.contents)) if self.contents[i].startswith("#include")]
     
@@ -44,7 +44,7 @@ class Top:
         """
         pref = ''
         if filename in os.listdir(self.dir):
-            return self.dir + '/' + filename
+            return self.dir + '/' + filename, pref
         else:
             if '/' in filename:
                 pref = '/'.join(filename.split('/')[:-1])
@@ -54,10 +54,23 @@ class Top:
             else:
                 first = pref.split('/')[0]
             if first in os.listdir(self.dir) and suff in os.listdir(self.dir + '/' + pref):
-                return self.dir + '/' + pref + '/' + suff
+                return self.dir + '/' + pref + '/' + suff, pref
             elif suff in os.listdir(self.gromacs_dir + '/' + pref):
-                return self.gromacs_dir + '/' + pref + '/' + suff
-        raise ValueError('file {} not found in neither local nor Gromacs directory'.format(filename))
+                return self.gromacs_dir + '/' + pref + '/' + suff, pref
+        raise FileNotFoundError('file {} not found in neither local nor Gromacs directory'.format(filename))
+    
+    @staticmethod
+    def add_prefix_to_include(content, prefix):
+        if prefix:
+            for nline, line in enumerate(content):
+                if line.strip().startswith("#include"):
+                    try:
+                        index = line.index('"')
+                    except ValueError:
+                        index = line.index("'")
+                    newline = line[:index+1] + prefix + '/' + line[index+1:]
+                    content[nline] = newline
+        return content
     
     def parse_sections(self):
         """
@@ -66,8 +79,9 @@ class Top:
         :return: None
         """
         special_sections = {'defaults', 'moleculetype', 'system'}
-        special_lines = [n for n, l in enumerate(self.contents) if l.strip().strip('[]').strip() in special_sections]
-        special_lines.append(len(self.contents) - 1)
+        special_lines = [n for n, l in enumerate(self.contents)
+                         if l.strip() and l.strip().strip('[]').strip().split()[0] in special_sections]
+        special_lines.append(len(self.contents))
         for beg, end in zip(special_lines[:-1], special_lines[1:]):
             self.sections.append(self.yield_sec(self.contents[beg:end]))
     
@@ -95,7 +109,7 @@ class Top:
         elif len(system_subsection) > 1:
             print("Section 'molecules' not present in the topology")
             return None, None, None
-        for e in system_subsection:
+        for e in system_subsection[0]:
             if not e.startswith(';'):
                 molecules[e.split()[0]] = int(e.split()[1])
         for mol in molecules.keys():

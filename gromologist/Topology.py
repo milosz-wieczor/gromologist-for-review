@@ -61,6 +61,13 @@ class Top:
     
     @staticmethod
     def add_prefix_to_include(content, prefix):
+        """
+        Modifies #include statements if nested #includes
+        point to different directories
+        :param content: list of str, content of the included file
+        :param prefix: str, directory name to add in the nested include
+        :return: list of str, modified content
+        """
         if prefix:
             for nline, line in enumerate(content):
                 if line.strip().startswith("#include"):
@@ -100,6 +107,13 @@ class Top:
             return Section(content, self)
         
     def read_system_properties(self):
+        """
+        Reads in system composition based on the [ molecules ] section
+        and calculates the number of atoms and charge of the system
+        :return: dict, contains molecule_name: number_of_molecules entries
+                 float, total charge of the system
+                 int, number of atoms in the system
+        """
         system_subsection = [s.get_subsection('molecules') for s in self.sections if isinstance(s, Section)
                              and 'molecules' in [ss.header for ss in s.subsections]]
         molecules = {}
@@ -143,6 +157,11 @@ class Top:
         pass
     
     def save_top(self, outname):
+        """
+        Saves the combined topology to the specified file
+        :param outname: str, file name for output
+        :return: None
+        """
         with open(outname, 'w') as outfile:
             for section in self.sections:
                 for subsection in section.subsections:

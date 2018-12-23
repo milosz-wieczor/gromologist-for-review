@@ -11,7 +11,6 @@ class Subsection:
         :param content: list of strings, entire content of the section
         """
         self.section = section
-        # TODO header should read 'impropers', write_header should read 'dihedrals'
         self.header = content[0].strip().strip('[]').strip()
         if ';' in self.header:
             pos = self.header.index(';')
@@ -51,6 +50,13 @@ class Subsection:
         return self.entries[n]
     
     def add_entry(self, new_entry, position=None):
+        """
+        Adds a single entry to the subsection, either at the end
+        or in a specified position
+        :param new_entry: str, entry to be added
+        :param position: where to add the entry (None is at the end)
+        :return: None
+        """
         if position:
             position = int(position)
             self.entries.insert(position, new_entry)
@@ -58,6 +64,13 @@ class Subsection:
             self.entries.append(new_entry)
     
     def add_entries(self, new_entries_list, position=None):
+        """
+        Adds multiple entries to the subsection, either at the end
+        or in a specified position
+        :param new_entries_list: list of str, entries to be added
+        :param position: where to add the entries (None is at the end)
+        :return: None
+        """
         if position:
             position = int(position)
             for new_entry in new_entries_list:
@@ -67,9 +80,20 @@ class Subsection:
             self.entries.extend(new_entries_list)
     
     def set_entry(self, line_number, new_line):
+        """
+        Sets content of a specified entry
+        :param line_number: int, which entry to modify
+        :param new_line: str, new content of the entry
+        :return: None
+        """
         self.entries[line_number] = new_line
     
     def get_entry(self, line_number):
+        """
+        Returns entry specified by line number
+        :param line_number: int, which entry to return
+        :return: str, subsection entry
+        """
         return self.entries[line_number]
         
         
@@ -136,6 +160,10 @@ class SubsectionBonded(Subsection):
 
 
 class SubsectionParam(Subsection):
+    """
+    SubsectionParam contains force field parameters;
+    should be included in SectionParam
+    """
     n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
                'nonbond_params': 2}
     
@@ -154,7 +182,6 @@ class SubsectionParam(Subsection):
         """
         Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
         while Amber uses angletype '1' (simple harmonic)
-        :param parmtype: str, name of the parameter
         :return: str, interaction type
         """
         if self.header not in SubsectionParam.n_atoms.keys():
@@ -168,6 +195,10 @@ class SubsectionParam(Subsection):
 
 
 class SubsectionAtom(Subsection):
+    """
+    SubsectionAtom contains definitions of all atoms in the molecule;
+    should be contained in SectionMol
+    """
     def __init__(self, content, section):
         super().__init__(content, section)
         self.fstring = "{:6}{:11}{:7}{:7}{:7}{:7}{:11}{:11}   ; " + '\n'
@@ -176,6 +207,10 @@ class SubsectionAtom(Subsection):
         self.charge = self.section.charge = self.calc_charge()
     
     def calc_charge(self):
+        """
+        Calculates total charge of the molecule
+        :return: float, total charge
+        """
         charge = 0
         for line in self.entries:
             lspl = line.split()
@@ -185,5 +220,9 @@ class SubsectionAtom(Subsection):
 
     
 class SubsectionHeader(Subsection):
+    """
+    SubsectionHeader contains the [ moleculetype ] section;
+    should be contained in SectionMol
+    """
     def __init__(self, content, section):
         super().__init__(content, section)

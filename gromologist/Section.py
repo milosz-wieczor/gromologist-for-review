@@ -277,10 +277,9 @@ class SectionParam(Section):
     def merge(self):
         """
         If multiple sections (e.g. [ bondtypes ]) are present in the topology,
-        this fn should merge them into single sections and sort entries to avoid
-        searching in all instances
-        # TODO do not merge dihedrals if have different interaction types
-        :return:
+        this fn merges them into single sections to avoid searching in all instances
+        # TODO do not merge dihedrals if have different interaction types?
+        :return: None
         """
         subsection_labels = [sub.label for sub in self.subsections]
         duplicated_subsections = list({label for label in subsection_labels if subsection_labels.count(label) > 1})
@@ -293,6 +292,12 @@ class SectionParam(Section):
                 self.subsections.remove(old)
     
     def merge_subsections(self, sub_list):
+        """
+        Merges a number of subsections of the same type into
+        a new subsection by combining all entries
+        :param sub_list: list of SubsectionParam instances, subsections to be merged
+        :return: SubsectionParam instance, merged subsection
+        """
         merged_entries = ["[ {} ]\n".format(sub_list[0].header)]
         for sub in sub_list:
             for line in sub:

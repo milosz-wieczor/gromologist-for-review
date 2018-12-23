@@ -1,5 +1,5 @@
-from .Subsection import *
 from itertools import product
+from .Subsection import *
 
 
 class Section:
@@ -10,9 +10,13 @@ class Section:
     """
     
     def __init__(self, content, top):
+        self.name = 'System'
         self.top = top
         self.dih_processed = False
         self.subsections = [self.yield_sub(content) for content in self.split_content(content)]
+    
+    def __repr__(self):
+        return "{} section with {} subsections".format(self.name, len(self.subsections))
     
     @staticmethod
     def split_content(content):
@@ -25,7 +29,7 @@ class Section:
         """
         # TODO second "dihedral" should be renamed as "improper" to avoid confusion
         # TODO see also Subsection constructor
-        special_lines = [n for n, l in content if l.strip().startswith('[')] + [len(content) - 1]
+        special_lines = [n for n, l in enumerate(content) if l.strip().startswith('[')] + [len(content)]
         return [content[beg:end] for beg, end in zip(special_lines[:-1], special_lines[1:])]
         
     def yield_sub(self, content):
@@ -38,19 +42,22 @@ class Section:
         :param content: list of strings, content of the subsection
         :return: a Subsection instance (or a derived class)
         """
-        header = content[0].strip().strip('[]').strip()
+        until = content[0].index(']')
+        header = content[0][:until].strip().strip('[]').strip()
         if header == 'dihedrals':
             if not self.dih_processed:
                 self.dih_processed = True
                 return SubsectionBonded(content, self)
             else:
                 return SubsectionBonded([l.replace('dihedrals', 'impropers') for l in content], self)
-        if header in {'atoms', 'bonds', 'pairs', 'angles', 'settles', 'exclusions', 'cmap'}:
+        elif header in {'bonds', 'pairs', 'angles', 'settles', 'exclusions', 'cmap', 'position_restraints'}:
             return SubsectionBonded(content, self)
         elif header == 'atoms':
             return SubsectionAtom(content, self)
+        elif header == 'moleculetype':
+            return SubsectionHeader(content, self)
         elif header in {'defaults', 'atomtypes', 'pairtypes', 'bondtypes', 'angletypes', 'dihedraltypes',
-                        'implicit_genborn_params', 'cmaptypes', 'nonbond_params'}:
+                        'implicit_genborn_params', 'cmaptypes', 'nonbond_params', 'constrainttypes'}:
             return SubsectionParam(content, self)
         else:
             return Subsection(content, self)
@@ -59,22 +66,16 @@ class Section:
         """
         Returns the specified subsection; we always need to run merge()
         on SectionParam first to avoid duplicates
-        # TODO need special treatment for improper dihedrals
+        # TODO need special treatment for param sections with different interaction types (mostly dihedraltypes)
         :param section_name:
         :return:
         """
-        if section_name not in ["dihedrals", "impropers"]:
-            ssect = [s for s in self.subsections if s.header == section_name]
-            if len(ssect) == 0:
-                raise KeyError
-            elif len(ssect) > 1:
-                raise RuntimeError("Error: subsection {} duplicated in {}".format(section_name, str(self)))
-            return ssect[0]
-        else:
-            if section_name == "dihedrals":
-                return [s for s in self.subsections if s.header == section_name][0]
-            else:
-                return [s for s in self.subsections if s.header == section_name][1]
+        ssect = [s for s in self.subsections if s.header == section_name]
+        if len(ssect) == 0:
+            raise KeyError
+        elif len(ssect) > 1:
+            raise RuntimeError("Error: subsection {} duplicated in {}".format(section_name, str(self)))
+        return ssect[0]
 
 
 class SectionMol(Section):
@@ -84,6 +85,7 @@ class SectionMol(Section):
     """
     
     def __init__(self, content_list, top):
+        self.name = 'Molecule'
         self.natoms = None
         self.charge = None
         super().__init__(content_list, top)
@@ -204,12 +206,12 @@ class SectionMol(Section):
             # TODO go for try/except
             # TODO need to get rid of other somehow after is transferred to self
             # TODO think of other fields as well?
+            # TODO merge all subsections
             subsection_other = other.get_subsection(subs)
             subsection_own = self.get_subsection(subs)
             subsection_own.add_entries([line for line in subsection_other if line.strip()])
     
     def make_bond(self, atom_own, atom_other, other):
-        # TODO needs to be wrapped in merge_two
         other.get_bonds()
         new_bond = [tuple(sorted([int(atom_own), int(atom_other)]))]
         new_angles = self.generate_angles(other, atom_own, atom_other)
@@ -269,13 +271,35 @@ class SectionParam(Section):
     
     def __init__(self, content_list, top):
         super().__init__(content_list, top)
+        self.name = 'Parameters'
+        self.merge()
     
     def merge(self):
         """
         If multiple sections (e.g. [ bondtypes ]) are present in the topology,
-        this fn should merge them into single sections and sort entries to avoid
-        searching in all instances
-        :return:
+        this fn merges them into single sections to avoid searching in all instances
+        # TODO do not merge dihedrals if have different interaction types?
+        :return: None
         """
-        # TODO
-        pass
+        subsection_labels = [sub.label for sub in self.subsections]
+        duplicated_subsections = list({label for label in subsection_labels if subsection_labels.count(label) > 1})
+        for sub in duplicated_subsections:
+            subsections_to_merge = [s for s in self.subsections if s.label == sub]
+            merged_subsection = self.merge_subsections(subsections_to_merge)
+            position = self.subsections.index(subsections_to_merge[0])
+            self.subsections.insert(position, merged_subsection)
+            for old in subsections_to_merge:
+                self.subsections.remove(old)
+    
+    def merge_subsections(self, sub_list):
+        """
+        Merges a number of subsections of the same type into
+        a new subsection by combining all entries
+        :param sub_list: list of SubsectionParam instances, subsections to be merged
+        :return: SubsectionParam instance, merged subsection
+        """
+        merged_entries = ["[ {} ]\n".format(sub_list[0].header)]
+        for sub in sub_list:
+            for line in sub:
+                merged_entries.append(line)
+        return SubsectionParam(merged_entries, self)

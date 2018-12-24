@@ -1,3 +1,6 @@
+from .Entries import *
+
+
 class Subsection:
     counter = {}
     
@@ -21,7 +24,18 @@ class Subsection:
         else:
             Subsection.counter[self.header] = 1
         self.id = Subsection.counter[self.header]
-        self._entries = [line for line in content if line.strip() and not line.strip().startswith('[')]
+        self._entries = [self.yield_entry(line) for line in content
+                         if line.strip() and not line.strip().startswith('[')]
+        
+    def yield_entry(self, line):
+        if line.strip()[0] in [';', '#'] or isinstance(self, Subsection) or isinstance(self, SubsectionHeader):
+            return Entry(line, self)
+        elif isinstance(self, SubsectionParam):
+            return EntryParam(line, self)
+        elif isinstance(self, SubsectionBonded):
+            return EntryBonded(line, self)
+        elif isinstance(self, SubsectionAtom):
+            return EntryAtom(line, self)
     
     def __str__(self):
         """
@@ -122,17 +136,16 @@ class SubsectionBonded(Subsection):
         """
         self._entries.sort(key=self.sorting_fn)
     
-    def sorting_fn(self, line):
+    def sorting_fn(self, entry):
         """
         Comments should go first, then we sort based on first, second,
         ... column of the section
         :param line: str, line to be sorted
         :return: int, ordering number
         """
-        if line.strip().startswith(';'):
+        if isinstance(entry, Entry):
             return -1
-        lspl = [int(x) for x in line.split()[:self.atoms_per_entry]]
-        return sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(lspl)])
+        return sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
             
     def add_ff_params_to_entry(self, atom_list, sect_params):
         """
@@ -151,11 +164,9 @@ class SubsectionBonded(Subsection):
         while Amber uses angletype '1' (simple harmonic)
         :return: str, interaction type
         """
-        npar = self.atoms_per_entry
-        for line in self:
-            lspl = line.split()
-            if len(lspl) > npar and not line.strip().startswith(';') and not line.strip().startswith('['):
-                return lspl[npar]
+        for entry in self:
+            if isinstance(entry, EntryBonded):
+                return entry.interaction_type
         return '0'
 
 
@@ -210,21 +221,45 @@ class SubsectionAtom(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.fstring = "{:6}{:11}{:7}{:7}{:7}{:7}{:11}{:11}   ; " + '\n'
-        self.nat = len([e for e in self._entries if len(e.split()) > 6 and not e.strip().startswith(';')])
-        self.section.natoms = self.nat
+        self.nat = self.section.natoms = len([e for e in self._entries if isinstance(e, EntryAtom)])
         self.charge = self.section.charge = self.calc_charge()
+        self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
     
     def calc_charge(self):
         """
         Calculates total charge of the molecule
         :return: float, total charge
         """
-        charge = 0
-        for line in self._entries:
-            lspl = line.split()
-            if len(lspl) > 6 and not lspl[0].startswith(';'):
-                charge += float(lspl[6])
-        return charge
+        total_charge = 0
+        for entry in self._entries:
+            total_charge += entry.charge
+        return total_charge
+
+    def get_dicts(self):
+        """
+        dicts are not always needed and are costly to calculate,
+        so only fill in the values when explicitly asked to
+        :return: None
+        """
+        if not self.name_to_num:
+            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self.mol_type_nums()
+
+    def mol_type_nums(self):
+        """
+        Provides bindings between atomnumber and atomtype
+        and vice versa for each molecule identified in
+        the topology
+        :return: tuple of dicts, each dict contains molname:(type:num) and
+        molname:(num:type) bindings
+        """
+        name_to_num, num_to_name, num_to_type, num_to_type_b = {}, {}, {}, {}
+        for entry in self:
+            if isinstance(entry, EntryAtom):
+                name_to_num[entry.atomname] = entry.num
+                num_to_name[entry.num] = entry.atomname
+                num_to_type[entry.num] = entry.type
+                num_to_type_b[entry.num] = entry.type_b if entry.type_b is not None else entry.type
+        return name_to_num, num_to_name, num_to_type, num_to_type_b
 
     
 class SubsectionHeader(Subsection):

@@ -89,40 +89,9 @@ class SectionMol(Section):
         self.natoms = None
         self.charge = None
         super().__init__(content_list, top)
-        self.names_to_nums, self.nums_to_types, self.nums_to_names = None, None, None
         self.bonds = None
         self.mol_name = [e for e in self.get_subsection('moleculetype')
                          if e.strip() and not e.strip().startswith(';')][0].split()[0]
-        
-    def get_dicts(self):
-        """
-        dicts are not always needed and are costly to calculate,
-        so only fill in the values when explicitly asked to
-        :return: None
-        """
-        if not all([self.names_to_nums, self.nums_to_types, self.nums_to_names]):
-            self.names_to_nums, self.nums_to_types, self.nums_to_names = self.mol_type_nums()
-    
-    def mol_type_nums(self):
-        """
-        Provides bindings between atomnumber and atomtype
-        and vice versa for each molecule identified in
-        the topology
-        :return: tuple of dicts, each dict contains molname:(type:num) and
-        molname:(num:type) bindings
-        """
-        names_to_nums = {}
-        nums_to_names = {}
-        nums_to_types = {}
-        atoms = self.get_subsection('atoms')
-        for line in atoms:
-            lspl = line.split()
-            if len(lspl) > 7 and line.lstrip()[0] not in ["'", '[', ';']:
-                names_to_nums["{}-{}-{}".format(lspl[3], lspl[2], lspl[4])] = lspl[0]
-                nums_to_names[lspl[0]] = "{}-{}-{}".format(lspl[3], lspl[2], lspl[4])
-                nums_to_types[lspl[0]] = lspl[1]
-                # TODO add optional reading of state B?
-        return names_to_nums, nums_to_types, nums_to_names
     
     def offset_numbering(self, offset, startfrom=0):
         """

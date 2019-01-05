@@ -114,8 +114,8 @@ class Top:
                  float, total charge of the system
                  int, number of atoms in the system
         """
-        system_subsection = [s.get_subsection('molecules') for s in self.sections if isinstance(s, Section)
-                             and 'molecules' in [ss.header for ss in s.subsections]]
+        system_subsection = [s.get_subsection('molecules') for s in self.sections
+                             if 'molecules' in [ss.header for ss in s.subsections]]
         molecules = {}
         natoms, charge = 0, 0
         if len(system_subsection) == 0:
@@ -124,8 +124,8 @@ class Top:
             print("Section 'molecules' not present in the topology")
             return None, None, None
         for e in system_subsection[0]:
-            if not e.startswith(';'):
-                molecules[e.split()[0]] = int(e.split()[1])
+            if e.content:
+                molecules[e.content[0]] = int(e.content[1])
         for mol in molecules.keys():
             sect_mol = self.get_molecule(mol)
             natoms += molecules[mol] * sect_mol.natoms

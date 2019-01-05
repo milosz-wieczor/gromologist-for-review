@@ -1,4 +1,5 @@
 from itertools import product
+from functools import reduce
 from .Subsection import *
 
 
@@ -90,8 +91,7 @@ class SectionMol(Section):
         self.charge = None
         super().__init__(content_list, top)
         self.bonds = None
-        self.mol_name = [e for e in self.get_subsection('moleculetype')
-                         if e.strip() and not e.strip().startswith(';')][0].split()[0]
+        self.mol_name = self.get_subsection('moleculetype').molname
     
     def offset_numbering(self, offset, startfrom=0):
         """
@@ -113,13 +113,9 @@ class SectionMol(Section):
         :return: None
         """
         subsection = self.get_subsection('atoms')
-        for linenum, line in enumerate(subsection):
-            lspl = line.split()
-            if len(lspl) > 7 and not lspl[0].startswith(';') and int(lspl[0]) >= startfrom:
-                new_line = ('{:6d}{:>11s}{:>7s}{:>7s}{:>7s}{:>7d} ' +
-                            (len(lspl) - 6) * '{:>10s} ').format(int(lspl[0]) + offset, *lspl[1:5],
-                                                                 int(lspl[5]) + offset, *lspl[6:])
-                subsection.set_entry(linenum, new_line)
+        for entry_num, entry in enumerate(subsection):
+            if isinstance(entry, EntryAtom) and entry.num >= startfrom:
+                entry.num += offset
 
     def offset_params(self, offset, startfrom):
         """
@@ -131,14 +127,9 @@ class SectionMol(Section):
         """
         for sub_name in [s.header for s in self.subsections if s.header != 'atoms']:
             subsection = self.get_subsection(sub_name)
-            n_atoms = subsection.atoms_per_entry
-            for linenum, line in enumerate(subsection):
-                lspl = line.split()
-                if len(lspl) > n_atoms and not lspl[0].startswith(';'):
-                    new_line = (n_atoms * '{:>5d} ' + '{:>5s} ' +
-                                (len(lspl) - n_atoms - 1)*'{:>10s}').format(*[int(x) + (offset * (int(x) >= startfrom))
-                                                                              for x in lspl[:n_atoms]], *lspl[n_atoms:])
-                    subsection.set_entry(linenum, new_line)
+            for entry_num, entry in enumerate(subsection):
+                if isinstance(entry, EntryBonded):
+                    entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
     
     def get_bonds(self):
         """
@@ -148,9 +139,9 @@ class SectionMol(Section):
         """
         subsection = self.get_subsection('bonds')
         bond_list = []
-        for line in subsection:
-            if line.split() and line.split()[2] == "1":
-                bond_list.append((int(line.split()[0]), int(line.split()[1])))
+        for entry in subsection:
+            if isinstance(entry, EntryBonded):
+                bond_list.append(entry.atom_numbers)
         self.bonds = bond_list
 
     def merge_two(self, other, anchor_own, anchor_other):
@@ -188,7 +179,8 @@ class SectionMol(Section):
         for sub, entries in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
                                 [new_bond, new_pairs, new_angles, new_dihedrals]):
             subsection = self.get_subsection(sub)
-            subsection.add_entries([subsection.fstring.format(*entry, subsection.prmtype) for entry in entries])
+            subsection.add_entries([EntryBonded(subsection.fstring.format(*entry, subsection.prmtype), subsection)
+                                    for entry in entries])
 
     def generate_angles(self, other, atom_own, atom_other):
         """
@@ -254,7 +246,7 @@ class SectionParam(Section):
         duplicated_subsections = list({label for label in subsection_labels if subsection_labels.count(label) > 1})
         for sub in duplicated_subsections:
             subsections_to_merge = [s for s in self.subsections if s.label == sub]
-            merged_subsection = sum(subsections_to_merge)
+            merged_subsection = reduce(lambda x, y: x+y, subsections_to_merge)
             position = self.subsections.index(subsections_to_merge[0])
             self.subsections.insert(position, merged_subsection)
             for old in subsections_to_merge:

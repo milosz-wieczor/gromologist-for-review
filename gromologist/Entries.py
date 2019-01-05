@@ -1,3 +1,5 @@
+
+
 class Entry:
     def __init__(self, content, subsection):
         self.subsection = subsection
@@ -9,11 +11,16 @@ class Entry:
             self.content = content.strip().split()
             self.comment = ''
     
+    def __bool__(self):
+        if not self.content and not self.comment:
+            return False
+        return True
+    
     
 class EntryBonded(Entry):
     def __init__(self, content, subsection):
         super().__init__(content, subsection)
-        self.atoms_per_entry = self.subsection.atoms_per_entry
+        self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.atom_numbers = tuple([int(x) for x in self.content[:self.atoms_per_entry]])
         self.interaction_type = content[self.atoms_per_entry]
         # TODO maybe type assignment should only be performed when asked to, i.e. outside of constructor
@@ -34,14 +41,25 @@ class EntryBonded(Entry):
 class EntryParam(Entry):
     def __init__(self, content, subsection):
         super().__init__(content, subsection)
-        self.atoms_per_entry = self.subsection.atoms_per_entry
+        self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.types = tuple(self.content[:self.atoms_per_entry])
-        self.params = None
-        self.interaction_type = content[self.atoms_per_entry]
+        self.params = self.content[self.atoms_per_entry + 1:]
+        self.interaction_type = self.content[self.atoms_per_entry]
+    
+    def __repr__(self):
+        return "Parameters entry with atomtypes {}, interaction type {} " \
+               "and parameters {}".format(self.types,
+                                          self.interaction_type,
+                                          self.params)
         
         
 class EntryAtom(Entry):
     def __init__(self, content, subsection):
         super().__init__(content, subsection)
-        self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge, self.mass = self.content[:8]
+        try:
+            self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge, self.mass = self.content[:8]
+        except ValueError:
+            self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge = self.content[:7]
+            self.mass = 0  # TODO get mass as the default from the ffnonbonded 'atomtypes' section
         self.type_b, self.charge_b, self.mass_b = None, None, None
+        self.charge, self.mass = float(self.charge), float(self.mass)

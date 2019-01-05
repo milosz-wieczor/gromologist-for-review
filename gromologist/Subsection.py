@@ -24,11 +24,15 @@ class Subsection:
         else:
             Subsection.counter[self.header] = 1
         self.id = Subsection.counter[self.header]
-        self._entries = [self.yield_entry(line) for line in content
-                         if line.strip() and not line.strip().startswith('[')]
+        self._entries = []
+        for element in content:
+            if issubclass(type(element), Entry):
+                self._entries.append(element)
+            elif isinstance(element, str) and element.strip() and not element.strip().startswith('['):
+                self._entries.append(self.yield_entry(element))
         
     def yield_entry(self, line):
-        if line.strip()[0] in [';', '#'] or isinstance(self, Subsection) or isinstance(self, SubsectionHeader):
+        if line.strip()[0] in [';', '#']:
             return Entry(line, self)
         elif isinstance(self, SubsectionParam):
             return EntryParam(line, self)
@@ -36,6 +40,8 @@ class Subsection:
             return EntryBonded(line, self)
         elif isinstance(self, SubsectionAtom):
             return EntryAtom(line, self)
+        elif isinstance(self, Subsection):
+            return Entry(line, self)
     
     def __str__(self):
         """
@@ -140,7 +146,7 @@ class SubsectionBonded(Subsection):
         """
         Comments should go first, then we sort based on first, second,
         ... column of the section
-        :param line: str, line to be sorted
+        :param entry: Entry, entry to be sorted
         :return: int, ordering number
         """
         if isinstance(entry, Entry):
@@ -176,10 +182,12 @@ class SubsectionParam(Subsection):
     should be included in SectionParam
     """
     n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
-               'nonbond_params': 2}
+               'nonbond_params': 2, 'defaults': 0, 'atomtypes': 1, 'implicit_genborn_params': 1, 'cmaptypes': 5}
+    # TODO need post-processing of cmap entries
     
     def __init__(self, content, section):
         super().__init__(content, section)
+        self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
         self.prmtype = self.check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
         
@@ -206,10 +214,9 @@ class SubsectionParam(Subsection):
         if self.header not in SubsectionParam.n_atoms.keys():
             return '0'
         npar = SubsectionParam.n_atoms[self.header]
-        for line in self:
-            lspl = line.split()
-            if len(lspl) > npar and not line.strip().startswith(';') and not line.strip().startswith('['):
-                return lspl[npar]
+        for entry in self:
+            if len(entry.content) > npar and isinstance(entry, EntryParam):
+                return entry.content[npar]
         return '0'
 
 
@@ -232,7 +239,8 @@ class SubsectionAtom(Subsection):
         """
         total_charge = 0
         for entry in self._entries:
-            total_charge += entry.charge
+            if isinstance(entry, EntryAtom):
+                total_charge += entry.charge
         return total_charge
 
     def get_dicts(self):
@@ -269,3 +277,5 @@ class SubsectionHeader(Subsection):
     """
     def __init__(self, content, section):
         super().__init__(content, section)
+        self.molname = [a.content[0] for a in self._entries if a.content][0]
+        

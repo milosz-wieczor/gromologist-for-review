@@ -1,5 +1,6 @@
 import os
 from .Section import *
+from collections import OrderedDict
 
 
 class Top:
@@ -110,13 +111,13 @@ class Top:
         """
         Reads in system composition based on the [ molecules ] section
         and calculates the number of atoms and charge of the system
-        :return: dict, contains molecule_name: number_of_molecules entries
+        :return: OrderedDict, contains molecule_name:number_of_molecules pairs and preserves the order read from file
                  float, total charge of the system
                  int, number of atoms in the system
         """
         system_subsection = [s.get_subsection('molecules') for s in self.sections
                              if 'molecules' in [ss.header for ss in s.subsections]]
-        molecules = {}
+        molecules = OrderedDict()  # we want to preserve the order of molecules in the system for e.g. PDB checking
         natoms, charge = 0, 0
         if len(system_subsection) == 0:
             raise KeyError

@@ -1,19 +1,88 @@
+from .Entries import EntryAtom
+import warnings
+
 
 class Pdb:
-    def __init__(self, filename, top=None):
+    def __init__(self, filename, top=None, altloc='A'):
         self.fname = filename
         self.contents = [line.strip() for line in open(self.fname)]
         self.atoms, self.box, self.remarks = self.parse_contents()
         self.top = top
+        self.altloc = altloc
         self.atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                            "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
     
-    def add_chains(self):
-        pass  # TODO
+    def add_chains(self, serials=None, chain=None):
+        """
+        Given a matching Top instance, adds chain identifiers to atoms
+        based on the (previously verified) matching between invididual
+        molecules defined in Top and consecutive atoms in this Pdb instance.
+        Solvent molecules are ommited, and only characters from A to Z
+        are supported as valid chain identifiers.
+        Optionally, given `serials` and `chain`, one can set all atoms
+        with atom numbers in `serials` as belonging to chain `chain`.
+        :param serials: iterable of ints, atom numbers to set chain for (default is all)
+        :param chain: chain to set for serials (default is use consecutive letters)
+        :return: None
+        """
+        self.check_top()
+        excluded = {'SOL', 'HOH', 'TIP3', 'K', 'NA', 'CL', 'POT'}
+        base_char = 65  # 65 is ASCII for "A"
+        index = 0
+        for mol_name in self.top.system.keys():
+            if mol_name.upper() not in excluded:
+                n_mols = self.top.system[mol_name]
+                mol = self.top.get_molecule(mol_name)
+                n_atoms = mol.natoms
+                for m in range(n_mols):
+                    for a in range(n_atoms):
+                        self.atoms[index].chain = chr(base_char)
+                        index += 1
+                    base_char += 1
+                    if base_char > 90:
+                        return
+
+    def check_top(self):
+        if self.top is None:
+            raise ValueError("a Top object has not been assigned; molecule info missing")
+        index, err = 0, 0
+        self.remove_altloc()
+        for mol_name in self.top.system.keys():
+            mol = self.top.get_molecule(mol_name)
+            n_mols = self.top.system[mol_name]
+            atom_subsection = mol.get_subsection('atoms')
+            atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
+            for m in range(n_mols):
+                for n, a in enumerate(atom_entries):
+                    err += self.check_mismatch(atom_entries[n], self.atoms[index], mol_name)
+                    index += 1
+                    if err > 20:
+                        raise RuntimeError("Error: too many warnings")
+    
+    @staticmethod
+    def check_mismatch(atom_entry, atom_instance, mol_name):
+        if atom_entry.atomname != atom_instance.atomname:
+            warnings.warn("Atoms {} ({}) in molecule {} topology and {} ({}) in .pdb have "
+                          "non-matching names".format(atom_entry.num, atom_entry.atomname, mol_name,
+                                                      atom_instance.serial, atom_instance.atomname), Warning)
+            return 1
+        return 0
+        
+    def remove_altloc(self):
+        """
+        We only keep one of the alternative locations in case
+        there is more (by default, A is kept)
+        :return: None
+        """
+        self.atoms = [a for a in self.atoms if a.altloc in [' ', self.altloc]]
     
     def write_line(self, atom):
         return self.atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain, atom.resnum,
                                        atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta, atom.element)
+    
+    def renumber_all(self):
+        for n, atom in enumerate(self.atoms):
+            atom.serial = n + 1
 
     def find_line(self, name, res, resname):
         lines = [x for x in range(len(self.contents)) if self.contents[x].startswith("ATOM")

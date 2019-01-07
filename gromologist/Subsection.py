@@ -1,3 +1,6 @@
+from .Entries import *
+
+
 class Subsection:
     counter = {}
     
@@ -21,7 +24,24 @@ class Subsection:
         else:
             Subsection.counter[self.header] = 1
         self.id = Subsection.counter[self.header]
-        self.entries = [line for line in content if line.strip() and not line.strip().startswith('[')]
+        self._entries = []
+        for element in content:
+            if issubclass(type(element), Entry):
+                self._entries.append(element)
+            elif isinstance(element, str) and element.strip() and not element.strip().startswith('['):
+                self._entries.append(self.yield_entry(element))
+        
+    def yield_entry(self, line):
+        if line.strip()[0] in [';', '#']:
+            return Entry(line, self)
+        elif isinstance(self, SubsectionParam):
+            return EntryParam(line, self)
+        elif isinstance(self, SubsectionBonded):
+            return EntryBonded(line, self)
+        elif isinstance(self, SubsectionAtom):
+            return EntryAtom(line, self)
+        elif isinstance(self, Subsection):
+            return Entry(line, self)
     
     def __str__(self):
         """
@@ -36,7 +56,7 @@ class Subsection:
         return "Subsection {}".format(self.header, self.id)
     
     def __len__(self):
-        return len(self.entries)
+        return len(self._entries)
     
     def __iter__(self):
         self.n = 0
@@ -47,7 +67,7 @@ class Subsection:
             raise StopIteration
         n = self.n
         self.n += 1
-        return self.entries[n]
+        return self._entries[n]
     
     def add_entry(self, new_entry, position=None):
         """
@@ -59,9 +79,9 @@ class Subsection:
         """
         if position:
             position = int(position)
-            self.entries.insert(position, new_entry)
+            self._entries.insert(position, new_entry)
         else:
-            self.entries.append(new_entry)
+            self._entries.append(new_entry)
     
     def add_entries(self, new_entries_list, position=None):
         """
@@ -74,10 +94,10 @@ class Subsection:
         if position:
             position = int(position)
             for new_entry in new_entries_list:
-                self.entries.insert(position, new_entry)
+                self._entries.insert(position, new_entry)
                 position += 1
         else:
-            self.entries.extend(new_entries_list)
+            self._entries.extend(new_entries_list)
     
     def set_entry(self, line_number, new_line):
         """
@@ -86,7 +106,7 @@ class Subsection:
         :param new_line: str, new content of the entry
         :return: None
         """
-        self.entries[line_number] = new_line
+        self._entries[line_number] = new_line
     
     def get_entry(self, line_number):
         """
@@ -94,7 +114,7 @@ class Subsection:
         :param line_number: int, which entry to return
         :return: str, subsection entry
         """
-        return self.entries[line_number]
+        return self._entries[line_number]
         
         
 class SubsectionBonded(Subsection):
@@ -120,19 +140,18 @@ class SubsectionBonded(Subsection):
         In case we want to sort entries after some are added at the end of the section
         :return: None
         """
-        self.entries.sort(key=self.sorting_fn)
+        self._entries.sort(key=self.sorting_fn)
     
-    def sorting_fn(self, line):
+    def sorting_fn(self, entry):
         """
         Comments should go first, then we sort based on first, second,
         ... column of the section
-        :param line: str, line to be sorted
+        :param entry: Entry, entry to be sorted
         :return: int, ordering number
         """
-        if line.strip().startswith(';'):
+        if isinstance(entry, Entry):
             return -1
-        lspl = [int(x) for x in line.split()[:self.atoms_per_entry]]
-        return sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(lspl)])
+        return sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
             
     def add_ff_params_to_entry(self, atom_list, sect_params):
         """
@@ -151,11 +170,9 @@ class SubsectionBonded(Subsection):
         while Amber uses angletype '1' (simple harmonic)
         :return: str, interaction type
         """
-        npar = self.atoms_per_entry
-        for line in self:
-            lspl = line.split()
-            if len(lspl) > npar and not line.strip().startswith(';') and not line.strip().startswith('['):
-                return lspl[npar]
+        for entry in self:
+            if isinstance(entry, EntryBonded):
+                return entry.interaction_type
         return '0'
 
 
@@ -165,10 +182,12 @@ class SubsectionParam(Subsection):
     should be included in SectionParam
     """
     n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
-               'nonbond_params': 2}
+               'nonbond_params': 2, 'defaults': 0, 'atomtypes': 1, 'implicit_genborn_params': 1, 'cmaptypes': 5}
+    # TODO need post-processing of cmap entries
     
     def __init__(self, content, section):
         super().__init__(content, section)
+        self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
         self.prmtype = self.check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
         
@@ -177,6 +196,14 @@ class SubsectionParam(Subsection):
             return "Subsection {} with interaction type {}".format(self.header, self.prmtype)
         else:
             return "Subsection {}".format(self.header)
+    
+    def __add__(self, other):
+        if not isinstance(other, SubsectionParam):
+            raise TypeError("{} is not a SubsectionParam instance".format(other))
+        if self.header != other.header:
+            raise TypeError("Cannot merge subsections with different headers: {} and {}".format(self.header,
+                                                                                                other.header))
+        return SubsectionParam(["[ {} ]\n".format(self.header)] + self._entries + other._entries, self.section)
     
     def check_parm_type(self):
         """
@@ -187,10 +214,9 @@ class SubsectionParam(Subsection):
         if self.header not in SubsectionParam.n_atoms.keys():
             return '0'
         npar = SubsectionParam.n_atoms[self.header]
-        for line in self:
-            lspl = line.split()
-            if len(lspl) > npar and not line.strip().startswith(';') and not line.strip().startswith('['):
-                return lspl[npar]
+        for entry in self:
+            if len(entry.content) > npar and isinstance(entry, EntryParam):
+                return entry.content[npar]
         return '0'
 
 
@@ -202,21 +228,46 @@ class SubsectionAtom(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.fstring = "{:6}{:11}{:7}{:7}{:7}{:7}{:11}{:11}   ; " + '\n'
-        self.nat = len([e for e in self.entries if len(e.split()) > 6 and not e.strip().startswith(';')])
-        self.section.natoms = self.nat
+        self.nat = self.section.natoms = len([e for e in self._entries if isinstance(e, EntryAtom)])
         self.charge = self.section.charge = self.calc_charge()
+        self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
     
     def calc_charge(self):
         """
         Calculates total charge of the molecule
         :return: float, total charge
         """
-        charge = 0
-        for line in self.entries:
-            lspl = line.split()
-            if len(lspl) > 6 and not lspl[0].startswith(';'):
-                charge += float(lspl[6])
-        return charge
+        total_charge = 0
+        for entry in self._entries:
+            if isinstance(entry, EntryAtom):
+                total_charge += entry.charge
+        return total_charge
+
+    def get_dicts(self):
+        """
+        dicts are not always needed and are costly to calculate,
+        so only fill in the values when explicitly asked to
+        :return: None
+        """
+        if not self.name_to_num:
+            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self.mol_type_nums()
+
+    def mol_type_nums(self):
+        """
+        Provides bindings between atomnumber and atomtype
+        and vice versa for each molecule identified in
+        the topology
+        :return: tuple of dicts, each dict contains molname:(type:num) and
+        molname:(num:type) bindings
+        """
+        name_to_num, num_to_name, num_to_type, num_to_type_b = {}, {}, {}, {}
+        for entry in self:
+            if isinstance(entry, EntryAtom):
+                name_to_num[entry.atomname] = entry.num
+                num_to_name[entry.num] = entry.atomname
+                num_to_type[entry.num] = entry.type
+                num_to_type_b[entry.num] = entry.type_b if entry.type_b is not None else entry.type
+        return name_to_num, num_to_name, num_to_type, num_to_type_b
 
     
 class SubsectionHeader(Subsection):
@@ -226,3 +277,5 @@ class SubsectionHeader(Subsection):
     """
     def __init__(self, content, section):
         super().__init__(content, section)
+        self.molname = [a.content[0] for a in self._entries if a.content][0]
+        

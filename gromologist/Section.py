@@ -86,12 +86,12 @@ class SectionMol(Section):
     """
     
     def __init__(self, content_list, top):
-        self.name = 'Molecule'
         self.natoms = None
         self.charge = None
         super().__init__(content_list, top)
         self.bonds = None
         self.mol_name = self.get_subsection('moleculetype').molname
+        self.name = '{} molecule'.format(self.mol_name)
     
     def offset_numbering(self, offset, startfrom=0):
         """

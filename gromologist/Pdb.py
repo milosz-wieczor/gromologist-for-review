@@ -11,6 +11,10 @@ class Pdb:
         self.altloc = altloc
         self.atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                            "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
+        self.cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
+
+    def __repr__(self):
+        return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
     
     def add_chains(self, serials=None, chain=None):
         """
@@ -26,6 +30,8 @@ class Pdb:
         :return: None
         """
         self.check_top()
+        if (serials is None and chain is not None) or (serials is not None and chain is None):
+            raise ValueError("Both serials and chain have to be specified simultaneously")
         excluded = {'SOL', 'HOH', 'TIP3', 'K', 'NA', 'CL', 'POT'}
         base_char = 65  # 65 is ASCII for "A"
         index = 0
@@ -36,13 +42,17 @@ class Pdb:
                 n_atoms = mol.natoms
                 for m in range(n_mols):
                     for a in range(n_atoms):
-                        self.atoms[index].chain = chr(base_char)
+                        if serials is None and chain is None:
+                            self.atoms[index].chain = chr(base_char)
+                        else:
+                            if self.atoms[index].serial in serials:
+                                self.atoms[index].chain = chain
                         index += 1
                     base_char += 1
                     if base_char > 90:
                         return
 
-    def check_top(self):
+    def check_top(self, maxwarn=20):
         if self.top is None:
             raise ValueError("a Top object has not been assigned; molecule info missing")
         index, err = 0, 0
@@ -56,7 +66,7 @@ class Pdb:
                 for n, a in enumerate(atom_entries):
                     err += self.check_mismatch(atom_entries[n], self.atoms[index], mol_name)
                     index += 1
-                    if err > 20:
+                    if err > maxwarn:
                         raise RuntimeError("Error: too many warnings")
     
     @staticmethod
@@ -76,7 +86,7 @@ class Pdb:
         """
         self.atoms = [a for a in self.atoms if a.altloc in [' ', self.altloc]]
     
-    def write_line(self, atom):
+    def write_atom(self, atom):
         return self.atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain, atom.resnum,
                                        atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta, atom.element)
     
@@ -98,26 +108,49 @@ class Pdb:
     
     def parse_contents(self):
         atoms, remarks = [], []
-        box = 0, 0, 0
+        box = [7.5, 7.5, 7.5, 90, 90, 90]  # generic default, will be overwritten if present
         for line in self.contents:
-            if line.startswith('ATOM'):
+            if line.startswith('ATOM'):  # TODO take care of HETATM
                 atoms.append(Atom(line))
-            elif "CRYST" in line:
-                box = []
+            elif line.startswith("CRYST1"):
+                box = [float(line[6+9*a:6+9*(a+1)]) for a in range(3)] + \
+                      [float(line[33+7*a:33+7*(a+1)]) for a in range(3)]
             elif not line.startswith('TER') and not line.startswith('END'):
                 remarks.append(line)
-        return atoms, box, remarks
+        return atoms, tuple(box), remarks
         
     def fill_beta(self, values, serials=None):
-        pass
+        """
+        Enables user to write arbitrary values to the beta field
+        of the PDB entry
+        :param values: iterable; values to fill
+        :param serials: iterable, optional; can be used to specify a subset of atoms
+        :return: None
+        """
+        if any([v > 9999 for v in values]):
+            print("At least one value is too large to fit into the `beta` field, consider division "
+                  "to make values smaller")
+        if not serials:
+            serials = [a.serial for a in self.atoms]
+        if not all([i == j for i, j in zip(serials, sorted(serials))]):
+            raise ValueError("Atoms' serial numbers are not sorted, consider running .renumber_all() first")
+        if len(values) != len(serials):
+            raise ValueError("Lists 'value' and 'serials' have inconsistent sizes: {} and {}".format(len(values),
+                                                                                                     len(serials)))
+        index = 0
+        for atom in self.atoms:
+            if atom.serial in serials:
+                atom.beta = values[index]
+                index += 1
 
-    def save_pdb(self):
-        path = self.fname.split('/')
-        outname = '/'.join(path)
+    def save_pdb(self, outname='out.pdb'):
         with open(outname, 'w') as outfile:
-            for line in self.contents:
-                outfile.write(line)
-            outfile.write('\n')
+            outfile.write(self.cryst_format.format(*self.box))
+            for line in self.remarks:
+                outfile.write(line.strip() + '\n')
+            for atom in self.atoms:
+                outfile.write(self.write_atom(atom))
+            outfile.write('ENDMDL\n')
 
 
 class Atom:
@@ -140,3 +173,7 @@ class Atom:
                 self.element = name[:1]
             else:
                 self.element = name[:2]
+        
+    def __repr__(self):
+        chain = self.chain if self.chain != " " else "unspecified"
+        return "Atom {} in residue {}{} of chain {}".format(self.atomname, self.resname, self.resnum, chain)

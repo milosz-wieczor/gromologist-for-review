@@ -8,10 +8,11 @@ class Subsection:
         """
         Here we want to have:
           - a unique representation of the section (header/ID)
-          - a list of entries (TODO: decide whether to wrap them in another class)
+          - a list of entries
           - a binding to the Top class that holds the Section object
 
         :param content: list of strings, entire content of the section
+        :param section: a Section instance that contains this Subsection
         """
         self.section = section
         self.header = content[0].strip().strip('[]').strip()
@@ -32,6 +33,12 @@ class Subsection:
                 self._entries.append(self.yield_entry(element))
         
     def yield_entry(self, line):
+        """
+        Decides which Entry subclass to return
+        based on which Subsection subclass evokes this fn
+        :param line: str, a line to be converted into an Entry instance
+        :return: Entry, an instance of the proper Entry subclass
+        """
         if line.strip()[0] in [';', '#']:
             return Entry(line, self)
         elif isinstance(self, SubsectionParam):
@@ -59,6 +66,11 @@ class Subsection:
         return len(self._entries)
     
     def __iter__(self):
+        """
+        Useful if we want to iterate over entries as "for entry in subsection",
+        allows us to mark self._entries as private
+        :return: self
+        """
         self.n = 0
         return self
     
@@ -198,6 +210,12 @@ class SubsectionParam(Subsection):
             return "Subsection {}".format(self.header)
     
     def __add__(self, other):
+        """
+        Added for the purpose of merging subsections with
+        identical headers
+        :param other: other SubsectionParam instance
+        :return: a new SubsectionParam instance resulting from the merger
+        """
         if not isinstance(other, SubsectionParam):
             raise TypeError("{} is not a SubsectionParam instance".format(other))
         if self.header != other.header:

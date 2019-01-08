@@ -1,16 +1,18 @@
 import os
 from .Section import *
 from collections import OrderedDict
+from .Pdb import Pdb
 
 
 class Top:
-    def __init__(self, filename, gmx_dir='/usr/share/gromacs/top/'):
+    def __init__(self, filename, gmx_dir='/usr/share/gromacs/top/', pdb=None):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
         :param filename: str, path to the .top file
         :param gmx_dir: str, Gromacs FF directory
         """
+        self.pdb = None if pdb is None else Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
         self.dir = os.getcwd() + '/' + '/'.join(self.fname.split('/')[:-1])
@@ -20,6 +22,9 @@ class Top:
         self.sections = []
         self.parse_sections()
         self.system, self.charge, self.natoms = self.read_system_properties()
+    
+    def add_pdb(self, pdbfile):
+        self.pdb = Pdb(pdbfile, top=self)
     
     def include_all(self):
         """

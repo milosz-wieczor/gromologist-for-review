@@ -120,6 +120,9 @@ class Pdb:
         self.atoms.insert(index, new_atom)
 
     def select_atoms(self, selection_string):
+        return sorted(list(self.select_set_atoms(selection_string)))
+
+    def select_set_atoms(self, selection_string):
         """
         
         :param selection_string: str
@@ -129,19 +132,23 @@ class Pdb:
         parenth_ranges, operators = self.parse_sel_string(selection_string)
         if not parenth_ranges and not operators:
             if selection_string.strip().startswith("not "):
-                return self.find_atoms(selection_string, rev=True)
+                return self.find_atoms(selection_string.lstrip()[4:], rev=True)
             else:
                 return self.find_atoms(selection_string)
         elif parenth_ranges and not operators:
-            return self.select_atoms(selection_string.strip().strip('()'))
+            if selection_string.strip().startswith("not "):
+                set_all = {n for n in range(len(self.atoms))}
+                return set_all.difference(self.select_set_atoms(selection_string.strip()[4:].strip('()')))
+            else:
+                return self.select_set_atoms(selection_string.strip().strip('()'))
         else:
             first_op = selection_string[operators[0][0]:operators[0][1]].strip()
             if first_op == "and":
-                return self.select_atoms(selection_string[:operators[0][0]])\
-                    .intersection(self.select_atoms(selection_string[operators[0][1]:]))
+                return self.select_set_atoms(selection_string[:operators[0][0]])\
+                    .intersection(self.select_set_atoms(selection_string[operators[0][1]:]))
             elif first_op == "or":
-                return self.select_atoms(selection_string[:operators[0][0]]) \
-                    .union(self.select_atoms(selection_string[operators[0][1]:]))
+                return self.select_set_atoms(selection_string[:operators[0][0]]) \
+                    .union(self.select_set_atoms(selection_string[operators[0][1]:]))
     
     @staticmethod
     def parse_sel_string(selection_string):
@@ -160,7 +167,7 @@ class Pdb:
                 if opened_parenth == 0:
                     parenth_ranges.append((beginning, end))
                     beginning = 0
-            if opened_parenth < 0:
+            if opened_parenth < 0:  # TODO fix parentheses with "not"
                 raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
             if selection_string[nc:nc + 5] == " and " and opened_parenth == 0:
                 operators.append((nc, nc + 5))
@@ -174,16 +181,16 @@ class Pdb:
         chosen = []
         keyw = sel_string.split()[0]
         matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
-                     "chain": "chain", "resname": "resname"}
+                     "chain": "chain", "resname": "resname", "serial": "serial"}
         try:
             vals = {int(x) for x in sel_string.split()[1:]}
         except ValueError:
-            if " to " in sel_string.strip():
-                beg = int(sel_string.strip()[1])
-                end = int(sel_string.strip()[3])
+            if " to " in sel_string:
+                beg = int(sel_string.split()[1])
+                end = int(sel_string.split()[3])
                 vals = set(range(beg, end+1))
             else:
-                vals = set(sel_string[1:])
+                vals = set(sel_string.split()[1:])
         for n, a in enumerate(self.atoms):
             if not rev:
                 if a.__getattribute__(matchings[keyw]) in vals:

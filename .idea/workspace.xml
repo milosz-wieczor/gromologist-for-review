@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="f196fcdd-38f0-4546-99a1-20d3bdc8dc81" name="Default" comment="implemented entries/Entry subclasses">
-      <change afterPath="$PROJECT_DIR$/gromologist/Pdb.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.gitignore" beforeDir="false" afterPath="$PROJECT_DIR$/.gitignore" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/gromologist/Section.py" beforeDir="false" afterPath="$PROJECT_DIR$/gromologist/Section.py" afterDir="false" />
+    <list default="true" id="f196fcdd-38f0-4546-99a1-20d3bdc8dc81" name="Default" comment="">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/gromologist/Pdb.py" beforeDir="false" afterPath="$PROJECT_DIR$/gromologist/Pdb.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gromologist/Topology.py" beforeDir="false" afterPath="$PROJECT_DIR$/gromologist/Topology.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/gromologist/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/gromologist/__init__.py" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
     <option name="TRACKING_ENABLED" value="true" />
@@ -19,8 +19,8 @@
       <file leaf-file-name="Topology.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/gromologist/Topology.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="3948">
-              <caret line="141" column="73" selection-start-line="141" selection-start-column="73" selection-end-line="141" selection-end-column="73" />
+            <state relative-caret-position="728">
+              <caret line="26" column="67" selection-start-line="26" selection-start-column="67" selection-end-line="26" selection-end-column="67" />
               <folding>
                 <element signature="e#0#9#0" expanded="true" />
               </folding>
@@ -31,7 +31,7 @@
       <file leaf-file-name="Section.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/gromologist/Section.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="510">
+            <state relative-caret-position="784">
               <caret line="91" column="25" lean-forward="true" selection-start-line="91" selection-start-column="25" selection-end-line="91" selection-end-column="25" />
               <folding>
                 <element signature="e#0#29#0" expanded="true" />
@@ -43,8 +43,11 @@
       <file leaf-file-name="Pdb.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/gromologist/Pdb.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="196">
-              <caret line="7" column="106" selection-start-line="7" selection-start-column="106" selection-end-line="7" selection-end-column="106" />
+            <state relative-caret-position="1296">
+              <caret line="176" column="60" lean-forward="true" selection-start-line="176" selection-start-column="60" selection-end-line="176" selection-end-column="60" />
+              <folding>
+                <element signature="e#0#30#0" expanded="true" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -52,8 +55,8 @@
       <file leaf-file-name="Entries.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/gromologist/Entries.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="-608">
-              <caret line="18" column="4" lean-forward="true" selection-start-line="18" selection-start-column="4" selection-end-line="18" selection-end-column="4" />
+            <state relative-caret-position="1540">
+              <caret line="73" column="42" selection-start-line="73" selection-start-column="42" selection-end-line="73" selection-end-column="42" />
             </state>
           </provider>
         </entry>
@@ -61,8 +64,8 @@
       <file leaf-file-name="__init__.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/gromologist/__init__.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="56">
-              <caret line="2" column="25" selection-start-line="2" selection-start-column="25" selection-end-line="2" selection-end-column="25" />
+            <state relative-caret-position="112">
+              <caret line="4" column="18" selection-start-line="4" selection-start-column="18" selection-end-line="4" selection-end-column="18" />
               <folding>
                 <element signature="e#0#22#0" expanded="true" />
               </folding>
@@ -73,8 +76,8 @@
       <file leaf-file-name="Subsection.py" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/gromologist/Subsection.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="812">
-              <caret line="44" column="4" selection-start-line="44" selection-start-column="4" selection-end-line="44" selection-end-column="4" />
+            <state relative-caret-position="706">
+              <caret line="216" column="73" lean-forward="true" selection-start-line="216" selection-start-column="73" selection-end-line="216" selection-end-column="73" />
             </state>
           </provider>
         </entry>
@@ -100,11 +103,11 @@
   <component name="IdeDocumentHistory">
     <option name="CHANGED_PATHS">
       <list>
-        <option value="$PROJECT_DIR$/gromologist/__init__.py" />
-        <option value="$PROJECT_DIR$/gromologist/Topology.py" />
+        <option value="$PROJECT_DIR$/gromologist/Section.py" />
         <option value="$PROJECT_DIR$/gromologist/Subsection.py" />
         <option value="$PROJECT_DIR$/gromologist/Entries.py" />
-        <option value="$PROJECT_DIR$/gromologist/Section.py" />
+        <option value="$PROJECT_DIR$/gromologist/__init__.py" />
+        <option value="$PROJECT_DIR$/gromologist/Topology.py" />
         <option value="$PROJECT_DIR$/gromologist/Pdb.py" />
       </list>
     </option>
@@ -279,7 +282,28 @@
       <option name="project" value="LOCAL" />
       <updated>1545612421022</updated>
     </task>
-    <option name="localTasksCounter" value="13" />
+    <task id="LOCAL-00013" summary="PDB format implemented">
+      <created>1546902661860</created>
+      <option name="number" value="00013" />
+      <option name="presentableId" value="LOCAL-00013" />
+      <option name="project" value="LOCAL" />
+      <updated>1546902661860</updated>
+    </task>
+    <task id="LOCAL-00014" summary="topology checking implemented">
+      <created>1546905417989</created>
+      <option name="number" value="00014" />
+      <option name="presentableId" value="LOCAL-00014" />
+      <option name="project" value="LOCAL" />
+      <updated>1546905417990</updated>
+    </task>
+    <task id="LOCAL-00015" summary="writing PDBs implemented, added some docs">
+      <created>1546908865272</created>
+      <option name="number" value="00015" />
+      <option name="presentableId" value="LOCAL-00015" />
+      <option name="project" value="LOCAL" />
+      <updated>1546908865272</updated>
+    </task>
+    <option name="localTasksCounter" value="16" />
     <servers />
   </component>
   <component name="ToolWindowManager">
@@ -295,7 +319,7 @@
       <window_info anchor="bottom" id="Version Control" weight="0.3297414" />
       <window_info anchor="bottom" id="Python Console" />
       <window_info anchor="bottom" id="Terminal" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.12382532" />
+      <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.12382532" />
       <window_info anchor="bottom" id="Docker" show_stripe_button="false" />
       <window_info anchor="right" id="Database" />
       <window_info anchor="bottom" id="Find" order="1" weight="0.3297414" />
@@ -329,7 +353,10 @@
     <MESSAGE value="added ff directory to examples" />
     <MESSAGE value="added some docs" />
     <MESSAGE value="implemented entries/Entry subclasses" />
-    <option name="LAST_COMMIT_MESSAGE" value="implemented entries/Entry subclasses" />
+    <MESSAGE value="PDB format implemented" />
+    <MESSAGE value="topology checking implemented" />
+    <MESSAGE value="writing PDBs implemented, added some docs" />
+    <option name="LAST_COMMIT_MESSAGE" value="writing PDBs implemented, added some docs" />
   </component>
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/gromologist/__init__.py">
@@ -376,43 +403,33 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/gromologist/Subsection.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="706">
+          <caret line="216" column="73" lean-forward="true" selection-start-line="216" selection-start-column="73" selection-end-line="216" selection-end-column="73" />
+        </state>
+      </provider>
+    </entry>
+    <entry file="file://$PROJECT_DIR$/gromologist/Entries.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="1540">
+          <caret line="73" column="42" selection-start-line="73" selection-start-column="42" selection-end-line="73" selection-end-column="42" />
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/gromologist/__init__.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="56">
-          <caret line="2" column="25" selection-start-line="2" selection-start-column="25" selection-end-line="2" selection-end-column="25" />
+        <state relative-caret-position="112">
+          <caret line="4" column="18" selection-start-line="4" selection-start-column="18" selection-end-line="4" selection-end-column="18" />
           <folding>
             <element signature="e#0#22#0" expanded="true" />
           </folding>
         </state>
       </provider>
     </entry>
-    <entry file="file://$PROJECT_DIR$/gromologist/Topology.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="3948">
-          <caret line="141" column="73" selection-start-line="141" selection-start-column="73" selection-end-line="141" selection-end-column="73" />
-          <folding>
-            <element signature="e#0#9#0" expanded="true" />
-          </folding>
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/gromologist/Subsection.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="812">
-          <caret line="44" column="4" selection-start-line="44" selection-start-column="4" selection-end-line="44" selection-end-column="4" />
-        </state>
-      </provider>
-    </entry>
-    <entry file="file://$PROJECT_DIR$/gromologist/Entries.py">
-      <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="-608">
-          <caret line="18" column="4" lean-forward="true" selection-start-line="18" selection-start-column="4" selection-end-line="18" selection-end-column="4" />
-        </state>
-      </provider>
-    </entry>
     <entry file="file://$PROJECT_DIR$/gromologist/Section.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="510">
+        <state relative-caret-position="784">
           <caret line="91" column="25" lean-forward="true" selection-start-line="91" selection-start-column="25" selection-end-line="91" selection-end-column="25" />
           <folding>
             <element signature="e#0#29#0" expanded="true" />
@@ -420,10 +437,23 @@
         </state>
       </provider>
     </entry>
+    <entry file="file://$PROJECT_DIR$/gromologist/Topology.py">
+      <provider selected="true" editor-type-id="text-editor">
+        <state relative-caret-position="728">
+          <caret line="26" column="67" selection-start-line="26" selection-start-column="67" selection-end-line="26" selection-end-column="67" />
+          <folding>
+            <element signature="e#0#9#0" expanded="true" />
+          </folding>
+        </state>
+      </provider>
+    </entry>
     <entry file="file://$PROJECT_DIR$/gromologist/Pdb.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="196">
-          <caret line="7" column="106" selection-start-line="7" selection-start-column="106" selection-end-line="7" selection-end-column="106" />
+        <state relative-caret-position="1296">
+          <caret line="176" column="60" lean-forward="true" selection-start-line="176" selection-start-column="60" selection-end-line="176" selection-end-column="60" />
+          <folding>
+            <element signature="e#0#30#0" expanded="true" />
+          </folding>
         </state>
       </provider>
     </entry>

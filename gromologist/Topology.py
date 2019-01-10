@@ -22,6 +22,9 @@ class Top:
         self.sections = []
         self.parse_sections()
         self.system, self.charge, self.natoms = self.read_system_properties()
+        
+    def __repr__(self):
+        return "Topology with {} atoms and total charge {}".format(self.natoms, self.charge)
     
     def add_pdb(self, pdbfile):
         self.pdb = Pdb(pdbfile, top=self)

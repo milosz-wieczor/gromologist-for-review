@@ -52,7 +52,9 @@ class Pdb:
                     if base_char > 90:
                         return
 
-    def check_top(self, maxwarn=20):
+    def check_top(self, maxwarn=20, fix_pdb=False, fix_top=False):
+        if fix_pdb and fix_top:
+            raise ValueError("You either want to fix topology or pdb naming")
         if self.top is None:
             raise ValueError("a Top object has not been assigned; molecule info missing")
         index, err = 0, 0
@@ -64,7 +66,13 @@ class Pdb:
             atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
             for m in range(n_mols):
                 for n, a in enumerate(atom_entries):
-                    err += self.check_mismatch(atom_entries[n], self.atoms[index], mol_name)
+                    rtrn = self.check_mismatch(atom_entries[n], self.atoms[index], mol_name)
+                    if rtrn:
+                        if fix_pdb:
+                            self.atoms[index].atomname = atom_entries[n].atomname
+                        elif fix_top:
+                            atom_entries[n].atomname = self.atoms[index].atomname
+                    err += rtrn
                     index += 1
                     if err > maxwarn:
                         raise RuntimeError("Error: too many warnings")
@@ -72,9 +80,9 @@ class Pdb:
     @staticmethod
     def check_mismatch(atom_entry, atom_instance, mol_name):
         if atom_entry.atomname != atom_instance.atomname:
-            warnings.warn("Atoms {} ({}) in molecule {} topology and {} ({}) in .pdb have "
-                          "non-matching names".format(atom_entry.num, atom_entry.atomname, mol_name,
-                                                      atom_instance.serial, atom_instance.atomname), Warning)
+            print("Atoms {} ({}) in molecule {} topology and {} ({}) in .pdb have "
+                  "non-matching names".format(atom_entry.num, atom_entry.atomname, mol_name,
+                                              atom_instance.serial, atom_instance.atomname))
             return 1
         return 0
         
@@ -93,19 +101,98 @@ class Pdb:
     def renumber_all(self):
         for n, atom in enumerate(self.atoms):
             atom.serial = n + 1
-
-    def find_line(self, name, res, resname):
-        lines = [x for x in range(len(self.contents)) if self.contents[x].startswith("ATOM")
-                 and int(self.contents[x][22:26]) == res and self.contents[x][12:16].strip() == name
-                 and self.contents[x][17:20].strip() == resname]
-        if len(lines) > 1:
-            raise RuntimeError("found more than one line fulfilling criterion:\n{}\n"
-                               "Consider renumbering DNA residues in your PDB file to avoid duplicates"
-                               .format(" ".join([self.contents[a] for a in lines])))
-        elif len(lines) == 0:
-            raise RuntimeError("name {} and resnum {} not found".format(name, res))
-        return lines[0]
     
+    def insert_atom(self, index, base_atom, **kwargs):
+        """
+        Inserts an atom into the atomlist. The atom is defined by
+        providing a base Atom instance and a number of keyworded modifiers,
+        e.g. atomname="CA", serial=15, ...
+        :param index: int, the new index of the inserted Atom in the Atoms list
+        :param base_atom: Atom, instance based on which the new atom will be based
+        :param kwargs: Atom attributes to be held by the new atom
+        :return: None
+        """
+        new_atom = Atom(self.write_atom(base_atom))
+        for kw in kwargs.keys():
+            if kw not in {"serial", "atomname", "resname", "chain", "resnum", "x", "y", "z", "occ", "beta", "element"}:
+                raise ValueError("{} is not a valid Atom attribute")
+            new_atom.__setattr__(kw, kwargs[kw])
+        self.atoms.insert(index, new_atom)
+
+    def select_atoms(self, selection_string):
+        """
+        
+        :param selection_string: str
+        :return:
+        """
+        assert isinstance(selection_string, str)
+        parenth_ranges, operators = self.parse_sel_string(selection_string)
+        if not parenth_ranges and not operators:
+            if selection_string.strip().startswith("not "):
+                return self.find_atoms(selection_string, rev=True)
+            else:
+                return self.find_atoms(selection_string)
+        elif parenth_ranges and not operators:
+            return self.select_atoms(selection_string.strip().strip('()'))
+        else:
+            first_op = selection_string[operators[0][0]:operators[0][1]].strip()
+            if first_op == "and":
+                return self.select_atoms(selection_string[:operators[0][0]])\
+                    .intersection(self.select_atoms(selection_string[operators[0][1]:]))
+            elif first_op == "or":
+                return self.select_atoms(selection_string[:operators[0][0]]) \
+                    .union(self.select_atoms(selection_string[operators[0][1]:]))
+    
+    @staticmethod
+    def parse_sel_string(selection_string):
+        parenth_ranges = []
+        operators = []
+        opened_parenth = 0
+        beginning = 0
+        for nc, char in enumerate(selection_string):
+            if char == '(':
+                opened_parenth += 1
+                if beginning == 0:
+                    beginning = nc
+            elif char == ')':
+                opened_parenth -= 1
+                end = nc
+                if opened_parenth == 0:
+                    parenth_ranges.append((beginning, end))
+                    beginning = 0
+            if opened_parenth < 0:
+                raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
+            if selection_string[nc:nc + 5] == " and " and opened_parenth == 0:
+                operators.append((nc, nc + 5))
+            if selection_string[nc:nc + 4] == " or " and opened_parenth == 0:
+                operators.append((nc, nc + 4))
+        if opened_parenth != 0:
+            raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
+        return parenth_ranges, operators
+    
+    def find_atoms(self, sel_string, rev=False):
+        chosen = []
+        keyw = sel_string.split()[0]
+        matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
+                     "chain": "chain", "resname": "resname"}
+        try:
+            vals = {int(x) for x in sel_string.split()[1:]}
+        except ValueError:
+            if " to " in sel_string.strip():
+                beg = int(sel_string.strip()[1])
+                end = int(sel_string.strip()[3])
+                vals = set(range(beg, end+1))
+            else:
+                vals = set(sel_string[1:])
+        for n, a in enumerate(self.atoms):
+            if not rev:
+                if a.__getattribute__(matchings[keyw]) in vals:
+                    chosen.append(n)
+            else:
+                if a.__getattribute__(matchings[keyw]) not in vals:
+                    chosen.append(n)
+        return set(chosen)
+        
     def parse_contents(self):
         atoms, remarks = [], []
         box = [7.5, 7.5, 7.5, 90, 90, 90]  # generic default, will be overwritten if present
@@ -127,7 +214,7 @@ class Pdb:
         :param serials: iterable, optional; can be used to specify a subset of atoms
         :return: None
         """
-        if any([v > 9999 for v in values]):
+        if any([v > 999 for v in values]):
             print("At least one value is too large to fit into the `beta` field, consider division "
                   "to make values smaller")
         if not serials:

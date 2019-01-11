@@ -120,6 +120,17 @@ class Pdb:
         self.atoms.insert(index, new_atom)
 
     def select_atoms(self, selection_string):
+        protein_selection = "resname ALA ACE CYS ASP ASPP GLU GLUP PHE GLY HIS HID HIE HSD HSE ILE LYS LEU MET " \
+                            "NME NMA ASN PRO GLN ARG SER THR VAL TRP"
+        dna_selection = "resname DA DG DC DT DA5 DG5 DC5 DT5 DA3 DG3 DC3 DT3"
+        rna_selection = "resname RA RG RC RT RA5 RG5 RC5 RT5 RA3 RG3 RC3 RT3"
+        solvent_selection = "resname HOH TIP3 SOL K CL NA"
+        selection_string = selection_string.replace('solvent', solvent_selection)
+        selection_string = selection_string.replace('water', 'resname HOH TIP3 SOL')
+        selection_string = selection_string.replace('protein', protein_selection)
+        selection_string = selection_string.replace('nucleic', 'dna or rna')
+        selection_string = selection_string.replace('dna', dna_selection)
+        selection_string = selection_string.replace('rna', rna_selection)
         return sorted(list(self.select_set_atoms(selection_string)))
 
     def select_set_atoms(self, selection_string):
@@ -204,7 +215,7 @@ class Pdb:
         atoms, remarks = [], []
         box = [7.5, 7.5, 7.5, 90, 90, 90]  # generic default, will be overwritten if present
         for line in self.contents:
-            if line.startswith('ATOM'):  # TODO take care of HETATM
+            if line.startswith('ATOM') or line.startswith('HETATM'):
                 atoms.append(Atom(line))
             elif line.startswith("CRYST1"):
                 box = [float(line[6+9*a:6+9*(a+1)]) for a in range(3)] + \
@@ -249,6 +260,7 @@ class Pdb:
 
 class Atom:
     def __init__(self, line):
+        self.label = line[:6].strip()
         self.serial = int(line[6:11].strip())
         self.atomname = line[12:16].strip()
         self.altloc = line[16:17]
@@ -260,7 +272,7 @@ class Atom:
         self.occ = float(line[54:60].strip())
         self.beta = float(line[60:66].strip())
         try:
-            self.element = line[76:78]
+            self.element = line[76:78].strip()
         except IndexError:
             name = self.atomname.strip('1234567890')
             if name in 'CHONSP':

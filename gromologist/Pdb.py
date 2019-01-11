@@ -1,5 +1,4 @@
 from .Entries import EntryAtom
-import warnings
 
 
 class Pdb:
@@ -178,7 +177,7 @@ class Pdb:
                 if opened_parenth == 0:
                     parenth_ranges.append((beginning, end))
                     beginning = 0
-            if opened_parenth < 0:  # TODO fix parentheses with "not"
+            if opened_parenth < 0:
                 raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
             if selection_string[nc:nc + 5] == " and " and opened_parenth == 0:
                 operators.append((nc, nc + 5))

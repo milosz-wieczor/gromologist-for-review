@@ -1,6 +1,11 @@
 
 
 class Entry:
+    """
+    A generic class representing a single line in the topology.
+    In an entry, the actual content and the comments are kept
+    in two separate variables.
+    """
     def __init__(self, content, subsection):
         self.subsection = subsection
         semicol_index = content.find(';')
@@ -18,6 +23,11 @@ class Entry:
     
     
 class EntryBonded(Entry):
+    """
+    This Entry subclass is intended for entries that correspond
+    to bonded interaction (bonds, pairs, angles, dihedrals)
+    between specific atoms in the topology
+    """
     def __init__(self, content, subsection):
         super().__init__(content, subsection)
         self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
@@ -39,6 +49,11 @@ class EntryBonded(Entry):
         
         
 class EntryParam(Entry):
+    """
+    This Entry subclass represents a line containing force field
+    parameters, e.g. bondtypes, angletypes, cmaptypes, pairtypes etc.
+    that map a set of atom types to a set of FF-specific values
+    """
     def __init__(self, content, subsection):
         super().__init__(content, subsection)
         self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
@@ -54,6 +69,10 @@ class EntryParam(Entry):
         
         
 class EntryAtom(Entry):
+    """
+    This Entry subclass corresponds to atoms defined in
+    the [ atoms ] section of each molecule
+    """
     def __init__(self, content, subsection):
         super().__init__(content, subsection)
         try:

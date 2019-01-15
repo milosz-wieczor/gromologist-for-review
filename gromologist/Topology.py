@@ -1,15 +1,18 @@
 import os
 from .Section import *
+from collections import OrderedDict
+from .Pdb import Pdb
 
 
 class Top:
-    def __init__(self, filename, gmx_dir='/usr/share/gromacs/top/'):
+    def __init__(self, filename, gmx_dir='/usr/share/gromacs/top/', pdb=None):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
         :param filename: str, path to the .top file
         :param gmx_dir: str, Gromacs FF directory
         """
+        self.pdb = None if pdb is None else Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
         self.dir = os.getcwd() + '/' + '/'.join(self.fname.split('/')[:-1])
@@ -19,6 +22,12 @@ class Top:
         self.sections = []
         self.parse_sections()
         self.system, self.charge, self.natoms = self.read_system_properties()
+        
+    def __repr__(self):
+        return "Topology with {} atoms and total charge {}".format(self.natoms, self.charge)
+    
+    def add_pdb(self, pdbfile):
+        self.pdb = Pdb(pdbfile, top=self)
     
     def include_all(self):
         """
@@ -110,13 +119,13 @@ class Top:
         """
         Reads in system composition based on the [ molecules ] section
         and calculates the number of atoms and charge of the system
-        :return: dict, contains molecule_name: number_of_molecules entries
+        :return: OrderedDict, contains molecule_name:number_of_molecules pairs and preserves the order read from file
                  float, total charge of the system
                  int, number of atoms in the system
         """
         system_subsection = [s.get_subsection('molecules') for s in self.sections
                              if 'molecules' in [ss.header for ss in s.subsections]]
-        molecules = {}
+        molecules = OrderedDict()  # we want to preserve the order of molecules in the system for e.g. PDB checking
         natoms, charge = 0, 0
         if len(system_subsection) == 0:
             raise KeyError

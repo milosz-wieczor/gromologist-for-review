@@ -65,7 +65,11 @@ class Pdb:
             atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
             for m in range(n_mols):
                 for n, a in enumerate(atom_entries):
-                    rtrn = self.check_mismatch(atom_entries[n], self.atoms[index], mol_name)
+                    try:
+                        rtrn = self.check_mismatch(atom_entries[n], self.atoms[index], mol_name)
+                    except IndexError:
+                        raise RuntimeError("Mismatch encountered: PDB has {} atoms while topology "
+                                           "has {}".format(n + 1, index + 1, len(self.atoms), self.top.natoms))
                     if rtrn:
                         if fix_pdb:
                             self.atoms[index].atomname = atom_entries[n].atomname
@@ -75,6 +79,7 @@ class Pdb:
                     index += 1
                     if err > maxwarn:
                         raise RuntimeError("Error: too many warnings")
+        print("Check passed, all names match")
     
     @staticmethod
     def check_mismatch(atom_entry, atom_instance, mol_name):

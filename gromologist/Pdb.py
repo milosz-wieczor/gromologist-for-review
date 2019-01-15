@@ -101,6 +101,28 @@ class Pdb:
         for n, atom in enumerate(self.atoms):
             atom.serial = n + 1
     
+    def match_order_by_top_names(self):
+        if self.top is None:
+            raise ValueError("a Top object has not been assigned; molecule info missing")
+        new_atoms = []
+        for mol_name in self.top.system.keys():
+            mol = self.top.get_molecule(mol_name)
+            n_mols = self.top.system[mol_name]
+            atom_subsection = mol.get_subsection('atoms')
+            atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
+            for m in range(n_mols):
+                for a in atom_entries:
+                    pdb_loc = self.select_atoms("resname {} and resid {} and name {}".format(a.resname, a.resid,
+                                                                                             a.atomname))
+                    if len(pdb_loc) != 1:
+                        raise ValueError("Could not proceed; for match-based renumbering, residue numberings "
+                                         "have to be consistent between PDB and .top, atom names need to match, "
+                                         "and molecules cannot be repeated.\nError encountered when processing"
+                                         "residue {} with resid {}, atom name {}".format(a.resname, a.resid,
+                                                                                             a.atomname))
+                    new_atoms.append(self.atoms[list(pdb_loc)[0]])
+        self.atoms = new_atoms
+    
     def insert_atom(self, index, base_atom, **kwargs):
         """
         Inserts an atom into the atomlist. The atom is defined by

@@ -4,13 +4,12 @@ from .Entries import EntryAtom
 class Pdb:
     def __init__(self, filename, top=None, altloc='A'):
         self.fname = filename
-        self.contents = [line.strip() for line in open(self.fname)]
-        self.atoms, self.box, self.remarks = self.parse_contents()
+        self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
         self.top = top
         self.altloc = altloc
-        self.atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
-                           "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
-        self.cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
+        self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
+                            "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
+        self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
 
     def __repr__(self):
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
@@ -57,7 +56,7 @@ class Pdb:
         if self.top is None:
             raise ValueError("a Top object has not been assigned; molecule info missing")
         index, err = 0, 0
-        self.remove_altloc()
+        self._remove_altloc()
         for mol_name in self.top.system.keys():
             mol = self.top.get_molecule(mol_name)
             n_mols = self.top.system[mol_name]
@@ -66,7 +65,7 @@ class Pdb:
             for m in range(n_mols):
                 for n, a in enumerate(atom_entries):
                     try:
-                        rtrn = self.check_mismatch(atom_entries[n], self.atoms[index], mol_name)
+                        rtrn = self._check_mismatch(atom_entries[n], self.atoms[index], mol_name)
                     except IndexError:
                         raise RuntimeError("Mismatch encountered: PDB has {} atoms while topology "
                                            "has {}".format(n + 1, index + 1, len(self.atoms), self.top.natoms))
@@ -82,7 +81,7 @@ class Pdb:
         print("Check passed, all names match")
     
     @staticmethod
-    def check_mismatch(atom_entry, atom_instance, mol_name):
+    def _check_mismatch(atom_entry, atom_instance, mol_name):
         if atom_entry.atomname != atom_instance.atomname:
             print("Atoms {} ({}) in molecule {} topology and {} ({}) in .pdb have "
                   "non-matching names".format(atom_entry.num, atom_entry.atomname, mol_name,
@@ -90,7 +89,7 @@ class Pdb:
             return 1
         return 0
         
-    def remove_altloc(self):
+    def _remove_altloc(self):
         """
         We only keep one of the alternative locations in case
         there is more (by default, A is kept)
@@ -98,9 +97,9 @@ class Pdb:
         """
         self.atoms = [a for a in self.atoms if a.altloc in [' ', self.altloc]]
     
-    def write_atom(self, atom):
-        return self.atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain, atom.resnum,
-                                       atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta, atom.element)
+    def _write_atom(self, atom):
+        return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain, atom.resnum,
+                                        atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta, atom.element)
     
     def renumber_all(self):
         for n, atom in enumerate(self.atoms):
@@ -124,7 +123,7 @@ class Pdb:
                                          "have to be consistent between PDB and .top, atom names need to match, "
                                          "and molecules cannot be repeated.\nError encountered when processing"
                                          "residue {} with resid {}, atom name {}".format(a.resname, a.resid,
-                                                                                             a.atomname))
+                                                                                         a.atomname))
                     new_atoms.append(self.atoms[list(pdb_loc)[0]])
         self.atoms = new_atoms
     
@@ -138,7 +137,7 @@ class Pdb:
         :param kwargs: Atom attributes to be held by the new atom
         :return: None
         """
-        new_atom = Atom(self.write_atom(base_atom))
+        new_atom = Atom(self._write_atom(base_atom))
         for kw in kwargs.keys():
             if kw not in {"serial", "atomname", "resname", "chain", "resnum", "x", "y", "z", "occ", "beta", "element"}:
                 raise ValueError("{} is not a valid Atom attribute")
@@ -157,38 +156,38 @@ class Pdb:
         selection_string = selection_string.replace('nucleic', 'dna or rna')
         selection_string = selection_string.replace('dna', dna_selection)
         selection_string = selection_string.replace('rna', rna_selection)
-        return sorted(list(self.select_set_atoms(selection_string)))
+        return sorted(list(self._select_set_atoms(selection_string)))
 
-    def select_set_atoms(self, selection_string):
+    def _select_set_atoms(self, selection_string):
         """
         
         :param selection_string: str
         :return:
         """
         assert isinstance(selection_string, str)
-        parenth_ranges, operators = self.parse_sel_string(selection_string)
+        parenth_ranges, operators = self._parse_sel_string(selection_string)
         if not parenth_ranges and not operators:
             if selection_string.strip().startswith("not "):
-                return self.find_atoms(selection_string.lstrip()[4:], rev=True)
+                return self._find_atoms(selection_string.lstrip()[4:], rev=True)
             else:
-                return self.find_atoms(selection_string)
+                return self._find_atoms(selection_string)
         elif parenth_ranges and not operators:
             if selection_string.strip().startswith("not "):
                 set_all = {n for n in range(len(self.atoms))}
-                return set_all.difference(self.select_set_atoms(selection_string.strip()[4:].strip('()')))
+                return set_all.difference(self._select_set_atoms(selection_string.strip()[4:].strip('()')))
             else:
-                return self.select_set_atoms(selection_string.strip().strip('()'))
+                return self._select_set_atoms(selection_string.strip().strip('()'))
         else:
             first_op = selection_string[operators[0][0]:operators[0][1]].strip()
             if first_op == "and":
-                return self.select_set_atoms(selection_string[:operators[0][0]])\
-                    .intersection(self.select_set_atoms(selection_string[operators[0][1]:]))
+                return self._select_set_atoms(selection_string[:operators[0][0]])\
+                    .intersection(self._select_set_atoms(selection_string[operators[0][1]:]))
             elif first_op == "or":
-                return self.select_set_atoms(selection_string[:operators[0][0]]) \
-                    .union(self.select_set_atoms(selection_string[operators[0][1]:]))
+                return self._select_set_atoms(selection_string[:operators[0][0]]) \
+                    .union(self._select_set_atoms(selection_string[operators[0][1]:]))
     
     @staticmethod
-    def parse_sel_string(selection_string):
+    def _parse_sel_string(selection_string):
         parenth_ranges = []
         operators = []
         opened_parenth = 0
@@ -214,7 +213,7 @@ class Pdb:
             raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
         return parenth_ranges, operators
     
-    def find_atoms(self, sel_string, rev=False):
+    def _find_atoms(self, sel_string, rev=False):
         chosen = []
         keyw = sel_string.split()[0]
         matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
@@ -237,10 +236,11 @@ class Pdb:
                     chosen.append(n)
         return set(chosen)
         
-    def parse_contents(self):
+    @staticmethod
+    def _parse_contents(contents):
         atoms, remarks = [], []
         box = [7.5, 7.5, 7.5, 90, 90, 90]  # generic default, will be overwritten if present
-        for line in self.contents:
+        for line in contents:
             if line.startswith('ATOM') or line.startswith('HETATM'):
                 atoms.append(Atom(line))
             elif line.startswith("CRYST1"):
@@ -276,11 +276,11 @@ class Pdb:
 
     def save_pdb(self, outname='out.pdb'):
         with open(outname, 'w') as outfile:
-            outfile.write(self.cryst_format.format(*self.box))
-            for line in self.remarks:
+            outfile.write(self._cryst_format.format(*self.box))
+            for line in self._remarks:
                 outfile.write(line.strip() + '\n')
             for atom in self.atoms:
-                outfile.write(self.write_atom(atom))
+                outfile.write(self._write_atom(atom))
             outfile.write('ENDMDL\n')
 
 

@@ -41,8 +41,8 @@
       <file leaf-file-name="Pdb.py" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/gromologist/Pdb.py">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="616">
-              <caret line="72" column="116" lean-forward="true" selection-start-line="72" selection-start-column="116" selection-end-line="72" selection-end-column="116" />
+            <state relative-caret-position="140">
+              <caret line="5" column="13" lean-forward="true" selection-start-line="5" selection-start-column="13" selection-end-line="5" selection-end-column="13" />
             </state>
           </provider>
         </entry>
@@ -326,7 +326,14 @@
       <option name="project" value="LOCAL" />
       <updated>1547568132974</updated>
     </task>
-    <option name="localTasksCounter" value="20" />
+    <task id="LOCAL-00020" summary="extra error raised when checking for compatibility">
+      <created>1547585249344</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1547585249344</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="ToolWindowManager">
@@ -344,6 +351,7 @@
       <window_info content_ui="combo" id="Project" order="0" visible="true" weight="0.12603648" />
       <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
       <window_info anchor="right" id="Database" order="3" />
+      <window_info anchor="bottom" id="Find" order="1" weight="0.3297414" />
       <window_info anchor="right" id="SciView" order="3" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info id="Favorites" order="2" side_tool="true" />
@@ -355,7 +363,6 @@
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
       <window_info anchor="right" x="0" y="0" width="414" height="892" id="Documentation" order="3" side_tool="true" weight="0.32946378" />
       <window_info anchor="bottom" id="Message" order="0" />
-      <window_info anchor="bottom" id="Find" order="1" weight="0.3297414" />
     </layout>
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -383,7 +390,8 @@
     <MESSAGE value="fixed a couple of erroneous behaviors in selection parsing" />
     <MESSAGE value="added automatic selections" />
     <MESSAGE value="added crude impl of PDB matching based on .top" />
-    <option name="LAST_COMMIT_MESSAGE" value="added crude impl of PDB matching based on .top" />
+    <MESSAGE value="extra error raised when checking for compatibility" />
+    <option name="LAST_COMMIT_MESSAGE" value="extra error raised when checking for compatibility" />
   </component>
   <component name="editorHistoryManager">
     <entry file="file://$PROJECT_DIR$/gromologist/Topology.py">
@@ -724,8 +732,8 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/gromologist/Pdb.py">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="616">
-          <caret line="72" column="116" lean-forward="true" selection-start-line="72" selection-start-column="116" selection-end-line="72" selection-end-column="116" />
+        <state relative-caret-position="140">
+          <caret line="5" column="13" lean-forward="true" selection-start-line="5" selection-start-column="13" selection-end-line="5" selection-end-column="13" />
         </state>
       </provider>
     </entry>

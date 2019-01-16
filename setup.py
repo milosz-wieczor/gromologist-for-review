@@ -6,6 +6,6 @@ setup(name='gromologist',
       url='https://gitlab.com/KomBioMol/gromologist',
       author='Milosz Wieczor, Cyprian Kleist',
       author_email='',
-      license='',
+      license='GNU GPLv3',
       packages=['gromologist'],
       zip_safe=False)

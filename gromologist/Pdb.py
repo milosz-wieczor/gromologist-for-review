@@ -105,10 +105,22 @@ class Pdb:
         for n, atom in enumerate(self.atoms):
             atom.serial = n + 1
     
-    def match_order_by_top_names(self):
+    def match_order_by_top_names(self, range=None):
+        """
+        Whenever PDB atoms have different ordering than .top ones
+        but naming is consistent, we can use the ordering from .top
+        to reorder PDB atoms.
+        This can be done for the entire system if molecules are unique;
+        otherwise, range has to be specified (using the Pythonic convention)
+        to avoid ambiguities. In that case, matching molecules will only be
+        looked for in the specified range.
+        :param range: tuple, start and end point of the modification (end is excluded)
+        :return:
+        """
         if self.top is None:
             raise ValueError("a Top object has not been assigned; molecule info missing")
         new_atoms = []
+        index = 0
         for mol_name in self.top.system.keys():
             mol = self.top.get_molecule(mol_name)
             n_mols = self.top.system[mol_name]
@@ -116,15 +128,18 @@ class Pdb:
             atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
             for m in range(n_mols):
                 for a in atom_entries:
-                    pdb_loc = self.select_atoms("resname {} and resid {} and name {}".format(a.resname, a.resid,
+                    if not range or range[0] <= index < range[1]:
+                        pdb_loc = self.select_atoms("resname {} and resid {} and name {}".format(a.resname, a.resid,
+                                                                                                 a.atomname))
+                        pdb_loc = [loc for loc in pdb_loc if not range or range[0] <= index < range[1]]
+                        if len(pdb_loc) != 1:
+                            raise ValueError("Could not proceed; for match-based renumbering, residue numberings "
+                                             "have to be consistent between PDB and .top, atom names need to match, "
+                                             "and molecules cannot be repeated.\nError encountered when processing"
+                                             "residue {} with resid {}, atom name {}".format(a.resname, a.resid,
                                                                                              a.atomname))
-                    if len(pdb_loc) != 1:
-                        raise ValueError("Could not proceed; for match-based renumbering, residue numberings "
-                                         "have to be consistent between PDB and .top, atom names need to match, "
-                                         "and molecules cannot be repeated.\nError encountered when processing"
-                                         "residue {} with resid {}, atom name {}".format(a.resname, a.resid,
-                                                                                         a.atomname))
-                    new_atoms.append(self.atoms[list(pdb_loc)[0]])
+                        new_atoms.append(self.atoms[list(pdb_loc)[0]])
+                    index += 1
         self.atoms = new_atoms
     
     def insert_atom(self, index, base_atom, **kwargs):

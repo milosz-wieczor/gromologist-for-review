@@ -5,45 +5,74 @@ from .Pdb import Pdb
 
 
 class Top:
-    def __init__(self, filename, gmx_dir='/usr/share/gromacs/top/', pdb=None):
+    def __init__(self, filename, gmx_dir='/usr/share/gromacs/top/', pdb=None, ignore_ifdef=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
         :param filename: str, path to the .top file
         :param gmx_dir: str, Gromacs FF directory
+        :param pdb: str, path to a matching PDB file
+        :param ignore_ifdef: bool, whether to ignore #include statements within #ifdef blocks (e.g. posre.itp)
         """
         self.pdb = None if pdb is None else Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
         self.dir = os.getcwd() + '/' + '/'.join(self.fname.split('/')[:-1])
-        self.contents = open(self.fname).readlines()
-        self.gromacs_dir = gmx_dir
-        self.include_all()
+        self._contents = open(self.fname).readlines()
+        self._gromacs_dir = gmx_dir
+        self._include_all(ignore_ifdef)
         self.sections = []
-        self.parse_sections()
-        self.system, self.charge, self.natoms = self.read_system_properties()
+        self._parse_sections()
+        if self.top.endswith('top'):
+            self.system, self.charge, self.natoms = self._read_system_properties()
         
     def __repr__(self):
         return "Topology with {} atoms and total charge {}".format(self.natoms, self.charge)
     
     def add_pdb(self, pdbfile):
+        """
+        Allows to pair a PDB file with the topology after the instance was initialized
+        :param pdbfile: str, path to PDB file
+        :return: None
+        """
         self.pdb = Pdb(pdbfile, top=self)
     
-    def include_all(self):
+    def _include_all(self, ign_ifdef):
         """
         includes all .itp files in the .top file to facilitate processing
         :return: None
         """
-        # TODO do we want to add #ifdef support + .mdp processing?
-        lines = [i for i in range(len(self.contents)) if self.contents[i].strip().startswith("#include")]
+        # TODO optionally insert .mdp defines in constructor & pass here?
+        ignore_lines = self._find_ifdef_lines() if ign_ifdef else set()
+        lines = [i for i in range(len(self._contents)) if self._contents[i].strip().startswith("#include")
+                 and i not in ignore_lines]
         while len(lines) > 0:
             lnum = lines[0]
-            to_include, extra_prefix = self.find_in_path(self.contents.pop(lnum).split()[1].strip('"\''))
-            contents = self.add_prefix_to_include(open(to_include).readlines(), extra_prefix)
-            self.contents[lnum:lnum] = contents
-            lines = [i for i in range(len(self.contents)) if self.contents[i].startswith("#include")]
+            to_include, extra_prefix = self._find_in_path(self._contents.pop(lnum).split()[1].strip('"\''))
+            contents = self._add_prefix_to_include(open(to_include).readlines(), extra_prefix)
+            self._contents[lnum:lnum] = contents
+            ignore_lines = self._find_ifdef_lines() if ign_ifdef else set()
+            lines = [i for i in range(len(self._contents)) if self._contents[i].startswith("#include")
+                     and i not in ignore_lines]
     
-    def find_in_path(self, filename):
+    def _find_ifdef_lines(self):
+        """
+        Finds #ifdef/#endif blocks in the topology if user
+        explicitly asks to ignore them
+        :return: set, int numbers of all lines that fall within an #ifdef/#endif block
+        """
+        ignore_set = set()
+        counter = 0
+        for n, line in enumerate(self._contents):
+            if line.strip().startswith("#ifdef"):
+                counter += 1
+            elif line.strip().startswith("#endif"):
+                counter -= 1
+            if counter > 0:
+                ignore_set.add(n)
+        return ignore_set
+    
+    def _find_in_path(self, filename):
         """
         looks for a file to be included in either the current directory
         or in Gromacs directories (as given by user), in order to
@@ -64,12 +93,14 @@ class Top:
                 first = pref.split('/')[0]
             if first in os.listdir(self.dir) and suff in os.listdir(self.dir + '/' + pref):
                 return self.dir + '/' + pref + '/' + suff, pref
-            elif suff in os.listdir(self.gromacs_dir + '/' + pref):
-                return self.gromacs_dir + '/' + pref + '/' + suff, pref
-        raise FileNotFoundError('file {} not found in neither local nor Gromacs directory'.format(filename))
+            elif suff in os.listdir(self._gromacs_dir + '/' + pref):
+                return self._gromacs_dir + '/' + pref + '/' + suff, pref
+        raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'
+                                'If the file is included in an #ifdef block, please try setting'
+                                ' ignore_ifdef=True'.format(filename))
     
     @staticmethod
-    def add_prefix_to_include(content, prefix):
+    def _add_prefix_to_include(content, prefix):
         """
         Modifies #include statements if nested #includes
         point to different directories
@@ -88,20 +119,20 @@ class Top:
                     content[nline] = newline
         return content
     
-    def parse_sections(self):
+    def _parse_sections(self):
         """
         Cuts the content in sections as defined by the position
         of special headers, and builds the self.sections list
         :return: None
         """
         special_sections = {'defaults', 'moleculetype', 'system'}
-        special_lines = [n for n, l in enumerate(self.contents)
+        special_lines = [n for n, l in enumerate(self._contents)
                          if l.strip() and l.strip().strip('[]').strip().split()[0] in special_sections]
-        special_lines.append(len(self.contents))
+        special_lines.append(len(self._contents))
         for beg, end in zip(special_lines[:-1], special_lines[1:]):
-            self.sections.append(self.yield_sec(self.contents[beg:end]))
+            self.sections.append(self._yield_sec(self._contents[beg:end]))
     
-    def yield_sec(self, content):
+    def _yield_sec(self, content):
         """
         Chooses which class (Section or derived classes)
         should be used for the particular set of entries
@@ -115,7 +146,7 @@ class Top:
         else:
             return Section(content, self)
         
-    def read_system_properties(self):
+    def _read_system_properties(self):
         """
         Reads in system composition based on the [ molecules ] section
         and calculates the number of atoms and charge of the system

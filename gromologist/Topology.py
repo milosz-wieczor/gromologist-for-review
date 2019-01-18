@@ -14,6 +14,7 @@ class Top:
         :param pdb: str, path to a matching PDB file
         :param ignore_ifdef: bool, whether to ignore #include statements within #ifdef blocks (e.g. posre.itp)
         """
+        # TODO maybe allow for construction of a blank top with a possibility to read data later?
         self.pdb = None if pdb is None else Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
@@ -77,6 +78,7 @@ class Top:
         Removes all SectionMol instances that are not part
         of the system definition in [ system ]
         # TODO optionally we could also delete all unused params
+        # TODO we could also have a fn that packs .top into .itps again based on section definitions
         :return: None
         """
         if self.system is None:
@@ -201,15 +203,17 @@ class Top:
             raise RuntimeError("Molecule {} is duplicated in topology".format(mol_name))
         return mol[0]
     
-    def check_pdb(self, pdb_object):
+    def check_pdb(self):
         """
         Compares the topology with a PDB object to check
         for consistency, just as gmx grompp does;
         if inconsistencies are found, prints a report
-        :param pdb_object: a PDB instance # TODO either make our own or import from mdtraj, or make optional
-        :return: int, 1 is consistent, 0 is not, -1 means naming incostistencies within the same element (C5T/C7 etc.)
+        :return: None
         """
-        pass
+        if self.pdb:
+            self.pdb.check_top()
+        else:
+            raise AttributeError("No PDB file has been bound to this topology")
     
     def save_top(self, outname):
         """

@@ -72,6 +72,21 @@ class Top:
                 ignore_set.add(n)
         return ignore_set
     
+    def clear_sections(self):
+        """
+        Removes all SectionMol instances that are not part
+        of the system definition in [ system ]
+        # TODO optionally we could also delete all unused params
+        :return: None
+        """
+        if self.system is None:
+            raise AttributeError("System properties have not been read, this is likely not a complete .top file")
+        sections_to_delete = []
+        for section_num, section in enumerate(self.sections):
+            if isinstance(section, SectionMol) and section.mol_name not in self.system.keys():
+                sections_to_delete.append(section_num)
+        self.sections = [s for n, s in enumerate(self.sections) if n not in sections_to_delete]
+    
     def _find_in_path(self, filename):
         """
         looks for a file to be included in either the current directory

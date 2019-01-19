@@ -1,4 +1,6 @@
 import os
+import datetime
+
 from .Section import *
 from collections import OrderedDict
 from .Pdb import Pdb
@@ -215,15 +217,45 @@ class Top:
         else:
             raise AttributeError("No PDB file has been bound to this topology")
     
-    def save_top(self, outname):
+    def save_top(self, outname, split=False):
         """
         Saves the combined topology to the specified file
         :param outname: str, file name for output
+        :param split: bool, whether to split into individual .top files
         :return: None
         """
-        with open(outname, 'w') as outfile:
+        outfile = open(outname, 'w')
+        self.write_header(outfile)
+        if not split:
             for section in self.sections:
-                for subsection in section.subsections:
-                    outfile.write('\n[ {} ]\n'.format(subsection.write_header))
-                    for line in subsection:
-                        outfile.write(line)
+                self.write_section(outfile, section)
+        else:
+            for section in self.sections:
+                if isinstance(section, SectionParam):
+                    with open('ffparams.itp', 'w') as out_itp:
+                        self.write_section(out_itp, section)
+                    outfile.write('\n; Include ff parameters\n#include "ffparams.itp"\n')
+                elif isinstance(section, SectionMol):
+                    with open('{}.itp'.format(section.mol_name), 'w') as out_itp:
+                        self.write_section(out_itp, section)
+                    outfile.write('\n; Include {mn} topology\n#include "{mn}.itp"\n'.format(mn=section.mol_name))
+                else:
+                    self.write_section(outfile, section)
+        outfile.close()
+
+    @staticmethod
+    def write_section(outfile, section):
+        for subsection in section.subsections:
+            outfile.write('\n[ {} ]\n'.format(subsection.header))
+            for entry in subsection:
+                str_entry = str(entry).strip() + '\n'
+                outfile.write(str_entry)
+                
+    @staticmethod
+    def write_header(outfile):
+        outname = outfile.name.split('/')[-1]
+        outfile.write(";\n;  File {} was generated with the gromologist library\n"
+                      ";  by user: {}\n;  on host: {}\n;  at date: {} \n;".format(outname,
+                                                                                  os.getenv("USER"),
+                                                                                  os.uname()[1],
+                                                                                  datetime.datetime.now()))

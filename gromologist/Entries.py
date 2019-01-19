@@ -21,6 +21,13 @@ class Entry:
             return False
         return True
     
+    def __str__(self):
+        """
+        Fallback if no explicit formatting is implemented
+        :return: str
+        """
+        return ' '.join(self.content) + self.comment + '\n'
+    
     
 class EntryBonded(Entry):
     """

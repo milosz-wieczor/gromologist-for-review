@@ -17,6 +17,7 @@ class Top:
         :param ignore_ifdef: bool, whether to ignore #include statements within #ifdef blocks (e.g. posre.itp)
         """
         # TODO maybe allow for construction of a blank top with a possibility to read data later?
+        # TODO need to take care of #define keywords such as e.g. in amber-ILDN force fields
         self.pdb = None if pdb is None else Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
@@ -248,7 +249,7 @@ class Top:
         for subsection in section.subsections:
             outfile.write('\n[ {} ]\n'.format(subsection.header))
             for entry in subsection:
-                str_entry = str(entry).strip() + '\n'
+                str_entry = str(entry).rstrip() + '\n'
                 outfile.write(str_entry)
                 
     @staticmethod

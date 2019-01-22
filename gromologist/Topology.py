@@ -7,7 +7,7 @@ from .Pdb import Pdb
 
 
 class Top:
-    def __init__(self, filename, gmx_dir='/usr/share/gromacs/top/', pdb=None, ignore_ifdef=False):
+    def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
@@ -18,12 +18,15 @@ class Top:
         """
         # TODO maybe allow for construction of a blank top with a possibility to read data later?
         # TODO need to take care of #define keywords such as e.g. in amber-ILDN force fields
+        if not gmx_dir:
+            self._gromacs_dir = self._find_gmx_dir()
+        else:
+            self._gromacs_dir = gmx_dir
         self.pdb = None if pdb is None else Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
         self.dir = os.getcwd() + '/' + '/'.join(self.fname.split('/')[:-1])
         self._contents = open(self.fname).readlines()
-        self._gromacs_dir = gmx_dir
         self._include_all(ignore_ifdef)
         self.sections = []
         self._parse_sections()
@@ -32,6 +35,37 @@ class Top:
         
     def __repr__(self):
         return "Topology with {} atoms and total charge {}".format(self.natoms, self.charge)
+    
+    @staticmethod
+    def _find_gmx_dir():
+        """
+        Attempts to find Gromacs internal files to fall back to
+        when default .itp files are included using the
+        #include statement
+        :return: str, path to share/gromacs/top directory
+        """
+        gmx = os.popen('which gmx').read().strip()
+        if not gmx:
+            gmx = os.popen('which gmx_mpi').read().strip()
+        if not gmx:
+            gmx = os.popen('which gmx_d').read().strip()
+        if not gmx:
+            gmx = os.popen('which grompp').read().strip()
+        if gmx:
+            gmx = '/'.join(gmx.split('/')[:-2]) + '/share/gromacs/top'
+            print('Gromacs files found in directory {}'.format(gmx))
+            return gmx
+        else:
+            print('No working Gromacs compilation found, assuming all file dependencies are referred to locally')
+            return ""
+    
+    def list_molecules(self):
+        """
+        Prints out a list of molecules contained in the System
+        :return: None
+        """
+        for mol in self.system.keys():
+            print("{:20s}{:>10d}".format(mol, self.system[mol]))
     
     def add_pdb(self, pdbfile):
         """
@@ -113,7 +147,7 @@ class Top:
                 first = pref.split('/')[0]
             if first in os.listdir(self.dir) and suff in os.listdir(self.dir + '/' + pref):
                 return self.dir + '/' + pref + '/' + suff, pref
-            elif suff in os.listdir(self._gromacs_dir + '/' + pref):
+            elif self._gromacs_dir and suff in os.listdir(self._gromacs_dir + '/' + pref):
                 return self._gromacs_dir + '/' + pref + '/' + suff, pref
         raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'
                                 'If the file is included in an #ifdef block, please try setting'
@@ -201,7 +235,7 @@ class Top:
         """
         mol = [s for s in self.sections if isinstance(s, SectionMol) and s.mol_name == mol_name]
         if len(mol) == 0:
-            raise KeyError
+            raise KeyError("Molecule {} is not defined in topology".format(mol_name))
         elif len(mol) > 1:
             raise RuntimeError("Molecule {} is duplicated in topology".format(mol_name))
         return mol[0]

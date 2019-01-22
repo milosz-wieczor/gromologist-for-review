@@ -102,10 +102,10 @@ class SectionMol(Section):
         :return: None
         """
         offset = int(offset)
-        self.offset_atoms(offset, startfrom)
-        self.offset_params(offset, startfrom)
+        self._offset_atoms(offset, startfrom)
+        self._offset_params(offset, startfrom)
 
-    def offset_atoms(self, offset, startfrom):
+    def _offset_atoms(self, offset, startfrom):
         """
         Offsets atoms in the [ atoms ] section
         :param offset: int, by how much we wish to offset the numbering
@@ -117,7 +117,7 @@ class SectionMol(Section):
             if isinstance(entry, EntryAtom) and entry.num >= startfrom:
                 entry.num += offset
 
-    def offset_params(self, offset, startfrom):
+    def _offset_params(self, offset, startfrom):
         """
         Offsets atomic numbering in all parameter sections,
         e.g., [ bonds ]
@@ -131,7 +131,7 @@ class SectionMol(Section):
                 if isinstance(entry, EntryBonded):
                     entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
     
-    def get_bonds(self):
+    def _get_bonds(self):
         """
         When explicitly asked to, creates a list of bonds stored as
         ordered tuples of atom numbers
@@ -158,10 +158,11 @@ class SectionMol(Section):
         if other is not self:
             other.offset_numbering(self.natoms)
             anchor_other += self.natoms
-        self.make_bond(anchor_own, anchor_other, other)
-        self.merge_fields(other)
+        self._make_bond(anchor_own, anchor_other, other)
+        if other is not self:
+            self._merge_fields(other)
 
-    def merge_fields(self, other):
+    def _merge_fields(self, other):
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
             # TODO go for try/except
             # TODO need to get rid of other somehow after is transferred to self
@@ -169,20 +170,20 @@ class SectionMol(Section):
             # TODO merge all subsections
             subsection_other = other.get_subsection(subs)
             subsection_own = self.get_subsection(subs)
-            subsection_own.add_entries([line for line in subsection_other if line.strip()])
+            subsection_own.add_entries([str(entry) for entry in subsection_other if entry])
     
-    def make_bond(self, atom_own, atom_other, other):
-        other.get_bonds()
+    def _make_bond(self, atom_own, atom_other, other):
+        other._get_bonds()
         new_bond = [tuple(sorted([int(atom_own), int(atom_other)]))]
-        new_angles = self.generate_angles(other, atom_own, atom_other)
-        new_pairs, new_dihedrals = self.generate_14(other, atom_own, atom_other)
+        new_angles = self._generate_angles(other, atom_own, atom_other)
+        new_pairs, new_dihedrals = self._generate_14(other, atom_own, atom_other)
         for sub, entries in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
                                 [new_bond, new_pairs, new_angles, new_dihedrals]):
             subsection = self.get_subsection(sub)
             subsection.add_entries([EntryBonded(subsection.fstring.format(*entry, subsection.prmtype), subsection)
                                     for entry in entries])
 
-    def generate_angles(self, other, atom_own, atom_other):
+    def _generate_angles(self, other, atom_own, atom_other):
         """
         Generates new angles when an additional bond is formed
         :param other: SectionMol instance, the other molecule that participates in the bond (can be self)
@@ -196,7 +197,7 @@ class SectionMol(Section):
         new_angles += [(atom_own, atom_other, at2) for at2 in neigh_atoms_2]
         return new_angles
 
-    def generate_14(self, other, atom_own, atom_other):
+    def _generate_14(self, other, atom_own, atom_other):
         """
         Generates new 1-4 interaction (pairs and dihedrals)
         when an additional bond is formed

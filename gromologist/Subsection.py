@@ -142,7 +142,7 @@ class SubsectionBonded(Subsection):
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
         self.prmtype = self.check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
-        self.fstring = "{:5} " * SubsectionBonded.n_atoms[self.header] + '\n'
+        self.fstring = "{:5} " * (SubsectionBonded.n_atoms[self.header] + 1) + '\n'
     
     def __repr__(self):
         return "Subsection {} with interaction type {}".format(self.header, self.prmtype)

@@ -14,13 +14,13 @@ class Section:
         self.name = 'System'
         self.top = top
         self.dih_processed = False
-        self.subsections = [self.yield_sub(content) for content in self.split_content(content)]
+        self.subsections = [self._yield_sub(content) for content in self._split_content(content)]
     
     def __repr__(self):
         return "{} section with {} subsections".format(self.name, len(self.subsections))
     
     @staticmethod
-    def split_content(content):
+    def _split_content(content):
         """
         Splits a block of text (list of strings passed to the __init__,
         corresponding to the entire content of the given section)
@@ -33,7 +33,7 @@ class Section:
         special_lines = [n for n, l in enumerate(content) if l.strip().startswith('[')] + [len(content)]
         return [content[beg:end] for beg, end in zip(special_lines[:-1], special_lines[1:])]
         
-    def yield_sub(self, content):
+    def _yield_sub(self, content):
         """
         A wrapper that will select which kind of subsection
         should be instantiated (generic, bonded, or params);
@@ -240,9 +240,9 @@ class SectionParam(Section):
     def __init__(self, content_list, top):
         super().__init__(content_list, top)
         self.name = 'Parameters'
-        self.merge()
+        self._merge()
     
-    def merge(self):
+    def _merge(self):
         """
         If multiple sections (e.g. [ bondtypes ]) are present in the topology,
         this fn merges them into single sections to avoid searching in all instances

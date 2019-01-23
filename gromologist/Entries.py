@@ -77,7 +77,7 @@ class EntryBonded(Entry):
     
     def read_types(self):
         atoms_sub = self.subsection.section.get_subsection('atoms')
-        atoms_sub.get_dicts()
+        atoms_sub._get_dicts()
         num_to_type_a = atoms_sub.num_to_type
         num_to_type_b = atoms_sub.num_to_type_b
         self.types_state_a = tuple(num_to_type_a[num] for num in self.atom_numbers)

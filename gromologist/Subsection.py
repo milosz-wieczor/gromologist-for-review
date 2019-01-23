@@ -140,7 +140,7 @@ class SubsectionBonded(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
-        self.prmtype = self.check_parm_type()
+        self.prmtype = self._check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
         self.fstring = "{:5} " * (SubsectionBonded.n_atoms[self.header] + 1) + '\n'
     
@@ -152,9 +152,9 @@ class SubsectionBonded(Subsection):
         In case we want to sort entries after some are added at the end of the section
         :return: None
         """
-        self._entries.sort(key=self.sorting_fn)
+        self._entries.sort(key=self._sorting_fn)
     
-    def sorting_fn(self, entry):
+    def _sorting_fn(self, entry):
         """
         Comments should go first, then we sort based on first, second,
         ... column of the section
@@ -176,7 +176,7 @@ class SubsectionBonded(Subsection):
         # TODO
         pass
     
-    def check_parm_type(self):
+    def _check_parm_type(self):
         """
         Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
         while Amber uses angletype '1' (simple harmonic)
@@ -200,7 +200,7 @@ class SubsectionParam(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
-        self.prmtype = self.check_parm_type()
+        self.prmtype = self._check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
         
     def __repr__(self):
@@ -223,7 +223,7 @@ class SubsectionParam(Subsection):
                                                                                                 other.header))
         return SubsectionParam(["[ {} ]\n".format(self.header)] + self._entries + other._entries, self.section)
     
-    def check_parm_type(self):
+    def _check_parm_type(self):
         """
         Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
         while Amber uses angletype '1' (simple harmonic)
@@ -247,10 +247,10 @@ class SubsectionAtom(Subsection):
         super().__init__(content, section)
         self.fstring = "{:6}{:11}{:7}{:7}{:7}{:7}{:11}{:11}   ; " + '\n'
         self.nat = self.section.natoms = len([e for e in self._entries if isinstance(e, EntryAtom)])
-        self.charge = self.section.charge = self.calc_charge()
+        self.charge = self.section.charge = self._calc_charge()
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
     
-    def calc_charge(self):
+    def _calc_charge(self):
         """
         Calculates total charge of the molecule
         :return: float, total charge
@@ -261,16 +261,16 @@ class SubsectionAtom(Subsection):
                 total_charge += entry.charge
         return total_charge
 
-    def get_dicts(self):
+    def _get_dicts(self):
         """
         dicts are not always needed and are costly to calculate,
         so only fill in the values when explicitly asked to
         :return: None
         """
         if not self.name_to_num:
-            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self.mol_type_nums()
+            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
 
-    def mol_type_nums(self):
+    def _mol_type_nums(self):
         """
         Provides bindings between atomnumber and atomtype
         and vice versa for each molecule identified in

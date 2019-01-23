@@ -25,12 +25,12 @@ class Subsection:
         else:
             Subsection.counter[self.header] = 1
         self.id = Subsection.counter[self.header]
-        self._entries = []
+        self.entries = []
         for element in content:
             if issubclass(type(element), Entry):
-                self._entries.append(element)
+                self.entries.append(element)
             elif isinstance(element, str) and element.strip() and not element.strip().startswith('['):
-                self._entries.append(self.yield_entry(element))
+                self.entries.append(self.yield_entry(element))
         
     def yield_entry(self, line):
         """
@@ -63,7 +63,7 @@ class Subsection:
         return "Subsection {}".format(self.header, self.id)
     
     def __len__(self):
-        return len(self._entries)
+        return len(self.entries)
     
     def __iter__(self):
         """
@@ -79,7 +79,7 @@ class Subsection:
             raise StopIteration
         n = self.n
         self.n += 1
-        return self._entries[n]
+        return self.entries[n]
     
     def add_entry(self, new_entry, position=None):
         """
@@ -91,9 +91,9 @@ class Subsection:
         """
         if position:
             position = int(position)
-            self._entries.insert(position, new_entry)
+            self.entries.insert(position, new_entry)
         else:
-            self._entries.append(new_entry)
+            self.entries.append(new_entry)
     
     def add_entries(self, new_entries_list, position=None):
         """
@@ -106,10 +106,10 @@ class Subsection:
         if position:
             position = int(position)
             for new_entry in new_entries_list:
-                self._entries.insert(position, new_entry)
+                self.entries.insert(position, new_entry)
                 position += 1
         else:
-            self._entries.extend(new_entries_list)
+            self.entries.extend(new_entries_list)
     
     def set_entry(self, line_number, new_line):
         """
@@ -118,7 +118,7 @@ class Subsection:
         :param new_line: str, new content of the entry
         :return: None
         """
-        self._entries[line_number] = new_line
+        self.entries[line_number] = new_line
     
     def get_entry(self, line_number):
         """
@@ -126,7 +126,7 @@ class Subsection:
         :param line_number: int, which entry to return
         :return: str, subsection entry
         """
-        return self._entries[line_number]
+        return self.entries[line_number]
         
         
 class SubsectionBonded(Subsection):
@@ -152,7 +152,7 @@ class SubsectionBonded(Subsection):
         In case we want to sort entries after some are added at the end of the section
         :return: None
         """
-        self._entries.sort(key=self._sorting_fn)
+        self.entries.sort(key=self._sorting_fn)
     
     def _sorting_fn(self, entry):
         """
@@ -221,7 +221,7 @@ class SubsectionParam(Subsection):
         if self.header != other.header:
             raise TypeError("Cannot merge subsections with different headers: {} and {}".format(self.header,
                                                                                                 other.header))
-        return SubsectionParam(["[ {} ]\n".format(self.header)] + self._entries + other._entries, self.section)
+        return SubsectionParam(["[ {} ]\n".format(self.header)] + self.entries + other.entries, self.section)
     
     def _check_parm_type(self):
         """
@@ -245,8 +245,8 @@ class SubsectionAtom(Subsection):
     """
     def __init__(self, content, section):
         super().__init__(content, section)
-        self.fstring = "{:6}{:11}{:7}{:7}{:7}{:7}{:11}{:11}   ; " + '\n'
-        self.nat = self.section.natoms = len([e for e in self._entries if isinstance(e, EntryAtom)])
+        self.fstring = "{:>6}{:>11}{:>7}{:>7}{:>7}{:>7}{:>11}{:>11}   ; " + '\n'
+        self.nat = self.section.natoms = len([e for e in self.entries if isinstance(e, EntryAtom)])
         self.charge = self.section.charge = self._calc_charge()
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
     
@@ -256,7 +256,7 @@ class SubsectionAtom(Subsection):
         :return: float, total charge
         """
         total_charge = 0
-        for entry in self._entries:
+        for entry in self.entries:
             if isinstance(entry, EntryAtom):
                 total_charge += entry.charge
         return total_charge
@@ -295,5 +295,5 @@ class SubsectionHeader(Subsection):
     """
     def __init__(self, content, section):
         super().__init__(content, section)
-        self.molname = [a.content[0] for a in self._entries if a.content][0]
+        self.molname = [a.content[0] for a in self.entries if a.content][0]
         

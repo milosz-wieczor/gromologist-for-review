@@ -131,6 +131,81 @@ class SectionMol(Section):
                 if isinstance(entry, EntryBonded):
                     entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
     
+    def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None):
+        """
+        For convenience, we try to infer as much as possible
+        from existing data, so that it is sufficient to pass
+        atom number, atom name and atom type to have a working
+        example
+        :param atom_number:
+        :param atom_name:
+        :param atom_type:
+        :param charge:
+        :param resid:
+        :param resname:
+        :param mass:
+        :return:
+        """ # TODO make interactive optional
+        subs_atoms = self.get_subsection('atoms')
+        atoms = subs_atoms.entries
+        if not resid and not resname:
+            if atom_number > 1:
+                ref_entry = [e for e in atoms if (isinstance(e, EntryAtom) and e.num == atom_number - 1)][0]
+            else:
+                ref_entry = [e for e in atoms if isinstance(e, EntryAtom)][0]
+            while not resid:
+                q = input("By default, atom will be assigned to residue {}{}. Proceed? [y/n]".format(ref_entry.resname,
+                                                                                                     ref_entry.resid))
+                if q == 'y':
+                    resid = ref_entry.resid
+                    resname = ref_entry.resname
+                elif q == 'n':
+                    return
+                else:
+                    continue
+        elif resid and not resname:
+            ref_entry = [e for e in atoms if (isinstance(e, EntryAtom) and e.resid == resid)][0]
+            resname = ref_entry.resname
+        if not mass:
+            param_sect = [s for s in self.top.sections if isinstance(s, SectionParam)][0]
+            param_entry = [e for e in param_sect.get_subsection('atomtypes').entries if isinstance(e, EntryParam)
+                           and e.content[0] == atom_type][0]
+            mass = param_entry.content[2]
+        fstring = subs_atoms.fstring
+        print(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number, charge, mass))
+        new_entry = EntryAtom(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number,
+                                             charge, mass), subs_atoms)
+        position = [n for n, a in enumerate(atoms) if isinstance(a, EntryAtom) and a.num == atom_number][0]
+        self.offset_numbering(1, atom_number)
+        atoms.insert(position, new_entry)
+    
+    def del_atom(self, atom_number):
+        self._del_atom(atom_number)
+        self._del_params(atom_number)
+        self.offset_numbering(-1, atom_number)
+        # TODO recalc atoms in subsections and top.natoms
+        # TODO optionally also delete in PDB?
+        
+    def _del_atom(self, atom_number):
+        subsect_atoms = self.get_subsection('atoms')
+        chosen = [e for e in subsect_atoms.entries if isinstance(e, EntryAtom) and e.num == atom_number][0]
+        subsect_atoms.entries.remove(chosen)
+    
+    def _del_params(self, atom_number):
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
+            try:
+                subsection = self.get_subsection(subs)
+                to_del = []
+                for ne, entry in enumerate(subsection):
+                    if isinstance(entry, EntryBonded):
+                        if atom_number in entry.atom_numbers:
+                            to_del.append(ne)
+                for ne, entry in enumerate(subsection):
+                    if ne in to_del:
+                        subsection.entries.remove(entry)
+            except KeyError:
+                pass
+    
     def _get_bonds(self):
         """
         When explicitly asked to, creates a list of bonds stored as
@@ -165,6 +240,7 @@ class SectionMol(Section):
             # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
             system_setup = self.top.sections[-1].get_subsection('molecules')
             system_setup._entries = [e for e in system_setup if other.mol_name not in e]
+            self.top._read_system_properties()
 
     def _merge_fields(self, other):
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:

@@ -161,18 +161,24 @@ class SectionMol(Section):
         self._make_bond(anchor_own, anchor_other, other)
         if other is not self:
             self._merge_fields(other)
+            self.top.sections.remove(other)
+            # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
+            system_setup = self.top.sections[-1].get_subsection('molecules')
+            system_setup._entries = [e for e in system_setup if other.mol_name not in e]
 
     def _merge_fields(self, other):
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
-            # TODO go for try/except
-            # TODO need to get rid of other somehow after is transferred to self
-            # TODO think of other fields as well?
+            # TODO think of other fields as well? like, position_restraints
             # TODO merge all subsections
-            subsection_other = other.get_subsection(subs)
-            subsection_own = self.get_subsection(subs)
-            subsection_own.add_entries([str(entry) for entry in subsection_other if entry])
+            try:
+                subsection_other = other.get_subsection(subs)
+                subsection_own = self.get_subsection(subs)
+                subsection_own.add_entries([str(entry) for entry in subsection_other if entry])
+            except KeyError:
+                pass
     
     def _make_bond(self, atom_own, atom_other, other):
+        self._get_bonds()
         other._get_bonds()
         new_bond = [tuple(sorted([int(atom_own), int(atom_other)]))]
         new_angles = self._generate_angles(other, atom_own, atom_other)

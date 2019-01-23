@@ -37,6 +37,9 @@ class Entry:
             return False
         return True
     
+    def __getitem__(self, item):
+        return self.content[item]
+    
     def __str__(self):
         """
         Fallback if no explicit formatting is implemented

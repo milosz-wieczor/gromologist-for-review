@@ -192,16 +192,17 @@ class SubsectionParam(Subsection):
     """
     SubsectionParam contains force field parameters;
     should be included in SectionParam
-    """
+    """ # TODO do sth about genborn?
     n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
                'nonbond_params': 2, 'defaults': 0, 'atomtypes': 1, 'implicit_genborn_params': 1, 'cmaptypes': 5}
-    # TODO need post-processing of cmap entries
     
     def __init__(self, content, section):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
         self.prmtype = self._check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
+        if self.header == 'cmaptypes':
+            self._process_cmap()
         
     def __repr__(self):
         if self.prmtype != '0':
@@ -236,8 +237,24 @@ class SubsectionParam(Subsection):
             if len(entry.content) > npar and isinstance(entry, EntryParam):
                 return entry.content[npar]
         return '0'
-
-
+    
+    def _process_cmap(self):
+        new_entries = []
+        current = []
+        for e in self.entries:
+            if isinstance(e, EntryParam):
+                if e.content[-1].endswith('\\'):
+                    current.extend([x.rstrip('\\') for x in e.content])
+                else:
+                    current.extend([x.rstrip('\\') for x in e.content])
+                    new_entry = ' '.join(current)
+                    new_entries.append(EntryParam(new_entry, self, processed=True))
+                    current = []
+            else:
+                new_entries.append(e)
+        self.entries = new_entries
+        
+        
 class SubsectionAtom(Subsection):
     """
     SubsectionAtom contains definitions of all atoms in the molecule;
@@ -303,4 +320,3 @@ class SubsectionHeader(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.molname = [a.content[0] for a in self.entries if a.content][0]
-        

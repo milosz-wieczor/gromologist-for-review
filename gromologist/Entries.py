@@ -111,18 +111,43 @@ class EntryParam(Entry):
     parameters, e.g. bondtypes, angletypes, cmaptypes, pairtypes etc.
     that map a set of atom types to a set of FF-specific values
     """
-    def __init__(self, content, subsection):
+    def __init__(self, content, subsection, processed=False):
         super().__init__(content, subsection)
         self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.types = tuple(self.content[:self.atoms_per_entry])
-        self.params = self.content[self.atoms_per_entry + 1:]
-        self.interaction_type = self.content[self.atoms_per_entry]
+        if self.subsection.header == 'cmaptypes' and processed:
+            self.modifiers = self.content[self.atoms_per_entry + 1:self.atoms_per_entry + 3]
+            self.params = [float(x) for x in self.content[self.atoms_per_entry + 3:]]
+            self.interaction_type = self.content[self.atoms_per_entry]
+        elif self.subsection.header == 'cmaptypes' and not processed:
+            self.modifiers = []
+            self.params = self.content[self.atoms_per_entry + 1:]
+            self.interaction_type = self.content[self.atoms_per_entry]
+        elif self.subsection.header == 'defaults':
+            self.modifiers = self.content
+            self.params = []
+            self.interaction_type = ''
+        elif self.subsection.header == 'atomtypes':
+            self.modifiers = self.content[self.atoms_per_entry:self.atoms_per_entry + 5]
+            self.params = [float(x) for x in self.content[self.atoms_per_entry + 5:]]
+            self.interaction_type = ''
+        else:
+            self.params = [float(x) for x in self.content[self.atoms_per_entry + 1:]]
+            self.modifiers = []
+            self.interaction_type = self.content[self.atoms_per_entry]
+        # TODO add explicit string repr for CMAP
     
     def __repr__(self):
-        return "Parameters entry with atomtypes {}, interaction type {} " \
-               "and parameters {}".format(self.types,
-                                          self.interaction_type,
-                                          self.params)
+        if len(self.params) <= 4:
+            return "Parameters entry with atomtypes {}, interaction type {} " \
+                   "and parameters {}".format(self.types,
+                                              self.interaction_type,
+                                              ', '.join([str(x) for x in self.params]))
+        else:
+            return "Parameters entry with atomtypes {}, interaction type {} " \
+                   "and parameters {}...".format(self.types,
+                                                 self.interaction_type,
+                                                 ', '.join([str(x) for x in self.params[:4]]))
         
         
 class EntryAtom(Entry):

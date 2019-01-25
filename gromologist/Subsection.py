@@ -246,10 +246,14 @@ class SubsectionAtom(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.fstring = "{:>6}{:>11}{:>7}{:>7}{:>7}{:>7}{:>11}{:>11}   ; " + '\n'
-        self.nat = self.section.natoms = len([e for e in self.entries if isinstance(e, EntryAtom)])
-        self.charge = self.section.charge = self._calc_charge()
+        self.nat, self.charge = None, None
+        self.calc_properties()
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
     
+    def calc_properties(self):
+        self.nat = self.section.natoms = self._calc_nat()
+        self.charge = self.section.charge = self._calc_charge()
+        
     def _calc_charge(self):
         """
         Calculates total charge of the molecule
@@ -260,6 +264,9 @@ class SubsectionAtom(Subsection):
             if isinstance(entry, EntryAtom):
                 total_charge += entry.charge
         return total_charge
+    
+    def _calc_nat(self):
+        return len([e for e in self.entries if isinstance(e, EntryAtom)])
 
     def _get_dicts(self):
         """

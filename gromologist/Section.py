@@ -29,7 +29,6 @@ class Section:
         :return: list of lists of strings, contents of individual subsections
         """
         # TODO second "dihedral" should be renamed as "improper" to avoid confusion
-        # TODO see also Subsection constructor
         special_lines = [n for n, l in enumerate(content) if l.strip().startswith('[')] + [len(content)]
         return [content[beg:end] for beg, end in zip(special_lines[:-1], special_lines[1:])]
         
@@ -137,15 +136,15 @@ class SectionMol(Section):
         from existing data, so that it is sufficient to pass
         atom number, atom name and atom type to have a working
         example
-        :param atom_number:
-        :param atom_name:
-        :param atom_type:
-        :param charge:
-        :param resid:
-        :param resname:
-        :param mass:
-        :return:
-        """ # TODO make interactive optional
+        :param atom_number: int, new atom index (1-based)
+        :param atom_name: str, name of the atom
+        :param atom_type: str, type of the atom
+        :param charge: float, charge of the atom
+        :param resid: int, residue number
+        :param resname: str, residue name
+        :param mass: float, mass of the atom
+        :return: None
+        """
         subs_atoms = self.get_subsection('atoms')
         atoms = subs_atoms.entries
         if not resid and not resname:
@@ -178,12 +177,13 @@ class SectionMol(Section):
         position = [n for n, a in enumerate(atoms) if isinstance(a, EntryAtom) and a.num == atom_number][0]
         self.offset_numbering(1, atom_number)
         atoms.insert(position, new_entry)
+        self.top.recalc_sys_params()
     
     def del_atom(self, atom_number):
         self._del_atom(atom_number)
         self._del_params(atom_number)
         self.offset_numbering(-1, atom_number)
-        # TODO recalc atoms in subsections and top.natoms
+        self.top.recalc_sys_params()
         # TODO optionally also delete in PDB?
         
     def _del_atom(self, atom_number):
@@ -240,7 +240,7 @@ class SectionMol(Section):
             # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
             system_setup = self.top.sections[-1].get_subsection('molecules')
             system_setup._entries = [e for e in system_setup if other.mol_name not in e]
-            self.top._read_system_properties()
+            self.top.read_system_properties()
 
     def _merge_fields(self, other):
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:

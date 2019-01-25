@@ -31,7 +31,7 @@ class Top:
         self.sections = []
         self._parse_sections()
         if self.top.endswith('top'):
-            self.system, self.charge, self.natoms = self._read_system_properties()
+            self.system, self.charge, self.natoms = self.read_system_properties()
         
     def __repr__(self):
         return "Topology with {} atoms and total charge {}".format(self.natoms, self.charge)
@@ -200,7 +200,7 @@ class Top:
         else:
             return Section(content, self)
         
-    def _read_system_properties(self):
+    def read_system_properties(self):
         """
         Reads in system composition based on the [ molecules ] section
         and calculates the number of atoms and charge of the system
@@ -225,6 +225,12 @@ class Top:
             natoms += molecules[mol] * sect_mol.natoms
             charge += molecules[mol] * sect_mol.charge
         return molecules, charge, natoms
+    
+    def recalc_sys_params(self):
+        sub_mol = [sub for sect in self.sections for sub in sect.subsections if isinstance(sub, SubsectionAtom)]
+        for sub in sub_mol:
+            sub.calc_properties()
+        self.read_system_properties()
         
     def get_molecule(self, mol_name):
         """

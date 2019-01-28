@@ -34,7 +34,7 @@ class Top:
             self.system, self.charge, self.natoms = self.read_system_properties()
         
     def __repr__(self):
-        return "Topology with {} atoms and total charge {}".format(self.natoms, self.charge)
+        return "Topology with {} atoms and total charge {:.3f}".format(self.natoms, self.charge)
     
     @staticmethod
     def _find_gmx_dir():
@@ -230,7 +230,7 @@ class Top:
         sub_mol = [sub for sect in self.sections for sub in sect.subsections if isinstance(sub, SubsectionAtom)]
         for sub in sub_mol:
             sub.calc_properties()
-        self.read_system_properties()
+        self.system, self.charge, self.natoms = self.read_system_properties()
         
     def get_molecule(self, mol_name):
         """

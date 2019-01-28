@@ -135,7 +135,7 @@ class EntryParam(Entry):
             self.params = [float(x) for x in self.content[self.atoms_per_entry + 1:]]
             self.modifiers = []
             self.interaction_type = self.content[self.atoms_per_entry]
-        # TODO add explicit string repr for CMAP
+        # TODO add explicit string repr for CMAP (backslash at line breaks)
     
     def __repr__(self):
         if len(self.params) <= 4:

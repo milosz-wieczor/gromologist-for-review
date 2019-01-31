@@ -179,12 +179,34 @@ class SectionMol(Section):
         atoms.insert(position, new_entry)
         self.top.recalc_sys_params()
     
-    def del_atom(self, atom_number):
+    def del_atom(self, atom_number, del_in_pdb=True):
         self._del_atom(atom_number)
         self._del_params(atom_number)
         self.offset_numbering(-1, atom_number)
         self.top.recalc_sys_params()
-        # TODO optionally also delete in PDB?
+        if del_in_pdb:
+            if self.top.pdb:
+                for to_remove in self._match_pdb_to_top(atom_number):
+                    self.top.pdb.delete_atom(to_remove)
+    
+    def _match_pdb_to_top(self, atom_number):
+        """
+        Returns a list of PDB atom indices (assuming .top matches .pdb)
+        that correspond to the specified atom_number in the molecule topology
+        :param atom_number: int, atom number in self (1-based)
+        :return: list, PDB atom serials (1-based)
+        """
+        if not self.top.pdb:
+            raise ValueError("No PDB object matched to the currently processed topology")
+        count = 0
+        pdb_atom_indices = []
+        for molecule in self.top.system.keys():
+            if molecule != self.mol_name:
+                count += self.top.get_molecule(molecule).natoms
+            else:
+                count += atom_number - 1
+                pdb_atom_indices.append(self.top.pdb.atoms[count].serial)
+        return pdb_atom_indices
         
     def _del_atom(self, atom_number):
         subsect_atoms = self.get_subsection('atoms')

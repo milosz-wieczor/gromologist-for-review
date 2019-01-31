@@ -158,8 +158,20 @@ class Pdb:
                 raise ValueError("{} is not a valid Atom attribute")
             new_atom.__setattr__(kw, kwargs[kw])
         self.atoms.insert(index, new_atom)
+    
+    def delete_atom(self, serial, renumber=False):
+        num = [n for n, a in enumerate(self.atoms) if a.serial == serial]
+        if len(num) == 0:
+            raise ValueError('No atoms with serial number {}'.format(serial))
+        elif len(num) > 1:
+            raise ValueError('Multiple atoms with serial number {}; consider renumbering'.format(serial))
+        atom = self.atoms.pop(num[0])
+        print('Entry {} deleted from PDB'.format(str(atom)))
+        if renumber:
+            self.renumber_all()
 
     def select_atoms(self, selection_string):
+        # TODO add within and same residue as
         protein_selection = "resname ALA ACE CYS ASP ASPP GLU GLUP PHE GLY HIS HID HIE HSD HSE ILE LYS LEU MET " \
                             "NME NMA ASN PRO GLN ARG SER THR VAL TRP"
         dna_selection = "resname DA DG DC DT DA5 DG5 DC5 DT5 DA3 DG3 DC3 DT3"

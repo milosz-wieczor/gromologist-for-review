@@ -242,6 +242,14 @@ class Pdb:
     
     def _find_atoms(self, sel_string, rev=False):
         chosen = []
+        same = False
+        within = False
+        if ' '.join(sel_string.split()[:3]) == "same residue as":
+            sel_string = ' '.join(sel_string.split()[3:])
+            same = True
+        if sel_string.split()[0] == 'within' and sel_string.split()[2] == 'of':
+            within = float(sel_string.split()[1])
+            sel_string = ' '.join(sel_string.split()[3:])
         keyw = sel_string.split()[0]
         matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
                      "chain": "chain", "resname": "resname", "serial": "serial"}
@@ -261,7 +269,30 @@ class Pdb:
             else:
                 if a.__getattribute__(matchings[keyw]) not in vals:
                     chosen.append(n)
+        if same:
+            chosen = self._same_residue_as(chosen)
+        if within:
+            chosen = self._within(chosen, within)
         return set(chosen)
+    
+    def _same_residue_as(self, query_iter):
+        new_list = []
+        for atom in query_iter:
+            residue, resid = self.atoms[atom].resname, self.atoms[atom].resnum
+            matching = [n for n, a in enumerate(self.atoms) if a.resname == residue and a.resnum == resid]
+            new_list.extend(matching)
+        return set(new_list)
+    
+    def _within(self, query_iter, threshold):
+        new_list = []
+        for n, atom in enumerate(self.atoms):
+            if any([self._atoms_dist(atom, self.atoms[query]) <= threshold for query in query_iter]):
+                new_list.append(n)
+        return set(new_list)
+    
+    @staticmethod
+    def _atoms_dist(at1, at2):
+        return ((at2.x - at1.x)**2 + (at2.y - at1.y)**2 + (at2.z - at1.z)**2)**0.5
         
     @staticmethod
     def _parse_contents(contents):

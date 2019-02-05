@@ -149,6 +149,18 @@ class EntryParam(Entry):
                                                  self.interaction_type,
                                                  ', '.join([str(x) for x in self.params[:4]]))
         
+    def __str__(self):
+        if self.subsection.header == 'cmaptypes':
+            first = ((8 * "{} ")[:-1] + "\\\n").format(*self.types, self.interaction_type, *self.modifiers)
+            npar = len(self.params)
+            last = '\\\n'.join([((10 * "{} ")[:-1]).format(*self.params[10*n:10*(n+1)]) for n in range(int(npar/10))])
+            if 10 * int(npar/10) != npar:
+                last = last + '\\\n' + \
+                       (((npar-10*int(npar/10)) * "{} ")[:-1]).format(*self.params[10*int(npar/10):]) + '\n'
+            return first + last
+        else:
+            return super().__str__()
+
         
 class EntryAtom(Entry):
     """

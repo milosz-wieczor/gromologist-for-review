@@ -192,7 +192,7 @@ class SubsectionParam(Subsection):
     """
     SubsectionParam contains force field parameters;
     should be included in SectionParam
-    """ # TODO do sth about genborn?
+    """  # TODO do sth about genborn?
     n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
                'nonbond_params': 2, 'defaults': 0, 'atomtypes': 1, 'implicit_genborn_params': 1, 'cmaptypes': 5}
     

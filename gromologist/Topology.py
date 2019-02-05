@@ -115,7 +115,6 @@ class Top:
         Removes all SectionMol instances that are not part
         of the system definition in [ system ]
         # TODO optionally we could also delete all unused params
-        # TODO we could also have a fn that packs .top into .itps again based on section definitions
         :return: None
         """
         if self.system is None:

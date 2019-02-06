@@ -1,4 +1,5 @@
 
+
 class Entry:
     """
     A generic class representing a single line in the topology.
@@ -128,14 +129,31 @@ class EntryParam(Entry):
             self.params = []
             self.interaction_type = ''
         elif self.subsection.header == 'atomtypes':
-            self.modifiers = self.content[self.atoms_per_entry:self.atoms_per_entry + 5]
-            self.params = [float(x) for x in self.content[self.atoms_per_entry + 5:]]
+            self.modifiers = self.content[self.atoms_per_entry:self.atoms_per_entry + 4]
+            self.params = [float(x) for x in self.content[self.atoms_per_entry + 4:]]
             self.interaction_type = ''
         else:
             self.params = [float(x) for x in self.content[self.atoms_per_entry + 1:]]
             self.modifiers = []
             self.interaction_type = self.content[self.atoms_per_entry]
-        # TODO add explicit string repr for CMAP (backslash at line breaks)
+        if self.subsection.header == 'dihedraltypes' and self.interaction_type in ('9', '4'):
+            self.params[-1] = int(self.params[-1])
+            
+    def format(self):
+        fmt = {('bondtypes', '1'): "{:>8s} {:>8s}{:>6s}{:>13.8f}{:>13.2f}",
+               ('angletypes', '5'): "{:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>13.8f}{:>13.2f}",
+               ('angletypes', '1'): "{:>8s} {:>8s} {:>8s}{:>6s}{:>13.8f}{:>13.2f}",
+               ('dihedraltypes', '9'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d}",
+               ('dihedraltypes', '4'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d}",
+               ('dihedraltypes', '2'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}",
+               ('atomtypes', ''): "{:>6s}{}{:>6s}{:>13s}{:>9s}{:>3s}{:>16.12f}{:>9.5f}",
+               ('pairtypes', '1'): "{:>8s} {:>8s}{:>3s}{:>16.12f}{:>16.12f}",
+               ('nonbond_params', '1'): "{:>8s} {:>8s}{:>3s}{:>16.12f}{:>16.12f}",
+               ('implicit_genborn_params', ''): " {:8s}{:8.4f}{:8.4f}{:8.4f}{:8.4f}{:8.4f}"}
+        if (self.subsection.header, self.interaction_type) in fmt.keys():
+            return fmt[(self.subsection.header, self.interaction_type)]
+        else:
+            return None
     
     def __repr__(self):
         if len(self.params) <= 4:
@@ -150,6 +168,12 @@ class EntryParam(Entry):
                                                  ', '.join([str(x) for x in self.params[:4]]))
         
     def __str__(self):
+        """
+        For cmaptypes, we rearrange lines to retrieve the matrix
+        format lost during read-in; for other entry types, we
+        delegate formatting to Subsection.fmt
+        :return:
+        """
         if self.subsection.header == 'cmaptypes':
             first = ((8 * "{} ")[:-1] + "\\\n").format(*self.types, self.interaction_type, *self.modifiers)
             npar = len(self.params)
@@ -158,6 +182,9 @@ class EntryParam(Entry):
                 last = last + '\\\n' + \
                        (((npar-10*int(npar/10)) * "{} ")[:-1]).format(*self.params[10*int(npar/10):]) + '\n'
             return first + last
+        elif self.format():
+            return self.format().format(*self.types, self.interaction_type, *self.modifiers, *self.params) +\
+                   self.comment + '\n'
         else:
             return super().__str__()
 

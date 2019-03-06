@@ -1,4 +1,5 @@
 from .Entries import EntryAtom
+from .Section import SectionMol
 
 
 class Pdb:
@@ -105,7 +106,7 @@ class Pdb:
         for n, atom in enumerate(self.atoms):
             atom.serial = n + 1
     
-    def match_order_by_top_names(self, range=None):
+    def match_order_by_top_names(self, arange=None):
         """
         Whenever PDB atoms have different ordering than .top ones
         but naming is consistent, we can use the ordering from .top
@@ -114,7 +115,7 @@ class Pdb:
         otherwise, range has to be specified (using the Pythonic convention)
         to avoid ambiguities. In that case, matching molecules will only be
         looked for in the specified range.
-        :param range: tuple, start and end point of the modification (end is excluded)
+        :param arange: tuple, start and end point of the modification (end is excluded)
         :return:
         """
         if self.top is None:
@@ -126,12 +127,12 @@ class Pdb:
             n_mols = self.top.system[mol_name]
             atom_subsection = mol.get_subsection('atoms')
             atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
-            for m in range(n_mols):
+            for _ in arange(n_mols):
                 for a in atom_entries:
-                    if not range or range[0] <= index < range[1]:
+                    if not arange or arange[0] <= index < arange[1]:
                         pdb_loc = self.select_atoms("resname {} and resid {} and name {}".format(a.resname, a.resid,
                                                                                                  a.atomname))
-                        pdb_loc = [loc for loc in pdb_loc if not range or range[0] <= index < range[1]]
+                        pdb_loc = [loc for loc in pdb_loc if not arange or arange[0] <= index < arange[1]]
                         if len(pdb_loc) != 1:
                             raise ValueError("Could not proceed; for match-based renumbering, residue numberings "
                                              "have to be consistent between PDB and .top, atom names need to match, "
@@ -171,111 +172,10 @@ class Pdb:
             self.renumber_all()
 
     def select_atoms(self, selection_string):
-        # TODO add within and same residue as
-        protein_selection = "resname ALA ACE CYS ASP ASPP GLU GLUP PHE GLY HIS HID HIE HSD HSE ILE LYS LEU MET " \
-                            "NME NMA ASN PRO GLN ARG SER THR VAL TRP"
-        dna_selection = "resname DA DG DC DT DA5 DG5 DC5 DT5 DA3 DG3 DC3 DT3"
-        rna_selection = "resname RA RG RC RT RA5 RG5 RC5 RT5 RA3 RG3 RC3 RT3"
-        solvent_selection = "resname HOH TIP3 SOL K CL NA"
-        selection_string = selection_string.replace('solvent', solvent_selection)
-        selection_string = selection_string.replace('water', 'resname HOH TIP3 SOL')
-        selection_string = selection_string.replace('protein', protein_selection)
-        selection_string = selection_string.replace('nucleic', 'dna or rna')
-        selection_string = selection_string.replace('dna', dna_selection)
-        selection_string = selection_string.replace('rna', rna_selection)
-        return sorted(list(self._select_set_atoms(selection_string)))
-
-    def _select_set_atoms(self, selection_string):
-        """
-        
-        :param selection_string: str
-        :return:
-        """
-        assert isinstance(selection_string, str)
-        parenth_ranges, operators = self._parse_sel_string(selection_string)
-        if not parenth_ranges and not operators:
-            if selection_string.strip().startswith("not "):
-                return self._find_atoms(selection_string.lstrip()[4:], rev=True)
-            else:
-                return self._find_atoms(selection_string)
-        elif parenth_ranges and not operators:
-            if selection_string.strip().startswith("not "):
-                set_all = {n for n in range(len(self.atoms))}
-                return set_all.difference(self._select_set_atoms(selection_string.strip()[4:].strip('()')))
-            else:
-                return self._select_set_atoms(selection_string.strip().strip('()'))
-        else:
-            first_op = selection_string[operators[0][0]:operators[0][1]].strip()
-            if first_op == "and":
-                return self._select_set_atoms(selection_string[:operators[0][0]])\
-                    .intersection(self._select_set_atoms(selection_string[operators[0][1]:]))
-            elif first_op == "or":
-                return self._select_set_atoms(selection_string[:operators[0][0]]) \
-                    .union(self._select_set_atoms(selection_string[operators[0][1]:]))
+        sel = SelectionParser(self)
+        return sel(selection_string)
     
-    @staticmethod
-    def _parse_sel_string(selection_string):
-        parenth_ranges = []
-        operators = []
-        opened_parenth = 0
-        beginning = 0
-        for nc, char in enumerate(selection_string):
-            if char == '(':
-                opened_parenth += 1
-                if beginning == 0:
-                    beginning = nc
-            elif char == ')':
-                opened_parenth -= 1
-                end = nc
-                if opened_parenth == 0:
-                    parenth_ranges.append((beginning, end))
-                    beginning = 0
-            if opened_parenth < 0:
-                raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
-            if selection_string[nc:nc + 5] == " and " and opened_parenth == 0:
-                operators.append((nc, nc + 5))
-            if selection_string[nc:nc + 4] == " or " and opened_parenth == 0:
-                operators.append((nc, nc + 4))
-        if opened_parenth != 0:
-            raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
-        return parenth_ranges, operators
-    
-    def _find_atoms(self, sel_string, rev=False):
-        chosen = []
-        same = False
-        within = False
-        if ' '.join(sel_string.split()[:3]) == "same residue as":
-            sel_string = ' '.join(sel_string.split()[3:])
-            same = True
-        if sel_string.split()[0] == 'within' and sel_string.split()[2] == 'of':
-            within = float(sel_string.split()[1])
-            sel_string = ' '.join(sel_string.split()[3:])
-        keyw = sel_string.split()[0]
-        matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
-                     "chain": "chain", "resname": "resname", "serial": "serial"}
-        try:
-            vals = {int(x) for x in sel_string.split()[1:]}
-        except ValueError:
-            if " to " in sel_string:
-                beg = int(sel_string.split()[1])
-                end = int(sel_string.split()[3])
-                vals = set(range(beg, end+1))
-            else:
-                vals = set(sel_string.split()[1:])
-        for n, a in enumerate(self.atoms):
-            if not rev:
-                if a.__getattribute__(matchings[keyw]) in vals:
-                    chosen.append(n)
-            else:
-                if a.__getattribute__(matchings[keyw]) not in vals:
-                    chosen.append(n)
-        if same:
-            chosen = self._same_residue_as(chosen)
-        if within:
-            chosen = self._within(chosen, within)
-        return set(chosen)
-    
-    def _same_residue_as(self, query_iter):
+    def same_residue_as(self, query_iter):
         new_list = []
         for atom in query_iter:
             residue, resid = self.atoms[atom].resname, self.atoms[atom].resnum
@@ -283,7 +183,7 @@ class Pdb:
             new_list.extend(matching)
         return set(new_list)
     
-    def _within(self, query_iter, threshold):
+    def within(self, query_iter, threshold):
         new_list = []
         for n, atom in enumerate(self.atoms):
             if any([self._atoms_dist(atom, self.atoms[query]) <= threshold for query in query_iter]):
@@ -367,3 +267,134 @@ class Atom:
     def __repr__(self):
         chain = self.chain if self.chain != " " else "unspecified"
         return "Atom {} in residue {}{} of chain {}".format(self.atomname, self.resname, self.resnum, chain)
+
+
+class SelectionParser:
+    def __init__(self, master):
+        if isinstance(master, Pdb):
+            self.master = master
+            self.nat = len(self.master.atoms)
+        elif isinstance(master, SectionMol):
+            self.master = master
+            self.nat = self.master.natoms
+        else:
+            raise TypeError("Can only parse selections with PDB or topology data")
+
+    def __call__(self, selection_string):
+        protein_selection = "resname ALA ACE CYS ASP ASPP GLU GLUP PHE GLY HIS HID HIE HSD HSE ILE LYS LEU MET " \
+                            "NME NMA ASN PRO GLN ARG SER THR VAL TRP"
+        dna_selection = "resname DA DG DC DT DA5 DG5 DC5 DT5 DA3 DG3 DC3 DT3"
+        rna_selection = "resname RA RG RC RT RA5 RG5 RC5 RT5 RA3 RG3 RC3 RT3"
+        solvent_selection = "resname HOH TIP3 SOL K CL NA"
+        selection_string = selection_string.replace('solvent', solvent_selection)
+        selection_string = selection_string.replace('water', 'resname HOH TIP3 SOL')
+        selection_string = selection_string.replace('protein', protein_selection)
+        selection_string = selection_string.replace('nucleic', 'dna or rna')
+        selection_string = selection_string.replace('dna', dna_selection)
+        selection_string = selection_string.replace('rna', rna_selection)
+        return sorted(list(self._select_set_atoms(selection_string)))
+
+    def _select_set_atoms(self, selection_string, ):
+        """
+        :param selection_string: str
+        :return:
+        """
+        assert isinstance(selection_string, str)
+        parenth_ranges, operators = self._parse_sel_string(selection_string)
+        if not parenth_ranges and not operators:
+            if selection_string.strip().startswith("not "):
+                return self._find_atoms(selection_string.lstrip()[4:], rev=True)
+            else:
+                return self._find_atoms(selection_string)
+        elif parenth_ranges and not operators:
+            if selection_string.strip().startswith("not "):
+                
+                set_all = {n for n in range(self.nat)}
+                return set_all.difference(self._select_set_atoms(selection_string.strip()[4:].strip('()')))
+            else:
+                return self._select_set_atoms(selection_string.strip().strip('()'))
+        else:
+            first_op = selection_string[operators[0][0]:operators[0][1]].strip()
+            if first_op == "and":
+                return self._select_set_atoms(selection_string[:operators[0][0]]) \
+                    .intersection(self._select_set_atoms(selection_string[operators[0][1]:]))
+            elif first_op == "or":
+                return self._select_set_atoms(selection_string[:operators[0][0]]) \
+                    .union(self._select_set_atoms(selection_string[operators[0][1]:]))
+
+    @staticmethod
+    def _parse_sel_string(selection_string):
+        parenth_ranges = []
+        operators = []
+        opened_parenth = 0
+        beginning = 0
+        for nc, char in enumerate(selection_string):
+            if char == '(':
+                opened_parenth += 1
+                if beginning == 0:
+                    beginning = nc
+            elif char == ')':
+                opened_parenth -= 1
+                end = nc
+                if opened_parenth == 0:
+                    parenth_ranges.append((beginning, end))
+                    beginning = 0
+            if opened_parenth < 0:
+                raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
+            if selection_string[nc:nc + 5] == " and " and opened_parenth == 0:
+                operators.append((nc, nc + 5))
+            if selection_string[nc:nc + 4] == " or " and opened_parenth == 0:
+                operators.append((nc, nc + 4))
+        if opened_parenth != 0:
+            raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
+        return parenth_ranges, operators
+
+    def _find_atoms(self, sel_string, rev=False):
+        chosen = []
+        same = False
+        within = False
+        if ' '.join(sel_string.split()[:3]) == "same residue as":
+            sel_string = ' '.join(sel_string.split()[3:])
+            same = True
+        if sel_string.split()[0] == 'within' and sel_string.split()[2] == 'of':
+            within = float(sel_string.split()[1])
+            sel_string = ' '.join(sel_string.split()[3:])
+        keyw = sel_string.split()[0]
+        if isinstance(self.master, Pdb):
+            matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
+                         "chain": "chain", "resname": "resname", "serial": "serial"}
+        elif isinstance(self.master, SectionMol):
+            matchings = {"name": "atomname", "resid": "resid", "resnum": "resid", "mass": "mass",
+                         "resname": "resname", "serial": "num", "type": "type"}
+        else:
+            raise TypeError("pass either a Pdb or SectionMol object")
+        try:
+            vals = {int(x) for x in sel_string.split()[1:]}
+        except ValueError:
+            if " to " in sel_string:
+                beg = int(sel_string.split()[1])
+                end = int(sel_string.split()[3])
+                vals = set(range(beg, end + 1))
+            else:
+                vals = set(sel_string.split()[1:])
+        if isinstance(self.master, Pdb):
+            atomlist = self.master.atoms
+        elif isinstance(self.master, SectionMol):
+            atomlist = [e for e in self.master.get_subsection('atoms').entries if isinstance(e, EntryAtom)]
+        else:
+            raise ValueError
+        for n, a in enumerate(atomlist):
+            if not rev:
+                if a.__getattribute__(matchings[keyw]) in vals:
+                    chosen.append(n)
+            else:
+                if a.__getattribute__(matchings[keyw]) not in vals:
+                    chosen.append(n)
+        
+        if same:
+            chosen = self.master.same_residue_as(chosen)  # TODO implement for SectMol
+        if within and isinstance(self.master, Pdb):
+            chosen = self.master.within(chosen, within)
+        if within and not isinstance(self.master, Pdb):
+            raise ValueError("the within keyword only works for structural data, not topology")
+        return set(chosen)

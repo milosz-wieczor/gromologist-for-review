@@ -1,6 +1,8 @@
 from itertools import product
 from functools import reduce
+
 from .Subsection import *
+from .Parser import SelectionParser
 
 
 class Section:
@@ -91,6 +93,10 @@ class SectionMol(Section):
         self.bonds = None
         self.mol_name = self.get_subsection('moleculetype').molname
         self.name = '{} molecule'.format(self.mol_name)
+    
+    def select_atoms(self, selection_string):
+        sel = SelectionParser(self)
+        return sel(selection_string)
     
     def offset_numbering(self, offset, startfrom=0):
         """

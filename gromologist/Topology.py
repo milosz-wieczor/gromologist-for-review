@@ -2,8 +2,8 @@ import os
 import datetime
 
 from .Section import *
+from .Pdb import *
 from collections import OrderedDict
-from .Pdb import Pdb
 
 
 class Top:
@@ -133,6 +133,8 @@ class Top:
         :param filename: str, name of the file to be searched for
         :return: None
         """
+        if filename.strip().startswith('./'):
+            filename = filename.strip()[2:]
         pref = ''
         if filename in os.listdir(self.dir):
             return self.dir + '/' + filename, pref

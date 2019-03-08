@@ -3,3 +3,4 @@ from .Topology import *
 from .Subsection import *
 from .Entries import *
 from .Pdb import *
+from .Parser import *

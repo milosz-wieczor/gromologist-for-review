@@ -2,9 +2,12 @@ from .Parser import *
 
 
 class Pdb:
-    def __init__(self, filename, top=None, altloc='A'):
+    def __init__(self, filename=None, top=None, altloc='A'):
         self.fname = filename
-        self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
+        if self.fname:
+            self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
+        else:
+            self.atoms, self.box, self._remarks = [], 3*[0], []
         self.top = top
         self.altloc = altloc
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
@@ -239,6 +242,12 @@ class Pdb:
             for atom in self.atoms:
                 outfile.write(self._write_atom(atom))
             outfile.write('ENDMDL\n')
+    
+    def get_coords(self, subset=None):
+        if subset:
+            return [[a.x, a.y, a.z] for a in [self.atoms[q] for q in subset]]
+        else:
+            return [[a.x, a.y, a.z] for a in self.atoms]
 
 
 class Atom:

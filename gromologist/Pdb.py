@@ -7,7 +7,7 @@ class Pdb:
         if self.fname:
             self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
         else:
-            self.atoms, self.box, self._remarks = [], 3*[0], []
+            self.atoms, self.box, self._remarks = [], 3*[10] + 3*[90], []
         self.top = top
         self.altloc = altloc
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
@@ -107,6 +107,18 @@ class Pdb:
     def renumber_all(self):
         for n, atom in enumerate(self.atoms):
             atom.serial = n + 1
+    
+    def renumber_residues(self):
+        count = 1
+        for n in range(len(self.atoms)):
+            temp = count
+            try:
+                if self.atoms[n].resnum != self.atoms[n+1].resnum or self.atoms[n].chain != self.atoms[n+1].chain:
+                    temp = count + 1
+            except IndexError:
+                pass
+            self.atoms[n].resnum = count
+            count = temp
     
     def match_order_by_top_names(self, arange=None):
         """
@@ -248,7 +260,13 @@ class Pdb:
             return [[a.x, a.y, a.z] for a in [self.atoms[q] for q in subset]]
         else:
             return [[a.x, a.y, a.z] for a in self.atoms]
-
+    
+    def set_coords(self, new_coords):
+        assert len(new_coords) == len(self.atoms)
+        for atom, coords in zip(self.atoms, new_coords):
+            assert len(coords) == 3
+            atom.x, atom.y, atom.z = coords
+            
 
 class Atom:
     def __init__(self, line):
@@ -271,6 +289,12 @@ class Atom:
                 self.element = name[:1]
             else:
                 self.element = name[:2]
+    
+    def coords(self):
+        return [self.x, self.y, self.z]
+    
+    def set_coords(self, coords):
+        self.x, self.y, self.z = coords
         
     def __repr__(self):
         chain = self.chain if self.chain != " " else "unspecified"

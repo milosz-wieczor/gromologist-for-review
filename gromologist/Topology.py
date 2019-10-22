@@ -32,9 +32,19 @@ class Top:
         self._parse_sections()
         if self.top.endswith('top'):
             self.system, self.charge, self.natoms = self.read_system_properties()
+        else:
+            self.system, self.charge, self.natoms = None, 0, 0
         
     def __repr__(self):
         return "Topology with {} atoms and total charge {:.3f}".format(self.natoms, self.charge)
+    
+    @classmethod
+    def _from_text(cls, text, gmx_dir=None, pdb=None, ignore_ifdef=False):
+        with open('tmp_topfile.gromo', 'w') as tmp:
+            tmp.write(text)
+        instance = cls('tmp_topfile.gromo', gmx_dir, pdb, ignore_ifdef)
+        os.remove('tmp_topfile.gromo')
+        return instance
     
     @staticmethod
     def _find_gmx_dir():
@@ -74,6 +84,13 @@ class Top:
         :return: None
         """
         self.pdb = Pdb(pdbfile, top=self)
+    
+    def add_params(self, paramfile):
+        prmtop = Top._from_text('#include {}\n'.format(paramfile))
+        paramsect_own = [t for t in self.sections if isinstance(t, SectionParam)][0]
+        paramsect_other = [t for t in prmtop.sections if isinstance(t, SectionParam)][0]
+        paramsect_own.subsections.extend(paramsect_other.subsections)
+        paramsect_own._merge()
     
     def _include_all(self, ign_ifdef):
         """

@@ -75,11 +75,12 @@ class Subsection:
         return self
     
     def __next__(self):
-        if self.n == len(self):
-            raise StopIteration
         n = self.n
         self.n += 1
-        return self.entries[n]
+        try:
+            return self.entries[n]
+        except IndexError:
+            raise StopIteration
     
     def add_entry(self, new_entry, position=None):
         """

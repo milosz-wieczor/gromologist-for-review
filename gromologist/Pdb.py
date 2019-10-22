@@ -9,6 +9,8 @@ class Pdb:
         else:
             self.atoms, self.box, self._remarks = [], 3*[10] + 3*[90], []
         self.top = top
+        if not self.top.pdb:
+            self.top.pdb = self
         self.altloc = altloc
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                             "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
@@ -17,7 +19,7 @@ class Pdb:
     def __repr__(self):
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
     
-    def add_chains(self, serials=None, chain=None):
+    def add_chains(self, serials=None, chain=None, offset=0):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual
@@ -28,13 +30,14 @@ class Pdb:
         with atom numbers in `serials` as belonging to chain `chain`.
         :param serials: iterable of ints, atom numbers to set chain for (default is all)
         :param chain: chain to set for serials (default is use consecutive letters)
+        :param offset: int, start chain ordering from letter other than A
         :return: None
         """
         self.check_top()
         if (serials is None and chain is not None) or (serials is not None and chain is None):
             raise ValueError("Both serials and chain have to be specified simultaneously")
         excluded = {'SOL', 'HOH', 'TIP3', 'K', 'NA', 'CL', 'POT'}
-        base_char = 65  # 65 is ASCII for "A"
+        base_char = 65 + offset  # 65 is ASCII for "A"
         index = 0
         for mol_name in self.top.system.keys():
             if mol_name.upper() not in excluded:

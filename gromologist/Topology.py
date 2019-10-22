@@ -148,6 +148,8 @@ class Top:
                 first = pref.split('/')[0]
             if first in os.listdir(self.dir) and suff in os.listdir(self.dir + '/' + pref):
                 return self.dir + '/' + pref + '/' + suff, pref
+            elif pref.startswith('/'):
+                return pref + '/' + suff, pref
             elif self._gromacs_dir and suff in os.listdir(self._gromacs_dir + '/' + pref):
                 return self._gromacs_dir + '/' + pref + '/' + suff, pref
         raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'

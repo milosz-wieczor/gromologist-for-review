@@ -152,26 +152,16 @@ class Top:
         """
         if filename.strip().startswith('./'):
             filename = filename.strip()[2:]
-        pref = ''
-        if filename in os.listdir(self.dir):
-            return self.dir + '/' + filename, pref
+        pref = '/'.join(filename.split('/')[:-1])
+        suff = filename.split('/')[-1]
+        if os.path.isfile(self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
+            return self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
+        elif os.path.isfile(self._gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
+            return self._gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
         else:
-            if '/' in filename:
-                pref = '/'.join(filename.split('/')[:-1])
-            suff = filename.split('/')[-1]
-            if pref.startswith('/') or pref.startswith('./'):
-                first = pref.split('/')[1]
-            else:
-                first = pref.split('/')[0]
-            if first in os.listdir(self.dir) and suff in os.listdir(self.dir + '/' + pref):
-                return self.dir + '/' + pref + '/' + suff, pref
-            elif pref.startswith('/'):
-                return pref + '/' + suff, pref
-            elif self._gromacs_dir and suff in os.listdir(self._gromacs_dir + '/' + pref):
-                return self._gromacs_dir + '/' + pref + '/' + suff, pref
-        raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'
-                                'If the file is included in an #ifdef block, please try setting'
-                                ' ignore_ifdef=True'.format(filename))
+            raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'
+                                    'If the file is included in an #ifdef block, please try setting'
+                                    ' ignore_ifdef=True'.format(filename))
     
     @staticmethod
     def _add_prefix_to_include(content, prefix):

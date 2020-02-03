@@ -224,13 +224,12 @@ class SectionMol(Section):
             try:
                 subsection = self.get_subsection(subs)
                 to_del = []
-                for ne, entry in enumerate(subsection):
+                for entry in subsection:
                     if isinstance(entry, EntryBonded):
                         if atom_number in entry.atom_numbers:
-                            to_del.append(ne)
-                for ne, entry in enumerate(subsection):
-                    if ne in to_del:
-                        subsection.entries.remove(entry)
+                            to_del.append(entry)
+                for entry in to_del:
+                    subsection.entries.remove(entry)
             except KeyError:
                 pass
     

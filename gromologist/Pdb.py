@@ -9,7 +9,7 @@ class Pdb:
         else:
             self.atoms, self.box, self._remarks = [], 3*[10] + 3*[90], []
         self.top = top
-        if not self.top.pdb:
+        if self.top and not self.top.pdb:
             self.top.pdb = self
         self.altloc = altloc
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \

@@ -1,4 +1,5 @@
 from .Entries import *
+from copy import deepcopy
 
 
 class Subsection:
@@ -164,7 +165,8 @@ class SubsectionBonded(Subsection):
         """
         if isinstance(entry, Entry):
             return -1
-        return sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
+        val = sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
+        return val
     
     def add_ff_params(self, as_comment):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
@@ -172,9 +174,12 @@ class SubsectionBonded(Subsection):
         sections = [sect for sect in self.section.top.sections if sect.name == 'Parameters']
         subsect_params = [sub for sect in sections for sub in sect.subsections
                           if sub.header == matchings[self.header]]
+        # TODO collapse all duplicates if present
+        self.bkp_entries = self.entries[:]
         for entry in self.entries:
             if isinstance(entry, EntryBonded):
                 self._add_ff_params_to_entry(entry, subsect_params, as_comment)
+        self.entries = self.bkp_entries[:]
     
     def _add_ff_params_to_entry(self, entry, subsect_params, as_comment):
         """
@@ -187,14 +192,37 @@ class SubsectionBonded(Subsection):
         """
         int_type = entry.interaction_type
         entry.read_types()  # TODO fix for multiple matches (dihedrals)
+        wildcard_present = []
         for subsections in subsect_params:
             for parm_entry in [e for e in subsections if isinstance(e, EntryParam)]:
                 if parm_entry.match(entry.types_state_a, int_type):
-                    if not as_comment:
-                        entry.params_state_a = parm_entry.params
+                    is_wildcard = 'X' in parm_entry.types
+                    if not wildcard_present and not is_wildcard:
+                        entry.params_state_a += parm_entry.params
+                    elif not wildcard_present and is_wildcard:
+                        entry.params_state_a += parm_entry.params
+                        wildcard_present += parm_entry.types
+                    elif wildcard_present and not is_wildcard:
+                        raise RuntimeError("Wildcard ('X') entries were found prior to regular ones, please fix"
+                                           "your FF parameters")
                     else:
-                        entry.comment += ' '.join([str(x) for x in parm_entry.params])
-        pass
+                        if parm_entry.types == wildcard_present:
+                            entry.params_state_a += parm_entry.params
+                        else:
+                            pass
+        if entry.params_state_a and entry.subsection.header == 'dihedrals':
+            if len(entry.params_state_a) > 3:
+                assert len(entry.params_state_a) % 3 == 0
+                leftover = entry.params_state_a[3:]
+                entry.params_state_a = entry.params_state_a[:3]
+                counter = 1
+                while leftover:
+                    new_entry = EntryBonded(' '.join(str(x) for x in entry.content), self)
+                    entry_location = entry.subsection.bkp_entries.index(entry)
+                    entry.subsection.bkp_entries.insert(entry_location+counter, new_entry)
+                    entry.subsection.bkp_entries[entry_location+counter].params_state_a = leftover[:3]
+                    leftover = leftover[3:]
+                    counter += 1
     
     def _check_parm_type(self):
         """
@@ -216,7 +244,7 @@ class SubsectionParam(Subsection):
     n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
                'nonbond_params': 2, 'defaults': 0, 'atomtypes': 1, 'implicit_genborn_params': 1, 'cmaptypes': 5}
     
-    def __init__(self, content, section): ## TODO sort entries sth wildcards come last
+    def __init__(self, content, section):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
         self.prmtype = self._check_parm_type()

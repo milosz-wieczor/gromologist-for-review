@@ -71,9 +71,9 @@ class EntryBonded(Entry):
         # type assignment should only be performed when asked to, i.e. outside of constructor, with read_types
         self.types_state_a = None
         self.types_state_b = None
-        self.params_state_a = None if len(self.content) == self.atoms_per_entry + 1 \
+        self.params_state_a = [] if len(self.content) == self.atoms_per_entry + 1 \
             else self.parse_params_state_a(self.content[self.atoms_per_entry + 1:])
-        self.params_state_b = None  # TODO checks for int_type and self.subsection.header to determine if needed
+        self.params_state_b = []  # TODO checks for int_type and self.subsection.header to determine if needed
         self.fstring = " ".join("{:>5d}" for n in range(self.atoms_per_entry)) + " {:>5s}"
     
     def read_types(self):
@@ -155,15 +155,16 @@ class EntryParam(Entry):
         else:
             return None
     
-    def match(self, ext_typelist, int_type): # TODO account for wildcards
+    def match(self, ext_typelist, int_type):
         if len(ext_typelist) != len(self.types):
             return False
         if self.interaction_type == int_type:
             if ext_typelist[0] == self.types[0]:
-                if all(ext_typelist[i] == self.types[i] for i in range(len(self.types))):
+                if all(ext_typelist[i] == self.types[i] for i in range(len(self.types)) if self.types[i] !='X'):
                     return True
             elif ext_typelist[0] == self.types[-1]:
-                if all(ext_typelist[i] == self.types[len(self.types)-i-1] for i in range(len(self.types))):
+                if all(ext_typelist[i] == self.types[len(self.types)-i-1] for i in range(len(self.types))
+                       if self.types[i] !='X'):
                     return True
         return False
     

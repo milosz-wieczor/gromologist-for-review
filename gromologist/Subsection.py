@@ -165,16 +165,35 @@ class SubsectionBonded(Subsection):
         if isinstance(entry, Entry):
             return -1
         return sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
-            
-    def add_ff_params_to_entry(self, atom_list, sect_params):
+    
+    def add_ff_params(self, as_comment):
+        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
+                     'impropers': 'dihedraltypes'}
+        sections = [sect for sect in self.section.top.sections if sect.name == 'Parameters']
+        subsect_params = [sub for sect in sections for sub in sect.subsections
+                          if sub.header == matchings[self.header]]
+        for entry in self.entries:
+            if isinstance(entry, EntryBonded):
+                self._add_ff_params_to_entry(entry, subsect_params, as_comment)
+    
+    def _add_ff_params_to_entry(self, entry, subsect_params, as_comment):
         """
         Given a bonded term (e.g. "21     24     26    5") converts it to atomtypes,
         finds the respective FF parameters and adds them to the bonded entry
-        :param atom_list: iterable, contains atom numbers for the entry in question
-        :param sect_params: a SectionParam instance that holds all FF params
+        :param entry: Entry, an EntryBonded instance to add FF params to
+        :param subsect_params: list, SubsectionParam instances that hold all FF params
+        :param as_comment: Boolean, only include the values as a comment
         :return: None
         """
-        # TODO
+        int_type = entry.interaction_type
+        entry.read_types()  # TODO fix for multiple matches (dihedrals)
+        for subsections in subsect_params:
+            for parm_entry in [e for e in subsections if isinstance(e, EntryParam)]:
+                if parm_entry.match(entry.types_state_a, int_type):
+                    if not as_comment:
+                        entry.params_state_a = parm_entry.params
+                    else:
+                        entry.comment += ' '.join([str(x) for x in parm_entry.params])
         pass
     
     def _check_parm_type(self):
@@ -197,7 +216,7 @@ class SubsectionParam(Subsection):
     n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
                'nonbond_params': 2, 'defaults': 0, 'atomtypes': 1, 'implicit_genborn_params': 1, 'cmaptypes': 5}
     
-    def __init__(self, content, section):
+    def __init__(self, content, section): ## TODO sort entries sth wildcards come last
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
         self.prmtype = self._check_parm_type()

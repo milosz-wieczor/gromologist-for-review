@@ -68,12 +68,12 @@ class EntryBonded(Entry):
         self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.atom_numbers = tuple([int(x) for x in self.content[:self.atoms_per_entry]])
         self.interaction_type = self.content[self.atoms_per_entry]
-        # TODO maybe type assignment should only be performed when asked to, i.e. outside of constructor
+        # type assignment should only be performed when asked to, i.e. outside of constructor, with read_types
         self.types_state_a = None
         self.types_state_b = None
         self.params_state_a = None if len(self.content) == self.atoms_per_entry + 1 \
             else self.parse_params_state_a(self.content[self.atoms_per_entry + 1:])
-        self.params_state_b = None  # TODO add checks for int_type and self.subsection.header to determine if needed
+        self.params_state_b = None  # TODO checks for int_type and self.subsection.header to determine if needed
         self.fstring = " ".join("{:>5d}" for n in range(self.atoms_per_entry)) + " {:>5s}"
     
     def read_types(self):
@@ -154,6 +154,18 @@ class EntryParam(Entry):
             return fmt[(self.subsection.header, self.interaction_type)]
         else:
             return None
+    
+    def match(self, ext_typelist, int_type): # TODO account for wildcards
+        if len(ext_typelist) != len(self.types):
+            return False
+        if self.interaction_type == int_type:
+            if ext_typelist[0] == self.types[0]:
+                if all(ext_typelist[i] == self.types[i] for i in range(len(self.types))):
+                    return True
+            elif ext_typelist[0] == self.types[-1]:
+                if all(ext_typelist[i] == self.types[len(self.types)-i-1] for i in range(len(self.types))):
+                    return True
+        return False
     
     def __repr__(self):
         if len(self.params) <= 4:

@@ -331,6 +331,19 @@ class SectionMol(Section):
         new_dihedrals += [(atom_own, atom_other, c, d) for d in neigh_atoms_21 for c in neigh_atoms_2
                           if (c, d) in self.bonds or (d, c) in self.bonds]
         return new_pairs, new_dihedrals
+    
+    def add_params(self, add_section='all', as_comment=False):
+        if add_section == 'all':
+            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
+        else:
+            subsections_to_add = [add_section]
+        for sub in subsections_to_add:
+            try:
+                subsection = [s for s in self.subsections if s.header == sub][0]
+            except IndexError:
+                pass
+            else:
+                subsection.add_ff_params(as_comment)
 
 
 class SectionParam(Section):

@@ -93,6 +93,9 @@ class SectionMol(Section):
         self.bonds = None
         self.mol_name = self.get_subsection('moleculetype').molname
         self.name = '{} molecule'.format(self.mol_name)
+        
+    def __repr__(self):
+        return self.name
     
     def select_atoms(self, selection_string):
         sel = SelectionParser(self)
@@ -180,9 +183,17 @@ class SectionMol(Section):
         print(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number, charge, mass))
         new_entry = EntryAtom(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number,
                                              charge, mass), subs_atoms)
-        position = [n for n, a in enumerate(atoms) if isinstance(a, EntryAtom) and a.num == atom_number][0]
-        self.offset_numbering(1, atom_number)
-        atoms.insert(position, new_entry)
+        try:
+            position = [n for n, a in enumerate(atoms) if isinstance(a, EntryAtom) and a.num == atom_number][0]
+        except IndexError:
+            last_atom = [a for a in atoms if isinstance(a, EntryAtom)][-1].num
+            if atom_number == last_atom + 1:
+                atoms.append(new_entry)
+            else:
+                raise RuntimeError("Last atom number is {}, cannot create atom nr {}".format(last_atom, atom_number))
+        else:
+            self.offset_numbering(1, atom_number)
+            atoms.insert(position, new_entry)
         self.top.recalc_sys_params()
     
     def del_atom(self, atom_number, del_in_pdb=True):
@@ -245,6 +256,12 @@ class SectionMol(Section):
             if isinstance(entry, EntryBonded):
                 bond_list.append(entry.atom_numbers)
         self.bonds = bond_list
+        
+    def add_bond(self, first_atom, second_atom):
+        """
+        This is just an alias for merge_two if bond is intramolecular
+        """
+        self.merge_two(self, first_atom, second_atom)
 
     def merge_two(self, other, anchor_own, anchor_other):
         """
@@ -332,7 +349,7 @@ class SectionMol(Section):
                           if (c, d) in self.bonds or (d, c) in self.bonds]
         return new_pairs, new_dihedrals
     
-    def add_params(self, add_section='all', as_comment=False):
+    def add_params(self, add_section='all'):
         if add_section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
@@ -343,7 +360,7 @@ class SectionMol(Section):
             except IndexError:
                 pass
             else:
-                subsection.add_ff_params(as_comment)
+                subsection.add_ff_params()
 
 
 class SectionParam(Section):

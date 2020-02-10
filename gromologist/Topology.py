@@ -69,6 +69,14 @@ class Top:
             print('No working Gromacs compilation found, assuming all file dependencies are referred to locally')
             return ""
     
+    @property
+    def molecules(self):
+        return [s for s in self.sections if isinstance(s, SectionMol)]
+    
+    @property
+    def parameters(self):
+        return [s for s in self.sections if isinstance(s, SectionParam)]
+    
     def list_molecules(self):
         """
         Prints out a list of molecules contained in the System
@@ -87,8 +95,8 @@ class Top:
     
     def add_params(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))
-        paramsect_own = [t for t in self.sections if isinstance(t, SectionParam)][0]
-        paramsect_other = [t for t in prmtop.sections if isinstance(t, SectionParam)][0]
+        paramsect_own = self.parameters[0]
+        paramsect_other = prmtop.parameters[0]
         paramsect_own.subsections.extend(paramsect_other.subsections)
         paramsect_own._merge()
     

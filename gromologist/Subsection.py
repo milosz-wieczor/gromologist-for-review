@@ -168,20 +168,19 @@ class SubsectionBonded(Subsection):
         val = sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
         return val
     
-    def add_ff_params(self, as_comment):
+    def add_ff_params(self):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
         sections = [sect for sect in self.section.top.sections if sect.name == 'Parameters']
         subsect_params = [sub for sect in sections for sub in sect.subsections
                           if sub.header == matchings[self.header]]
-        # TODO collapse all duplicates if present
         self.bkp_entries = self.entries[:]
         for entry in self.entries:
             if isinstance(entry, EntryBonded):
-                self._add_ff_params_to_entry(entry, subsect_params, as_comment)
+                self._add_ff_params_to_entry(entry, subsect_params)
         self.entries = self.bkp_entries[:]
     
-    def _add_ff_params_to_entry(self, entry, subsect_params, as_comment):
+    def _add_ff_params_to_entry(self, entry, subsect_params):
         """
         Given a bonded term (e.g. "21     24     26    5") converts it to atomtypes,
         finds the respective FF parameters and adds them to the bonded entry
@@ -189,9 +188,9 @@ class SubsectionBonded(Subsection):
         :param subsect_params: list, SubsectionParam instances that hold all FF params
         :param as_comment: Boolean, only include the values as a comment
         :return: None
-        """
+        """  # TODO add some info to comments
         int_type = entry.interaction_type
-        entry.read_types()  # TODO fix for multiple matches (dihedrals)
+        entry.read_types()
         wildcard_present = []
         for subsections in subsect_params:
             for parm_entry in [e for e in subsections if isinstance(e, EntryParam)]:

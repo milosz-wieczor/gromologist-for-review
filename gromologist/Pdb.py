@@ -1,5 +1,4 @@
-from .Parser import *
-
+import gromologist as gml
 
 class Pdb:
     def __init__(self, filename=None, top=None, altloc='A'):
@@ -8,7 +7,7 @@ class Pdb:
             self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
         else:
             self.atoms, self.box, self._remarks = [], 3*[10] + 3*[90], []
-        self.top = top
+        self.top = top if not isinstance(top, str) else gml.Top(top)
         if self.top and not self.top.pdb:
             self.top.pdb = self
         self.altloc = altloc
@@ -19,7 +18,7 @@ class Pdb:
     def __repr__(self):
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
     
-    def add_chains(self, serials=None, chain=None, offset=0):
+    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual
@@ -31,9 +30,10 @@ class Pdb:
         :param serials: iterable of ints, atom numbers to set chain for (default is all)
         :param chain: chain to set for serials (default is use consecutive letters)
         :param offset: int, start chain ordering from letter other than A
+        :param maxwarn: int, max number of warnings before an error shows up
         :return: None
         """
-        self.check_top()
+        self.check_top(maxwarn=maxwarn)
         if (serials is None and chain is not None) or (serials is not None and chain is None):
             raise ValueError("Both serials and chain have to be specified simultaneously")
         excluded = {'SOL', 'HOH', 'TIP3', 'K', 'NA', 'CL', 'POT'}
@@ -67,7 +67,7 @@ class Pdb:
             mol = self.top.get_molecule(mol_name)
             n_mols = self.top.system[mol_name]
             atom_subsection = mol.get_subsection('atoms')
-            atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
+            atom_entries = [e for e in atom_subsection if isinstance(e, gml.EntryAtom)]
             for m in range(n_mols):
                 for n, a in enumerate(atom_entries):
                     try:
@@ -83,7 +83,7 @@ class Pdb:
                     err += rtrn
                     index += 1
                     if err > maxwarn:
-                        raise RuntimeError("Error: too many warnings")
+                        raise RuntimeError("Error: too many warnings; use maxwarn=... to allow for exceptions")
         print("Check passed, all names match")
     
     @staticmethod
@@ -143,7 +143,7 @@ class Pdb:
             mol = self.top.get_molecule(mol_name)
             n_mols = self.top.system[mol_name]
             atom_subsection = mol.get_subsection('atoms')
-            atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
+            atom_entries = [e for e in atom_subsection if isinstance(e, gml.EntryAtom)]
             for _ in arange(n_mols):
                 for a in atom_entries:
                     if not arange or arange[0] <= index < arange[1]:
@@ -189,7 +189,7 @@ class Pdb:
             self.renumber_all()
 
     def select_atoms(self, selection_string):
-        sel = SelectionParser(self)
+        sel = gml.SelectionParser(self)
         return sel(selection_string)
     
     def same_residue_as(self, query_iter):

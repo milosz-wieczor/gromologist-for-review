@@ -1,8 +1,7 @@
 import os
 import datetime
 
-from .Section import *
-from .Pdb import *
+import gromologist as gml
 from collections import OrderedDict
 
 
@@ -22,11 +21,13 @@ class Top:
             self._gromacs_dir = self._find_gmx_dir()
         else:
             self._gromacs_dir = gmx_dir
-        self.pdb = None if pdb is None else Pdb(pdb, top=self)
+        self.pdb = None
+        self.pdb = None if pdb is None else gml.Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
         self.dir = os.getcwd() + '/' + '/'.join(self.fname.split('/')[:-1])
         self._contents = open(self.fname).readlines()
+        self.defines = {}
         self._include_all(ignore_ifdef)
         self.sections = []
         self._parse_sections()
@@ -71,11 +72,11 @@ class Top:
     
     @property
     def molecules(self):
-        return [s for s in self.sections if isinstance(s, SectionMol)]
+        return [s for s in self.sections if isinstance(s, gml.SectionMol)]
     
     @property
     def parameters(self):
-        return [s for s in self.sections if isinstance(s, SectionParam)]
+        return [s for s in self.sections if isinstance(s, gml.SectionParam)]
     
     def list_molecules(self):
         """
@@ -91,7 +92,7 @@ class Top:
         :param pdbfile: str, path to PDB file
         :return: None
         """
-        self.pdb = Pdb(pdbfile, top=self)
+        self.pdb = gml.Pdb(pdbfile, top=self)
     
     def add_params(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))
@@ -146,7 +147,7 @@ class Top:
             raise AttributeError("System properties have not been read, this is likely not a complete .top file")
         sections_to_delete = []
         for section_num, section in enumerate(self.sections):
-            if isinstance(section, SectionMol) and section.mol_name not in self.system.keys():
+            if isinstance(section, gml.SectionMol) and section.mol_name not in self.system.keys():
                 sections_to_delete.append(section_num)
         self.sections = [s for n, s in enumerate(self.sections) if n not in sections_to_delete]
     
@@ -212,11 +213,11 @@ class Top:
         :return: Section (or its subclass) instance
         """
         if 'defaults' in content[0]:
-            return SectionParam(content, self)
+            return gml.SectionParam(content, self)
         elif 'moleculetype' in content[0]:
-            return SectionMol(content, self)
+            return gml.SectionMol(content, self)
         else:
-            return Section(content, self)
+            return gml.Section(content, self)
         
     def read_system_properties(self):
         """
@@ -245,7 +246,7 @@ class Top:
         return molecules, charge, natoms
     
     def recalc_sys_params(self):
-        sub_mol = [sub for sect in self.sections for sub in sect.subsections if isinstance(sub, SubsectionAtom)]
+        sub_mol = [sub for sect in self.sections for sub in sect.subsections if isinstance(sub, gml.SubsectionAtom)]
         for sub in sub_mol:
             sub.calc_properties()
         self.system, self.charge, self.natoms = self.read_system_properties()
@@ -257,7 +258,7 @@ class Top:
         :param mol_name: name of the molecule
         :return: SectionMol instance
         """
-        mol = [s for s in self.sections if isinstance(s, SectionMol) and s.mol_name == mol_name]
+        mol = [s for s in self.sections if isinstance(s, gml.SectionMol) and s.mol_name == mol_name]
         if len(mol) == 0:
             raise KeyError("Molecule {} is not defined in topology".format(mol_name))
         elif len(mol) > 1:
@@ -290,11 +291,11 @@ class Top:
                 self._write_section(outfile, section)
         else:
             for section in self.sections:
-                if isinstance(section, SectionParam):
+                if isinstance(section, gml.SectionParam):
                     with open('ffparams.itp', 'w') as out_itp:
                         self._write_section(out_itp, section)
                     outfile.write('\n; Include ff parameters\n#include "ffparams.itp"\n')
-                elif isinstance(section, SectionMol):
+                elif isinstance(section, gml.SectionMol):
                     with open('{}.itp'.format(section.mol_name), 'w') as out_itp:
                         self._write_section(out_itp, section)
                     outfile.write('\n; Include {mn} topology\n#include "{mn}.itp"\n'.format(mn=section.mol_name))

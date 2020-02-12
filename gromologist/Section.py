@@ -1,8 +1,7 @@
 from itertools import product
 from functools import reduce
 
-from .Subsection import *
-from .Parser import SelectionParser
+import gromologist as gml
 
 
 class Section:
@@ -49,20 +48,20 @@ class Section:
         if header == 'dihedrals':
             if not self.dih_processed:
                 self.dih_processed = True
-                return SubsectionBonded(content, self)
+                return gml.SubsectionBonded(content, self)
             else:
-                return SubsectionBonded([l.replace('dihedrals', 'impropers') for l in content], self)
+                return gml.SubsectionBonded([l.replace('dihedrals', 'impropers') for l in content], self)
         elif header in {'bonds', 'pairs', 'angles', 'settles', 'exclusions', 'cmap', 'position_restraints'}:
-            return SubsectionBonded(content, self)
+            return gml.SubsectionBonded(content, self)
         elif header == 'atoms':
-            return SubsectionAtom(content, self)
+            return gml.SubsectionAtom(content, self)
         elif header == 'moleculetype':
-            return SubsectionHeader(content, self)
+            return gml.SubsectionHeader(content, self)
         elif header in {'defaults', 'atomtypes', 'pairtypes', 'bondtypes', 'angletypes', 'dihedraltypes',
                         'implicit_genborn_params', 'cmaptypes', 'nonbond_params', 'constrainttypes'}:
-            return SubsectionParam(content, self)
+            return gml.SubsectionParam(content, self)
         else:
-            return Subsection(content, self)
+            return gml.Subsection(content, self)
         
     def get_subsection(self, section_name):
         """
@@ -98,7 +97,7 @@ class SectionMol(Section):
         return self.name
     
     def select_atoms(self, selection_string):
-        sel = SelectionParser(self)
+        sel = gml.SelectionParser(self)
         return sel(selection_string)
     
     def offset_numbering(self, offset, startfrom=0):
@@ -122,7 +121,7 @@ class SectionMol(Section):
         """
         subsection = self.get_subsection('atoms')
         for entry_num, entry in enumerate(subsection):
-            if isinstance(entry, EntryAtom) and entry.num >= startfrom:
+            if isinstance(entry, gml.EntryAtom) and entry.num >= startfrom:
                 entry.num += offset
 
     def _offset_params(self, offset, startfrom):
@@ -136,7 +135,7 @@ class SectionMol(Section):
         for sub_name in [s.header for s in self.subsections if s.header != 'atoms']:
             subsection = self.get_subsection(sub_name)
             for entry_num, entry in enumerate(subsection):
-                if isinstance(entry, EntryBonded):
+                if isinstance(entry, gml.EntryBonded):
                     entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
     
     def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None):
@@ -158,9 +157,9 @@ class SectionMol(Section):
         atoms = subs_atoms.entries
         if not resid and not resname:
             if atom_number > 1:
-                ref_entry = [e for e in atoms if (isinstance(e, EntryAtom) and e.num == atom_number - 1)][0]
+                ref_entry = [e for e in atoms if (isinstance(e, gml.EntryAtom) and e.num == atom_number - 1)][0]
             else:
-                ref_entry = [e for e in atoms if isinstance(e, EntryAtom)][0]
+                ref_entry = [e for e in atoms if isinstance(e, gml.EntryAtom)][0]
             while not resid:
                 q = input("By default, atom will be assigned to residue {}{}. Proceed? [y/n]".format(ref_entry.resname,
                                                                                                      ref_entry.resid))
@@ -172,21 +171,21 @@ class SectionMol(Section):
                 else:
                     continue
         elif resid and not resname:
-            ref_entry = [e for e in atoms if (isinstance(e, EntryAtom) and e.resid == resid)][0]
+            ref_entry = [e for e in atoms if (isinstance(e, gml.EntryAtom) and e.resid == resid)][0]
             resname = ref_entry.resname
         if not mass:
             param_sect = [s for s in self.top.sections if isinstance(s, SectionParam)][0]
-            param_entry = [e for e in param_sect.get_subsection('atomtypes').entries if isinstance(e, EntryParam)
+            param_entry = [e for e in param_sect.get_subsection('atomtypes').entries if isinstance(e, gml.EntryParam)
                            and e.content[0] == atom_type][0]
             mass = param_entry.content[2]
         fstring = subs_atoms.fstring
         print(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number, charge, mass))
-        new_entry = EntryAtom(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number,
+        new_entry = gml.EntryAtom(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number,
                                              charge, mass), subs_atoms)
         try:
-            position = [n for n, a in enumerate(atoms) if isinstance(a, EntryAtom) and a.num == atom_number][0]
+            position = [n for n, a in enumerate(atoms) if isinstance(a, gml.EntryAtom) and a.num == atom_number][0]
         except IndexError:
-            last_atom = [a for a in atoms if isinstance(a, EntryAtom)][-1].num
+            last_atom = [a for a in atoms if isinstance(a, gml.EntryAtom)][-1].num
             if atom_number == last_atom + 1:
                 atoms.append(new_entry)
             else:
@@ -227,7 +226,7 @@ class SectionMol(Section):
         
     def _del_atom(self, atom_number):
         subsect_atoms = self.get_subsection('atoms')
-        chosen = [e for e in subsect_atoms.entries if isinstance(e, EntryAtom) and e.num == atom_number][0]
+        chosen = [e for e in subsect_atoms.entries if isinstance(e, gml.EntryAtom) and e.num == atom_number][0]
         subsect_atoms.entries.remove(chosen)
     
     def _del_params(self, atom_number):
@@ -236,7 +235,7 @@ class SectionMol(Section):
                 subsection = self.get_subsection(subs)
                 to_del = []
                 for entry in subsection:
-                    if isinstance(entry, EntryBonded):
+                    if isinstance(entry, gml.EntryBonded):
                         if atom_number in entry.atom_numbers:
                             to_del.append(entry)
                 for entry in to_del:
@@ -253,7 +252,7 @@ class SectionMol(Section):
         subsection = self.get_subsection('bonds')
         bond_list = []
         for entry in subsection:
-            if isinstance(entry, EntryBonded):
+            if isinstance(entry, gml.EntryBonded):
                 bond_list.append(entry.atom_numbers)
         self.bonds = bond_list
         
@@ -306,7 +305,7 @@ class SectionMol(Section):
         for sub, entries in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
                                 [new_bond, new_pairs, new_angles, new_dihedrals]):
             subsection = self.get_subsection(sub)
-            subsection.add_entries([EntryBonded(subsection.fstring.format(*entry, subsection.prmtype), subsection)
+            subsection.add_entries([gml.EntryBonded(subsection.fstring.format(*entry, subsection.prmtype), subsection)
                                     for entry in entries])
 
     def _generate_angles(self, other, atom_own, atom_other):
@@ -373,7 +372,9 @@ class SectionParam(Section):
     def __init__(self, content_list, top):
         super().__init__(content_list, top)
         self.name = 'Parameters'
+        self.defines = {}
         self._merge()
+        self._get_defines()
     
     def _merge(self):
         """
@@ -391,3 +392,9 @@ class SectionParam(Section):
             self.subsections.insert(position, merged_subsection)
             for old in subsections_to_merge:
                 self.subsections.remove(old)
+    
+    def _get_defines(self):
+        for sub in self.subsections:
+            for entry in [e for e in sub.entries if not isinstance(e, gml.EntryParam)]:
+                if entry.content and entry.content[0] == "#define":
+                    self.top.defines[entry.content[1]] = entry.content[2:]

@@ -1,5 +1,4 @@
 from .Entries import EntryAtom
-from .Pdb import Pdb
 
 
 class SelectionParser:
@@ -12,6 +11,15 @@ class SelectionParser:
                 self.nat = self.master.natoms
             except AttributeError:
                 raise TypeError("Can only parse selections with PDB or topology data")
+        
+    @staticmethod
+    def ispdb(obj):
+        try:
+            _ = obj._cryst_format
+        except AttributeError:
+            return False
+        else:
+            return True
     
     def __call__(self, selection_string):
         protein_selection = "resname ALA ACE CYS ASP ASPP GLU GLUP PHE GLY HIS HID HIE HSD HSE ILE LYS LEU MET " \
@@ -92,7 +100,7 @@ class SelectionParser:
             within = float(sel_string.split()[1])
             sel_string = ' '.join(sel_string.split()[3:])
         keyw = sel_string.split()[0]
-        if isinstance(self.master, Pdb):
+        if self.ispdb(self.master):
             matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
                          "chain": "chain", "resname": "resname", "serial": "serial"}
         else:
@@ -121,8 +129,8 @@ class SelectionParser:
         
         if same:
             chosen = self.master.same_residue_as(chosen)  # TODO implement for SectMol
-        if within and isinstance(self.master, Pdb):
+        if within and self.ispdb(self.master):
             chosen = self.master.within(chosen, within)
-        if within and not isinstance(self.master, Pdb):
+        if within and not self.ispdb(self.master):
             raise ValueError("the within keyword only works for structural data, not topology")
         return set(chosen)

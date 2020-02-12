@@ -87,10 +87,19 @@ class EntryBonded(Entry):
     def parse_params_state_a(self, excess_params):
         try:
             types = EntryBonded.fstr_suff[(self.subsection.header, self.interaction_type)]
-            excess_params = excess_params[:len(types)]
-            return [t(p) for p, t in zip(excess_params, types)]
         except KeyError:
             return [float(x) for x in excess_params]
+        else:
+            excess_params = excess_params[:len(types)]
+            try:
+                return [t(p) for p, t in zip(excess_params, types)]
+            except ValueError:
+                try:
+                    params = self.subsection.section.top.defines[excess_params[0]]
+                except KeyError:
+                    raise RuntimeError("Cannot process: ", excess_params)
+                else:
+                    return [float(x) for x in params]
     
     def __str__(self):
         if self.params_state_a:

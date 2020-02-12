@@ -1,4 +1,4 @@
-from .Entries import *
+import gromologist as gml
 from copy import deepcopy
 
 
@@ -28,7 +28,7 @@ class Subsection:
         self.id = Subsection.counter[self.header]
         self.entries = []
         for element in content:
-            if issubclass(type(element), Entry):
+            if issubclass(type(element), gml.Entry):
                 self.entries.append(element)
             elif isinstance(element, str) and element.strip() and not element.strip().startswith('['):
                 self.entries.append(self.yield_entry(element))
@@ -41,15 +41,15 @@ class Subsection:
         :return: Entry, an instance of the proper Entry subclass
         """
         if line.strip()[0] in [';', '#']:
-            return Entry(line, self)
+            return gml.Entry(line, self)
         elif isinstance(self, SubsectionParam):
-            return EntryParam(line, self)
+            return gml.EntryParam(line, self)
         elif isinstance(self, SubsectionBonded):
-            return EntryBonded(line, self)
+            return gml.EntryBonded(line, self)
         elif isinstance(self, SubsectionAtom):
-            return EntryAtom(line, self)
+            return gml.EntryAtom(line, self)
         elif isinstance(self, Subsection):
-            return Entry(line, self)
+            return gml.Entry(line, self)
     
     def __str__(self):
         """
@@ -163,7 +163,7 @@ class SubsectionBonded(Subsection):
         :param entry: Entry, entry to be sorted
         :return: int, ordering number
         """
-        if isinstance(entry, Entry):
+        if isinstance(entry, gml.Entry):
             return -1
         val = sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
         return val
@@ -176,7 +176,7 @@ class SubsectionBonded(Subsection):
                           if sub.header == matchings[self.header]]
         self.bkp_entries = self.entries[:]
         for entry in self.entries:
-            if isinstance(entry, EntryBonded):
+            if isinstance(entry, gml.EntryBonded):
                 self._add_ff_params_to_entry(entry, subsect_params)
         self.entries = self.bkp_entries[:]
     
@@ -186,14 +186,13 @@ class SubsectionBonded(Subsection):
         finds the respective FF parameters and adds them to the bonded entry
         :param entry: Entry, an EntryBonded instance to add FF params to
         :param subsect_params: list, SubsectionParam instances that hold all FF params
-        :param as_comment: Boolean, only include the values as a comment
         :return: None
         """  # TODO add some info to comments
         int_type = entry.interaction_type
         entry.read_types()
         wildcard_present = []
         for subsections in subsect_params:
-            for parm_entry in [e for e in subsections if isinstance(e, EntryParam)]:
+            for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
                 if parm_entry.match(entry.types_state_a, int_type):
                     is_wildcard = 'X' in parm_entry.types
                     if not wildcard_present and not is_wildcard:
@@ -216,7 +215,7 @@ class SubsectionBonded(Subsection):
                 entry.params_state_a = entry.params_state_a[:3]
                 counter = 1
                 while leftover:
-                    new_entry = EntryBonded(' '.join(str(x) for x in entry.content), self)
+                    new_entry = gml.EntryBonded(' '.join(str(x) for x in entry.content), self)
                     entry_location = entry.subsection.bkp_entries.index(entry)
                     entry.subsection.bkp_entries.insert(entry_location+counter, new_entry)
                     entry.subsection.bkp_entries[entry_location+counter].params_state_a = leftover[:3]
@@ -230,7 +229,7 @@ class SubsectionBonded(Subsection):
         :return: str, interaction type
         """
         for entry in self:
-            if isinstance(entry, EntryBonded):
+            if isinstance(entry, gml.EntryBonded):
                 return entry.interaction_type
         return '0'
 
@@ -281,7 +280,7 @@ class SubsectionParam(Subsection):
             return '0'
         npar = SubsectionParam.n_atoms[self.header]
         for entry in self:
-            if len(entry.content) > npar and isinstance(entry, EntryParam):
+            if len(entry.content) > npar and isinstance(entry, gml.EntryParam):
                 return entry.content[npar]
         return '0'
     
@@ -289,13 +288,13 @@ class SubsectionParam(Subsection):
         new_entries = []
         current = []
         for e in self.entries:
-            if isinstance(e, EntryParam):
+            if isinstance(e, gml.EntryParam):
                 if e.content[-1].endswith('\\'):
                     current.extend([x.rstrip('\\') for x in e.content])
                 else:
                     current.extend([x.rstrip('\\') for x in e.content])
                     new_entry = ' '.join(current)
-                    new_entries.append(EntryParam(new_entry, self, processed=True))
+                    new_entries.append(gml.EntryParam(new_entry, self, processed=True))
                     current = []
             else:
                 new_entries.append(e)
@@ -325,12 +324,12 @@ class SubsectionAtom(Subsection):
         """
         total_charge = 0
         for entry in self.entries:
-            if isinstance(entry, EntryAtom):
+            if isinstance(entry, gml.EntryAtom):
                 total_charge += entry.charge
         return total_charge
     
     def _calc_nat(self):
-        return len([e for e in self.entries if isinstance(e, EntryAtom)])
+        return len([e for e in self.entries if isinstance(e, gml.EntryAtom)])
 
     def _get_dicts(self):
         """
@@ -351,7 +350,7 @@ class SubsectionAtom(Subsection):
         """
         name_to_num, num_to_name, num_to_type, num_to_type_b = {}, {}, {}, {}
         for entry in self:
-            if isinstance(entry, EntryAtom):
+            if isinstance(entry, gml.EntryAtom):
                 name_to_num[entry.atomname] = entry.num
                 num_to_name[entry.num] = entry.atomname
                 num_to_type[entry.num] = entry.type

@@ -104,6 +104,10 @@ class Pdb:
         self.atoms = [a for a in self.atoms if a.altloc in [' ', self.altloc]]
     
     def _write_atom(self, atom):
+        atom.serial %= 100000
+        atom.resnum %= 10000
+        atom.occ %= 1000
+        atom.beta %= 1000
         return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain, atom.resnum,
                                         atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta, atom.element)
     

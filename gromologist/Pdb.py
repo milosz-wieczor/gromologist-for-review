@@ -1,13 +1,13 @@
 import gromologist as gml
 
 class Pdb:
-    def __init__(self, filename=None, top=None, altloc='A'):
+    def __init__(self, filename=None, top=None, altloc='A', **kwargs):
         self.fname = filename
         if self.fname:
             self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
         else:
             self.atoms, self.box, self._remarks = [], 3*[10] + 3*[90], []
-        self.top = top if not isinstance(top, str) else gml.Top(top)
+        self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
         if self.top and not self.top.pdb:
             self.top.pdb = self
         self.altloc = altloc
@@ -111,9 +111,9 @@ class Pdb:
         return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain, atom.resnum,
                                         atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta, atom.element)
     
-    def renumber_all(self):
-        for n, atom in enumerate(self.atoms):
-            atom.serial = n + 1
+    def renumber_atoms(self):
+        for n, atom in enumerate(self.atoms, 1):
+            atom.serial = n
     
     def renumber_residues(self):
         count = 1

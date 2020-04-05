@@ -3,7 +3,6 @@ import gromologist as gml
 
 class Pdb:
     def __init__(self, filename=None, top=None, altloc='A', **kwargs):
-        print(filename)
         self.fname = filename
         if self.fname:
             self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
@@ -109,8 +108,10 @@ class Pdb:
     def _write_atom(self, atom):
         atom.serial %= 100000
         atom.resnum %= 10000
-        atom.occ %= 1000
-        atom.beta %= 1000
+        if atom.occ > 1000:
+            atom.occ %= 1000
+        if atom.beta > 1000:
+            atom.beta %= 1000
         return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain, atom.resnum,
                                         atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta, atom.element)
     
@@ -193,7 +194,7 @@ class Pdb:
         atom = self.atoms.pop(num[0])
         print('Entry {} deleted from PDB'.format(str(atom)))
         if renumber:
-            self.renumber_all()
+            self.renumber_atoms()
 
     def select_atoms(self, selection_string):
         sel = gml.SelectionParser(self)
@@ -232,12 +233,14 @@ class Pdb:
                 remarks.append(line)
         return atoms, tuple(box), remarks
         
-    def fill_beta(self, values, serials=None, smooth=False):
+    def fill_beta(self, values, serials=None, smooth=False, ignore_mem=False):
         """
         Enables user to write arbitrary values to the beta field
         of the PDB entry
         :param values: iterable; values to fill
         :param serials: iterable, optional; can be used to specify a subset of atoms
+        :param smooth: if float, defines sigma (in Angstrom) for beta-value smoothing
+        :param ignore_mem: bool, allows to ignore memory warnings
         :return: None
         """
         if any([v > 999 for v in values]):
@@ -257,13 +260,17 @@ class Pdb:
                     atom.beta = values[index]
                     index += 1
         else:
+            if len(serials) > 10000 and not ignore_mem:
+                raise RuntimeError("Try to restrict the number of atoms (e.g. selecting CA only), or you're risking "
+                                   "running out of memory. To proceed anyway, run again with ignore_mem=True")
             import numpy as np
-            betas = np.array([values[serials.index(x)] if x in serials else 0 for x in [a.serial for a in self.atoms]])
-            coords = np.array(self.get_coords())
+            atomnums = [n for n, atom in enumerate(self.atoms) if atom.serial in serials]
+            coords = np.array(self.get_coords())[atomnums]
             for atom in self.atoms:
-                dists = np.linalg.norm(coords - np.array(atom.coords))
-                weights = np.exp(dists**2/smooth)
-                atom.beta = betas * weights/np.sum(weights)
+                dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
+                weights = np.exp(-(dists**2)/smooth)
+                weights /= np.sum(weights)
+                atom.beta = np.sum(values * weights)
 
     def save_pdb(self, outname='out.pdb'):
         with open(outname, 'w') as outfile:

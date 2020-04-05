@@ -268,7 +268,7 @@ class Pdb:
             coords = np.array(self.get_coords())[atomnums]
             for atom in self.atoms:
                 dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
-                weights = np.exp(-(dists**2)/smooth)
+                weights = np.exp(-(dists**2/(2*smooth)))
                 weights /= np.sum(weights)
                 atom.beta = np.sum(values * weights)
 

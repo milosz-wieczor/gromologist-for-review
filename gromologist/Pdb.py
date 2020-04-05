@@ -1,7 +1,9 @@
 import gromologist as gml
 
+
 class Pdb:
     def __init__(self, filename=None, top=None, altloc='A', **kwargs):
+        print(filename)
         self.fname = filename
         if self.fname:
             self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
@@ -82,8 +84,9 @@ class Pdb:
                             atom_entries[n].atomname = self.atoms[index].atomname
                     err += rtrn
                     index += 1
-                    if err > maxwarn:
-                        raise RuntimeError("Error: too many warnings; use maxwarn=... to allow for exceptions")
+                    if err > maxwarn > -1:
+                        raise RuntimeError("Error: too many warnings; use maxwarn=N to allow for up to N exceptions,"
+                                           "or -1 to allow for any number of them")
         print("Check passed, all names match")
     
     @staticmethod
@@ -229,7 +232,7 @@ class Pdb:
                 remarks.append(line)
         return atoms, tuple(box), remarks
         
-    def fill_beta(self, values, serials=None):
+    def fill_beta(self, values, serials=None, smooth=False):
         """
         Enables user to write arbitrary values to the beta field
         of the PDB entry
@@ -248,10 +251,19 @@ class Pdb:
             raise ValueError("Lists 'value' and 'serials' have inconsistent sizes: {} and {}".format(len(values),
                                                                                                      len(serials)))
         index = 0
-        for atom in self.atoms:
-            if atom.serial in serials:
-                atom.beta = values[index]
-                index += 1
+        if not smooth:
+            for atom in self.atoms:
+                if atom.serial in serials:
+                    atom.beta = values[index]
+                    index += 1
+        else:
+            import numpy as np
+            betas = np.array([values[serials.index(x)] if x in serials else 0 for x in [a.serial for a in self.atoms]])
+            coords = np.array(self.get_coords())
+            for atom in self.atoms:
+                dists = np.linalg.norm(coords - np.array(atom.coords))
+                weights = np.exp(dists**2/smooth)
+                atom.beta = betas * weights/np.sum(weights)
 
     def save_pdb(self, outname='out.pdb'):
         with open(outname, 'w') as outfile:
@@ -296,7 +308,8 @@ class Atom:
                 self.element = name[:1]
             else:
                 self.element = name[:2]
-    
+
+    @property
     def coords(self):
         return [self.x, self.y, self.z]
     

@@ -1,4 +1,5 @@
-from .Entries import *
+import gromologist as gml
+from copy import deepcopy
 
 
 class Subsection:
@@ -25,12 +26,12 @@ class Subsection:
         else:
             Subsection.counter[self.header] = 1
         self.id = Subsection.counter[self.header]
-        self._entries = []
+        self.entries = []
         for element in content:
-            if issubclass(type(element), Entry):
-                self._entries.append(element)
+            if issubclass(type(element), gml.Entry):
+                self.entries.append(element)
             elif isinstance(element, str) and element.strip() and not element.strip().startswith('['):
-                self._entries.append(self.yield_entry(element))
+                self.entries.append(self.yield_entry(element))
         
     def yield_entry(self, line):
         """
@@ -40,15 +41,15 @@ class Subsection:
         :return: Entry, an instance of the proper Entry subclass
         """
         if line.strip()[0] in [';', '#']:
-            return Entry(line, self)
+            return gml.Entry(line, self)
         elif isinstance(self, SubsectionParam):
-            return EntryParam(line, self)
+            return gml.EntryParam(line, self)
         elif isinstance(self, SubsectionBonded):
-            return EntryBonded(line, self)
+            return gml.EntryBonded(line, self)
         elif isinstance(self, SubsectionAtom):
-            return EntryAtom(line, self)
+            return gml.EntryAtom(line, self)
         elif isinstance(self, Subsection):
-            return Entry(line, self)
+            return gml.Entry(line, self)
     
     def __str__(self):
         """
@@ -63,7 +64,7 @@ class Subsection:
         return "Subsection {}".format(self.header, self.id)
     
     def __len__(self):
-        return len(self._entries)
+        return len(self.entries)
     
     def __iter__(self):
         """
@@ -75,11 +76,12 @@ class Subsection:
         return self
     
     def __next__(self):
-        if self.n == len(self):
-            raise StopIteration
         n = self.n
         self.n += 1
-        return self._entries[n]
+        try:
+            return self.entries[n]
+        except IndexError:
+            raise StopIteration
     
     def add_entry(self, new_entry, position=None):
         """
@@ -91,9 +93,9 @@ class Subsection:
         """
         if position:
             position = int(position)
-            self._entries.insert(position, new_entry)
+            self.entries.insert(position, new_entry)
         else:
-            self._entries.append(new_entry)
+            self.entries.append(new_entry)
     
     def add_entries(self, new_entries_list, position=None):
         """
@@ -106,10 +108,10 @@ class Subsection:
         if position:
             position = int(position)
             for new_entry in new_entries_list:
-                self._entries.insert(position, new_entry)
+                self.entries.insert(position, new_entry)
                 position += 1
         else:
-            self._entries.extend(new_entries_list)
+            self.entries.extend(new_entries_list)
     
     def set_entry(self, line_number, new_line):
         """
@@ -118,7 +120,7 @@ class Subsection:
         :param new_line: str, new content of the entry
         :return: None
         """
-        self._entries[line_number] = new_line
+        self.entries[line_number] = new_line
     
     def get_entry(self, line_number):
         """
@@ -126,7 +128,7 @@ class Subsection:
         :param line_number: int, which entry to return
         :return: str, subsection entry
         """
-        return self._entries[line_number]
+        return self.entries[line_number]
         
         
 class SubsectionBonded(Subsection):
@@ -135,14 +137,14 @@ class SubsectionBonded(Subsection):
     e.g., bonds or dihedrals; should be included in SectionMol
     """
     n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'impropers': 4,
-               'cmap': 5, 'settles': 2, 'exclusions': 3, 'position_restraints': 1}
+               'cmap': 5, 'settles': 2, 'exclusions': 2, 'position_restraints': 1}
     
     def __init__(self, content, section):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
-        self.prmtype = self.check_parm_type()
+        self.prmtype = self._check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
-        self.fstring = "{:5} " * SubsectionBonded.n_atoms[self.header] + '\n'
+        self.fstring = "{:5} " * (SubsectionBonded.n_atoms[self.header] + 1) + '\n'
     
     def __repr__(self):
         return "Subsection {} with interaction type {}".format(self.header, self.prmtype)
@@ -152,38 +154,84 @@ class SubsectionBonded(Subsection):
         In case we want to sort entries after some are added at the end of the section
         :return: None
         """
-        self._entries.sort(key=self.sorting_fn)
+        self.entries.sort(key=self._sorting_fn)
     
-    def sorting_fn(self, entry):
+    def _sorting_fn(self, entry):
         """
         Comments should go first, then we sort based on first, second,
         ... column of the section
         :param entry: Entry, entry to be sorted
         :return: int, ordering number
         """
-        if isinstance(entry, Entry):
+        if isinstance(entry, gml.Entry):
             return -1
-        return sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
-            
-    def add_ff_params_to_entry(self, atom_list, sect_params):
+        val = sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
+        return val
+    
+    def add_ff_params(self):
+        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
+                     'impropers': 'dihedraltypes'}
+        sections = [sect for sect in self.section.top.sections if sect.name == 'Parameters']
+        subsect_params = [sub for sect in sections for sub in sect.subsections
+                          if sub.header == matchings[self.header]]
+        self.bkp_entries = self.entries[:]
+        for entry in self.entries:
+            if isinstance(entry, gml.EntryBonded):
+                self._add_ff_params_to_entry(entry, subsect_params)
+        self.entries = self.bkp_entries[:]
+    
+    def _add_ff_params_to_entry(self, entry, subsect_params):
         """
         Given a bonded term (e.g. "21     24     26    5") converts it to atomtypes,
         finds the respective FF parameters and adds them to the bonded entry
-        :param atom_list: iterable, contains atom numbers for the entry in question
-        :param sect_params: a SectionParam instance that holds all FF params
+        :param entry: Entry, an EntryBonded instance to add FF params to
+        :param subsect_params: list, SubsectionParam instances that hold all FF params
         :return: None
-        """
-        # TODO
-        pass
+        """  # TODO add some info to comments
+        int_type = entry.interaction_type
+        entry.read_types()
+        wildcard_present = []
+        non_wildcard_present = []
+        for subsections in subsect_params:
+            for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
+                if parm_entry.match(entry.types_state_a, int_type):
+                    is_wildcard = 'X' in parm_entry.types
+                    if not wildcard_present and not is_wildcard:
+                        entry.params_state_a += parm_entry.params
+                        non_wildcard_present += parm_entry.types
+                    elif not wildcard_present and is_wildcard and not non_wildcard_present:
+                        entry.params_state_a += parm_entry.params
+                        wildcard_present = parm_entry.types
+                    elif wildcard_present and not is_wildcard:
+                        raise RuntimeError("Wildcard ('X') entries were found prior to regular ones, please fix"
+                                           "your FF parameters")
+                    elif wildcard_present and is_wildcard:  # only add if there are multiple entries per given wildcard
+                        if parm_entry.types == wildcard_present:
+                            entry.params_state_a += parm_entry.params
+                        else:
+                            pass
+        if entry.params_state_a and entry.subsection.header == 'dihedrals':
+            if len(entry.params_state_a) > 3:
+                assert len(entry.params_state_a) % 3 == 0
+                leftover = entry.params_state_a[3:]
+                entry.params_state_a = entry.params_state_a[:3]
+                counter = 1
+                while leftover:
+                    new_entry = gml.EntryBonded(' '.join(str(x) for x in entry.content), self)
+                    entry_location = entry.subsection.bkp_entries.index(entry)
+                    entry.subsection.bkp_entries.insert(entry_location+counter, new_entry)
+                    entry.subsection.bkp_entries[entry_location+counter].params_state_a = leftover[:3]
+                    leftover = leftover[3:]
+                    counter += 1
     
-    def check_parm_type(self):
+    def _check_parm_type(self):
         """
         Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
         while Amber uses angletype '1' (simple harmonic)
         :return: str, interaction type
         """
         for entry in self:
-            if isinstance(entry, EntryBonded):
+            if isinstance(entry, gml.EntryBonded):
                 return entry.interaction_type
         return '0'
 
@@ -195,16 +243,17 @@ class SubsectionParam(Subsection):
     """
     n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
                'nonbond_params': 2, 'defaults': 0, 'atomtypes': 1, 'implicit_genborn_params': 1, 'cmaptypes': 5}
-    # TODO need post-processing of cmap entries
     
     def __init__(self, content, section):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
-        self.prmtype = self.check_parm_type()
+        self.prmtype = self._check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
+        if self.header == 'cmaptypes':
+            self._process_cmap()
         
     def __repr__(self):
-        if self.prmtype != '0':
+        if self.prmtype != '0' or self.header not in ('atomtypes', 'implicit_genborn_params'):
             return "Subsection {} with interaction type {}".format(self.header, self.prmtype)
         else:
             return "Subsection {}".format(self.header)
@@ -221,9 +270,9 @@ class SubsectionParam(Subsection):
         if self.header != other.header:
             raise TypeError("Cannot merge subsections with different headers: {} and {}".format(self.header,
                                                                                                 other.header))
-        return SubsectionParam(["[ {} ]\n".format(self.header)] + self._entries + other._entries, self.section)
+        return SubsectionParam(["[ {} ]\n".format(self.header)] + self.entries + other.entries, self.section)
     
-    def check_parm_type(self):
+    def _check_parm_type(self):
         """
         Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
         while Amber uses angletype '1' (simple harmonic)
@@ -233,11 +282,27 @@ class SubsectionParam(Subsection):
             return '0'
         npar = SubsectionParam.n_atoms[self.header]
         for entry in self:
-            if len(entry.content) > npar and isinstance(entry, EntryParam):
+            if len(entry.content) > npar and isinstance(entry, gml.EntryParam):
                 return entry.content[npar]
         return '0'
-
-
+    
+    def _process_cmap(self):
+        new_entries = []
+        current = []
+        for e in self.entries:
+            if isinstance(e, gml.EntryParam):
+                if e.content[-1].endswith('\\'):
+                    current.extend([x.rstrip('\\') for x in e.content])
+                else:
+                    current.extend([x.rstrip('\\') for x in e.content])
+                    new_entry = ' '.join(current)
+                    new_entries.append(gml.EntryParam(new_entry, self, processed=True))
+                    current = []
+            else:
+                new_entries.append(e)
+        self.entries = new_entries
+        
+        
 class SubsectionAtom(Subsection):
     """
     SubsectionAtom contains definitions of all atoms in the molecule;
@@ -245,32 +310,39 @@ class SubsectionAtom(Subsection):
     """
     def __init__(self, content, section):
         super().__init__(content, section)
-        self.fstring = "{:6}{:11}{:7}{:7}{:7}{:7}{:11}{:11}   ; " + '\n'
-        self.nat = self.section.natoms = len([e for e in self._entries if isinstance(e, EntryAtom)])
-        self.charge = self.section.charge = self.calc_charge()
+        self.fstring = "{:>6}{:>11}{:>7}{:>7}{:>7}{:>7}{:>11}{:>11}   ; " + '\n'
+        self.nat, self.charge = None, None
+        self.calc_properties()
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
     
-    def calc_charge(self):
+    def calc_properties(self):
+        self.nat = self.section.natoms = self._calc_nat()
+        self.charge = self.section.charge = self._calc_charge()
+        
+    def _calc_charge(self):
         """
         Calculates total charge of the molecule
         :return: float, total charge
         """
         total_charge = 0
-        for entry in self._entries:
-            if isinstance(entry, EntryAtom):
+        for entry in self.entries:
+            if isinstance(entry, gml.EntryAtom):
                 total_charge += entry.charge
         return total_charge
+    
+    def _calc_nat(self):
+        return len([e for e in self.entries if isinstance(e, gml.EntryAtom)])
 
-    def get_dicts(self):
+    def _get_dicts(self):
         """
         dicts are not always needed and are costly to calculate,
         so only fill in the values when explicitly asked to
         :return: None
         """
         if not self.name_to_num:
-            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self.mol_type_nums()
+            self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
 
-    def mol_type_nums(self):
+    def _mol_type_nums(self):
         """
         Provides bindings between atomnumber and atomtype
         and vice versa for each molecule identified in
@@ -280,7 +352,7 @@ class SubsectionAtom(Subsection):
         """
         name_to_num, num_to_name, num_to_type, num_to_type_b = {}, {}, {}, {}
         for entry in self:
-            if isinstance(entry, EntryAtom):
+            if isinstance(entry, gml.EntryAtom):
                 name_to_num[entry.atomname] = entry.num
                 num_to_name[entry.num] = entry.atomname
                 num_to_type[entry.num] = entry.type
@@ -295,5 +367,4 @@ class SubsectionHeader(Subsection):
     """
     def __init__(self, content, section):
         super().__init__(content, section)
-        self.molname = [a.content[0] for a in self._entries if a.content][0]
-        
+        self.molname = [a.content[0] for a in self.entries if a.content][0]

@@ -191,19 +191,21 @@ class SubsectionBonded(Subsection):
         int_type = entry.interaction_type
         entry.read_types()
         wildcard_present = []
+        non_wildcard_present = []
         for subsections in subsect_params:
             for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
                 if parm_entry.match(entry.types_state_a, int_type):
                     is_wildcard = 'X' in parm_entry.types
                     if not wildcard_present and not is_wildcard:
                         entry.params_state_a += parm_entry.params
-                    elif not wildcard_present and is_wildcard:
+                        non_wildcard_present += parm_entry.types
+                    elif not wildcard_present and is_wildcard and not non_wildcard_present:
                         entry.params_state_a += parm_entry.params
-                        wildcard_present += parm_entry.types
+                        wildcard_present = parm_entry.types
                     elif wildcard_present and not is_wildcard:
                         raise RuntimeError("Wildcard ('X') entries were found prior to regular ones, please fix"
                                            "your FF parameters")
-                    else:
+                    elif wildcard_present and is_wildcard:  # only add if there are multiple entries per given wildcard
                         if parm_entry.types == wildcard_present:
                             entry.params_state_a += parm_entry.params
                         else:

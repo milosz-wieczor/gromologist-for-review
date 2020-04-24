@@ -231,13 +231,13 @@ class EntryAtom(Entry):
         else:
             self.type_b, self.charge_b, self.mass_b = None, None, None
         if self.type_b:
-            self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}{:>13.6f}{:>13.6f}{:>11s}{:>13.6f}{:>13.6f}"
-        else:
-            self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}{:>13.6f}{:>13.6f}"
+            self.alch_fstring = "{:>11s}" + self.float_fmt(self.charge_b) + self.float_fmt(self.mass_b)
+        self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}"
     
     def __str__(self):
         fstring = self.fstring + self.float_fmt(self.charge) + self.float_fmt(self.mass) + '   '
         if self.type_b:
+            fstring += self.alch_fstring
             return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
                                   self.charge, self.mass, self.type_b, self.charge_b, self.mass_b) + self.comment
         else:

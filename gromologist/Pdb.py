@@ -1,11 +1,16 @@
-from .Entries import EntryAtom
+import gromologist as gml
 
 
 class Pdb:
-    def __init__(self, filename, top=None, altloc='A'):
+    def __init__(self, filename=None, top=None, altloc='A', **kwargs):
         self.fname = filename
-        self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
-        self.top = top
+        if self.fname:
+            self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
+        else:
+            self.atoms, self.box, self._remarks = [], 3*[10] + 3*[90], []
+        self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
+        if self.top and not self.top.pdb:
+            self.top.pdb = self
         self.altloc = altloc
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                             "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
@@ -13,8 +18,18 @@ class Pdb:
 
     def __repr__(self):
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
+
+    @classmethod
+    def from_selection(cls, pdb, selection):
+        selected_indices = pdb.select_atoms(selection)
+        new_pdb = Pdb()
+        new_pdb.atoms = [atom for n, atom in enumerate(pdb.atoms) if n in selected_indices]
+        new_pdb.box = pdb.box
+        new_pdb._remarks = pdb._remarks
+        new_pdb.altloc = pdb.altloc
+        return new_pdb
     
-    def add_chains(self, serials=None, chain=None):
+    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual
@@ -25,13 +40,15 @@ class Pdb:
         with atom numbers in `serials` as belonging to chain `chain`.
         :param serials: iterable of ints, atom numbers to set chain for (default is all)
         :param chain: chain to set for serials (default is use consecutive letters)
+        :param offset: int, start chain ordering from letter other than A
+        :param maxwarn: int, max number of warnings before an error shows up
         :return: None
         """
-        self.check_top()
+        self.check_top(maxwarn=maxwarn)
         if (serials is None and chain is not None) or (serials is not None and chain is None):
             raise ValueError("Both serials and chain have to be specified simultaneously")
         excluded = {'SOL', 'HOH', 'TIP3', 'K', 'NA', 'CL', 'POT'}
-        base_char = 65  # 65 is ASCII for "A"
+        base_char = 65 + offset  # 65 is ASCII for "A"
         index = 0
         for mol_name in self.top.system.keys():
             if mol_name.upper() not in excluded:
@@ -61,7 +78,7 @@ class Pdb:
             mol = self.top.get_molecule(mol_name)
             n_mols = self.top.system[mol_name]
             atom_subsection = mol.get_subsection('atoms')
-            atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
+            atom_entries = [e for e in atom_subsection if isinstance(e, gml.EntryAtom)]
             for m in range(n_mols):
                 for n, a in enumerate(atom_entries):
                     try:
@@ -76,8 +93,9 @@ class Pdb:
                             atom_entries[n].atomname = self.atoms[index].atomname
                     err += rtrn
                     index += 1
-                    if err > maxwarn:
-                        raise RuntimeError("Error: too many warnings")
+                    if err > maxwarn > -1:
+                        raise RuntimeError("Error: too many warnings; use maxwarn=N to allow for up to N exceptions,"
+                                           "or -1 to allow for any number of them")
         print("Check passed, all names match")
     
     @staticmethod
@@ -98,14 +116,32 @@ class Pdb:
         self.atoms = [a for a in self.atoms if a.altloc in [' ', self.altloc]]
     
     def _write_atom(self, atom):
+        atom.serial %= 100000
+        atom.resnum %= 10000
+        if atom.occ > 1000:
+            atom.occ %= 1000
+        if atom.beta > 1000:
+            atom.beta %= 1000
         return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain, atom.resnum,
                                         atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta, atom.element)
     
-    def renumber_all(self):
-        for n, atom in enumerate(self.atoms):
-            atom.serial = n + 1
+    def renumber_atoms(self):
+        for n, atom in enumerate(self.atoms, 1):
+            atom.serial = n
     
-    def match_order_by_top_names(self, range=None):
+    def renumber_residues(self):
+        count = 1
+        for n in range(len(self.atoms)):
+            temp = count
+            try:
+                if self.atoms[n].resnum != self.atoms[n+1].resnum or self.atoms[n].chain != self.atoms[n+1].chain:
+                    temp = count + 1
+            except IndexError:
+                pass
+            self.atoms[n].resnum = count
+            count = temp
+    
+    def match_order_by_top_names(self, arange=None):
         """
         Whenever PDB atoms have different ordering than .top ones
         but naming is consistent, we can use the ordering from .top
@@ -114,7 +150,7 @@ class Pdb:
         otherwise, range has to be specified (using the Pythonic convention)
         to avoid ambiguities. In that case, matching molecules will only be
         looked for in the specified range.
-        :param range: tuple, start and end point of the modification (end is excluded)
+        :param arange: tuple, start and end point of the modification (end is excluded)
         :return:
         """
         if self.top is None:
@@ -125,13 +161,13 @@ class Pdb:
             mol = self.top.get_molecule(mol_name)
             n_mols = self.top.system[mol_name]
             atom_subsection = mol.get_subsection('atoms')
-            atom_entries = [e for e in atom_subsection if isinstance(e, EntryAtom)]
-            for m in range(n_mols):
+            atom_entries = [e for e in atom_subsection if isinstance(e, gml.EntryAtom)]
+            for _ in arange(n_mols):
                 for a in atom_entries:
-                    if not range or range[0] <= index < range[1]:
+                    if not arange or arange[0] <= index < arange[1]:
                         pdb_loc = self.select_atoms("resname {} and resid {} and name {}".format(a.resname, a.resid,
                                                                                                  a.atomname))
-                        pdb_loc = [loc for loc in pdb_loc if not range or range[0] <= index < range[1]]
+                        pdb_loc = [loc for loc in pdb_loc if not arange or arange[0] <= index < arange[1]]
                         if len(pdb_loc) != 1:
                             raise ValueError("Could not proceed; for match-based renumbering, residue numberings "
                                              "have to be consistent between PDB and .top, atom names need to match, "
@@ -158,98 +194,40 @@ class Pdb:
                 raise ValueError("{} is not a valid Atom attribute")
             new_atom.__setattr__(kw, kwargs[kw])
         self.atoms.insert(index, new_atom)
+    
+    def delete_atom(self, serial, renumber=False):
+        num = [n for n, a in enumerate(self.atoms) if a.serial == serial]
+        if len(num) == 0:
+            raise ValueError('No atoms with serial number {}'.format(serial))
+        elif len(num) > 1:
+            raise ValueError('Multiple atoms with serial number {}; consider renumbering'.format(serial))
+        atom = self.atoms.pop(num[0])
+        print('Entry {} deleted from PDB'.format(str(atom)))
+        if renumber:
+            self.renumber_atoms()
 
     def select_atoms(self, selection_string):
-        protein_selection = "resname ALA ACE CYS ASP ASPP GLU GLUP PHE GLY HIS HID HIE HSD HSE ILE LYS LEU MET " \
-                            "NME NMA ASN PRO GLN ARG SER THR VAL TRP"
-        dna_selection = "resname DA DG DC DT DA5 DG5 DC5 DT5 DA3 DG3 DC3 DT3"
-        rna_selection = "resname RA RG RC RT RA5 RG5 RC5 RT5 RA3 RG3 RC3 RT3"
-        solvent_selection = "resname HOH TIP3 SOL K CL NA"
-        selection_string = selection_string.replace('solvent', solvent_selection)
-        selection_string = selection_string.replace('water', 'resname HOH TIP3 SOL')
-        selection_string = selection_string.replace('protein', protein_selection)
-        selection_string = selection_string.replace('nucleic', 'dna or rna')
-        selection_string = selection_string.replace('dna', dna_selection)
-        selection_string = selection_string.replace('rna', rna_selection)
-        return sorted(list(self._select_set_atoms(selection_string)))
-
-    def _select_set_atoms(self, selection_string):
-        """
-        
-        :param selection_string: str
-        :return:
-        """
-        assert isinstance(selection_string, str)
-        parenth_ranges, operators = self._parse_sel_string(selection_string)
-        if not parenth_ranges and not operators:
-            if selection_string.strip().startswith("not "):
-                return self._find_atoms(selection_string.lstrip()[4:], rev=True)
-            else:
-                return self._find_atoms(selection_string)
-        elif parenth_ranges and not operators:
-            if selection_string.strip().startswith("not "):
-                set_all = {n for n in range(len(self.atoms))}
-                return set_all.difference(self._select_set_atoms(selection_string.strip()[4:].strip('()')))
-            else:
-                return self._select_set_atoms(selection_string.strip().strip('()'))
-        else:
-            first_op = selection_string[operators[0][0]:operators[0][1]].strip()
-            if first_op == "and":
-                return self._select_set_atoms(selection_string[:operators[0][0]])\
-                    .intersection(self._select_set_atoms(selection_string[operators[0][1]:]))
-            elif first_op == "or":
-                return self._select_set_atoms(selection_string[:operators[0][0]]) \
-                    .union(self._select_set_atoms(selection_string[operators[0][1]:]))
+        sel = gml.SelectionParser(self)
+        return sel(selection_string)
+    
+    def same_residue_as(self, query_iter):
+        new_list = []
+        for atom in query_iter:
+            residue, resid = self.atoms[atom].resname, self.atoms[atom].resnum
+            matching = [n for n, a in enumerate(self.atoms) if a.resname == residue and a.resnum == resid]
+            new_list.extend(matching)
+        return set(new_list)
+    
+    def within(self, query_iter, threshold):
+        new_list = []
+        for n, atom in enumerate(self.atoms):
+            if any([self._atoms_dist(atom, self.atoms[query]) <= threshold for query in query_iter]):
+                new_list.append(n)
+        return set(new_list)
     
     @staticmethod
-    def _parse_sel_string(selection_string):
-        parenth_ranges = []
-        operators = []
-        opened_parenth = 0
-        beginning = 0
-        for nc, char in enumerate(selection_string):
-            if char == '(':
-                opened_parenth += 1
-                if beginning == 0:
-                    beginning = nc
-            elif char == ')':
-                opened_parenth -= 1
-                end = nc
-                if opened_parenth == 0:
-                    parenth_ranges.append((beginning, end))
-                    beginning = 0
-            if opened_parenth < 0:
-                raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
-            if selection_string[nc:nc + 5] == " and " and opened_parenth == 0:
-                operators.append((nc, nc + 5))
-            if selection_string[nc:nc + 4] == " or " and opened_parenth == 0:
-                operators.append((nc, nc + 4))
-        if opened_parenth != 0:
-            raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
-        return parenth_ranges, operators
-    
-    def _find_atoms(self, sel_string, rev=False):
-        chosen = []
-        keyw = sel_string.split()[0]
-        matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
-                     "chain": "chain", "resname": "resname", "serial": "serial"}
-        try:
-            vals = {int(x) for x in sel_string.split()[1:]}
-        except ValueError:
-            if " to " in sel_string:
-                beg = int(sel_string.split()[1])
-                end = int(sel_string.split()[3])
-                vals = set(range(beg, end+1))
-            else:
-                vals = set(sel_string.split()[1:])
-        for n, a in enumerate(self.atoms):
-            if not rev:
-                if a.__getattribute__(matchings[keyw]) in vals:
-                    chosen.append(n)
-            else:
-                if a.__getattribute__(matchings[keyw]) not in vals:
-                    chosen.append(n)
-        return set(chosen)
+    def _atoms_dist(at1, at2):
+        return ((at2.x - at1.x)**2 + (at2.y - at1.y)**2 + (at2.z - at1.z)**2)**0.5
         
     @staticmethod
     def _parse_contents(contents):
@@ -265,12 +243,14 @@ class Pdb:
                 remarks.append(line)
         return atoms, tuple(box), remarks
         
-    def fill_beta(self, values, serials=None):
+    def fill_beta(self, values, serials=None, smooth=False, ignore_mem=False):
         """
         Enables user to write arbitrary values to the beta field
         of the PDB entry
         :param values: iterable; values to fill
         :param serials: iterable, optional; can be used to specify a subset of atoms
+        :param smooth: if float, defines sigma (in Angstrom) for beta-value smoothing
+        :param ignore_mem: bool, allows to ignore memory warnings
         :return: None
         """
         if any([v > 999 for v in values]):
@@ -284,10 +264,23 @@ class Pdb:
             raise ValueError("Lists 'value' and 'serials' have inconsistent sizes: {} and {}".format(len(values),
                                                                                                      len(serials)))
         index = 0
-        for atom in self.atoms:
-            if atom.serial in serials:
-                atom.beta = values[index]
-                index += 1
+        if not smooth:
+            for atom in self.atoms:
+                if atom.serial in serials:
+                    atom.beta = values[index]
+                    index += 1
+        else:
+            if len(serials) > 10000 and not ignore_mem:
+                raise RuntimeError("Try to restrict the number of atoms (e.g. selecting CA only), or you're risking "
+                                   "running out of memory. To proceed anyway, run again with ignore_mem=True")
+            import numpy as np
+            atomnums = [n for n, atom in enumerate(self.atoms) if atom.serial in serials]
+            coords = np.array(self.get_coords())[atomnums]
+            for atom in self.atoms:
+                dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
+                weights = np.exp(-(dists**2/(2*smooth)))
+                weights /= np.sum(weights)
+                atom.beta = np.sum(values * weights)
 
     def save_pdb(self, outname='out.pdb'):
         with open(outname, 'w') as outfile:
@@ -297,7 +290,19 @@ class Pdb:
             for atom in self.atoms:
                 outfile.write(self._write_atom(atom))
             outfile.write('ENDMDL\n')
-
+    
+    def get_coords(self, subset=None):
+        if subset:
+            return [[a.x, a.y, a.z] for a in [self.atoms[q] for q in subset]]
+        else:
+            return [[a.x, a.y, a.z] for a in self.atoms]
+    
+    def set_coords(self, new_coords):
+        assert len(new_coords) == len(self.atoms)
+        for atom, coords in zip(self.atoms, new_coords):
+            assert len(coords) == 3
+            atom.x, atom.y, atom.z = coords
+            
 
 class Atom:
     def __init__(self, line):
@@ -320,6 +325,13 @@ class Atom:
                 self.element = name[:1]
             else:
                 self.element = name[:2]
+
+    @property
+    def coords(self):
+        return [self.x, self.y, self.z]
+    
+    def set_coords(self, coords):
+        self.x, self.y, self.z = coords
         
     def __repr__(self):
         chain = self.chain if self.chain != " " else "unspecified"

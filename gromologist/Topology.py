@@ -1,49 +1,161 @@
 import os
-from .Section import *
+import datetime
+
+import gromologist as gml
 from collections import OrderedDict
-from .Pdb import Pdb
 
-
+# TODO add processing of CMAP
 class Top:
-    def __init__(self, filename, gmx_dir='/usr/share/gromacs/top/', pdb=None):
+    def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
         :param filename: str, path to the .top file
         :param gmx_dir: str, Gromacs FF directory
+        :param pdb: str, path to a matching PDB file
+        :param ignore_ifdef: bool, whether to ignore #include statements within #ifdef blocks (e.g. posre.itp)
         """
-        self.pdb = None if pdb is None else Pdb(pdb, top=self)
+        # TODO maybe allow for construction of a blank top with a possibility to read data later?
+        # TODO need to take care of #define keywords such as e.g. in amber-ILDN force fields
+        if not gmx_dir:
+            self._gromacs_dir = self._find_gmx_dir()
+        else:
+            self._gromacs_dir = gmx_dir
+        self.pdb = None
+        self.pdb = None if pdb is None else gml.Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
         self.dir = os.getcwd() + '/' + '/'.join(self.fname.split('/')[:-1])
-        self.contents = open(self.fname).readlines()
-        self.gromacs_dir = gmx_dir
-        self.include_all()
+        self._contents = open(self.fname).readlines()
+        self.defines = {}
+        self._include_all(ignore_ifdef)
         self.sections = []
-        self.parse_sections()
-        self.system, self.charge, self.natoms = self.read_system_properties()
+        self._parse_sections()
+        if self.top.endswith('top'):
+            self.read_system_properties()
+        else:
+            self.system, self.charge, self.natoms = None, 0, 0
         
     def __repr__(self):
-        return "Topology with {} atoms and total charge {}".format(self.natoms, self.charge)
+        return "Topology with {} atoms and total charge {:.3f}".format(self.natoms, self.charge)
+    
+    @classmethod
+    def _from_text(cls, text, gmx_dir=None, pdb=None, ignore_ifdef=False):
+        with open('tmp_topfile.gromo', 'w') as tmp:
+            tmp.write(text)
+        instance = cls('tmp_topfile.gromo', gmx_dir, pdb, ignore_ifdef)
+        os.remove('tmp_topfile.gromo')
+        return instance
+    
+    @staticmethod
+    def _find_gmx_dir():
+        """
+        Attempts to find Gromacs internal files to fall back to
+        when default .itp files are included using the
+        #include statement
+        :return: str, path to share/gromacs/top directory
+        """
+        gmx = os.popen('which gmx').read().strip()
+        if not gmx:
+            gmx = os.popen('which gmx_mpi').read().strip()
+        if not gmx:
+            gmx = os.popen('which gmx_d').read().strip()
+        if not gmx:
+            gmx = os.popen('which grompp').read().strip()
+        if gmx:
+            gmx = '/'.join(gmx.split('/')[:-2]) + '/share/gromacs/top'
+            print('Gromacs files found in directory {}'.format(gmx))
+            return gmx
+        else:
+            print('No working Gromacs compilation found, assuming all file dependencies are referred to locally')
+            return ""
+    
+    @property
+    def molecules(self):
+        return [s for s in self.sections if isinstance(s, gml.SectionMol)]
+    
+    @property
+    def parameters(self):
+        return [s for s in self.sections if isinstance(s, gml.SectionParam)]
+    
+    def list_molecules(self):
+        """
+        Prints out a list of molecules contained in the System
+        :return: None
+        """
+        for mol in self.system.keys():
+            print("{:20s}{:>10d}".format(mol, self.system[mol]))
     
     def add_pdb(self, pdbfile):
-        self.pdb = Pdb(pdbfile, top=self)
+        """
+        Allows to pair a PDB file with the topology after the instance was initialized
+        :param pdbfile: str, path to PDB file
+        :return: None
+        """
+        self.pdb = gml.Pdb(pdbfile, top=self)
+
+    def add_ff_params(self, section='all'):
+        for mol in self.molecules:
+            mol.add_ff_params(add_section=section)
     
-    def include_all(self):
+    def add_params_file(self, paramfile):
+        prmtop = Top._from_text('#include {}\n'.format(paramfile))
+        paramsect_own = self.parameters[0]
+        paramsect_other = prmtop.parameters[0]
+        paramsect_own.subsections.extend(paramsect_other.subsections)
+        paramsect_own._merge()
+    
+    def _include_all(self, ign_ifdef):
         """
         includes all .itp files in the .top file to facilitate processing
         :return: None
         """
-        # TODO do we want to add #ifdef support + .mdp processing?
-        lines = [i for i in range(len(self.contents)) if self.contents[i].strip().startswith("#include")]
+        # TODO optionally insert .mdp defines in constructor & pass here?
+        ignore_lines = self._find_ifdef_lines() if ign_ifdef else set()
+        lines = [i for i in range(len(self._contents)) if self._contents[i].strip().startswith("#include")
+                 and i not in ignore_lines]
         while len(lines) > 0:
             lnum = lines[0]
-            to_include, extra_prefix = self.find_in_path(self.contents.pop(lnum).split()[1].strip('"\''))
-            contents = self.add_prefix_to_include(open(to_include).readlines(), extra_prefix)
-            self.contents[lnum:lnum] = contents
-            lines = [i for i in range(len(self.contents)) if self.contents[i].startswith("#include")]
+            to_include, extra_prefix = self._find_in_path(self._contents.pop(lnum).split()[1].strip('"\''))
+            contents = self._add_prefix_to_include(open(to_include).readlines(), extra_prefix)
+            self._contents[lnum:lnum] = contents
+            ignore_lines = self._find_ifdef_lines() if ign_ifdef else set()
+            lines = [i for i in range(len(self._contents)) if self._contents[i].startswith("#include")
+                     and i not in ignore_lines]
     
-    def find_in_path(self, filename):
+    def _find_ifdef_lines(self):
+        """
+        Finds #ifdef/#endif blocks in the topology if user
+        explicitly asks to ignore them
+        :return: set, int numbers of all lines that fall within an #ifdef/#endif block
+        """
+        ignore_set = set()
+        counter = 0
+        for n, line in enumerate(self._contents):
+            if line.strip().startswith("#ifdef"):
+                counter += 1
+            elif line.strip().startswith("#endif"):
+                counter -= 1
+            if counter > 0:
+                ignore_set.add(n)
+        return ignore_set
+    
+    def clear_sections(self):
+        """
+        Removes all SectionMol instances that are not part
+        of the system definition in [ system ]
+        # TODO optionally we could also delete all unused params
+        :return: None
+        """
+        if self.system is None:
+            raise AttributeError("System properties have not been read, this is likely not a complete .top file")
+        sections_to_delete = []
+        for section_num, section in enumerate(self.sections):
+            if isinstance(section, gml.SectionMol) and section.mol_name not in self.system.keys():
+                sections_to_delete.append(section_num)
+        self.sections = [s for n, s in enumerate(self.sections) if n not in sections_to_delete]
+    
+    def _find_in_path(self, filename):
         """
         looks for a file to be included in either the current directory
         or in Gromacs directories (as given by user), in order to
@@ -51,25 +163,21 @@ class Top:
         :param filename: str, name of the file to be searched for
         :return: None
         """
-        pref = ''
-        if filename in os.listdir(self.dir):
-            return self.dir + '/' + filename, pref
+        if filename.strip().startswith('./'):
+            filename = filename.strip()[2:]
+        pref = '/'.join(filename.split('/')[:-1])
+        suff = filename.split('/')[-1]
+        if os.path.isfile(self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
+            return self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
+        elif os.path.isfile(self._gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
+            return self._gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
         else:
-            if '/' in filename:
-                pref = '/'.join(filename.split('/')[:-1])
-            suff = filename.split('/')[-1]
-            if pref.startswith('/') or pref.startswith('./'):
-                first = pref.split('/')[1]
-            else:
-                first = pref.split('/')[0]
-            if first in os.listdir(self.dir) and suff in os.listdir(self.dir + '/' + pref):
-                return self.dir + '/' + pref + '/' + suff, pref
-            elif suff in os.listdir(self.gromacs_dir + '/' + pref):
-                return self.gromacs_dir + '/' + pref + '/' + suff, pref
-        raise FileNotFoundError('file {} not found in neither local nor Gromacs directory'.format(filename))
+            raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'
+                                    'If the file is included in an #ifdef block, please try setting'
+                                    ' ignore_ifdef=True'.format(filename))
     
     @staticmethod
-    def add_prefix_to_include(content, prefix):
+    def _add_prefix_to_include(content, prefix):
         """
         Modifies #include statements if nested #includes
         point to different directories
@@ -88,20 +196,20 @@ class Top:
                     content[nline] = newline
         return content
     
-    def parse_sections(self):
+    def _parse_sections(self):
         """
         Cuts the content in sections as defined by the position
         of special headers, and builds the self.sections list
         :return: None
         """
         special_sections = {'defaults', 'moleculetype', 'system'}
-        special_lines = [n for n, l in enumerate(self.contents)
+        special_lines = [n for n, l in enumerate(self._contents)
                          if l.strip() and l.strip().strip('[]').strip().split()[0] in special_sections]
-        special_lines.append(len(self.contents))
+        special_lines.append(len(self._contents))
         for beg, end in zip(special_lines[:-1], special_lines[1:]):
-            self.sections.append(self.yield_sec(self.contents[beg:end]))
+            self.sections.append(self._yield_sec(self._contents[beg:end]))
     
-    def yield_sec(self, content):
+    def _yield_sec(self, content):
         """
         Chooses which class (Section or derived classes)
         should be used for the particular set of entries
@@ -109,11 +217,11 @@ class Top:
         :return: Section (or its subclass) instance
         """
         if 'defaults' in content[0]:
-            return SectionParam(content, self)
+            return gml.SectionParam(content, self)
         elif 'moleculetype' in content[0]:
-            return SectionMol(content, self)
+            return gml.SectionMol(content, self)
         else:
-            return Section(content, self)
+            return gml.Section(content, self)
         
     def read_system_properties(self):
         """
@@ -131,7 +239,8 @@ class Top:
             raise KeyError
         elif len(system_subsection) > 1:
             print("Section 'molecules' not present in the topology")
-            return None, None, None
+            self.system, self.charge, self.natoms = None, 0, 0
+            return
         for e in system_subsection[0]:
             if e.content:
                 molecules[e.content[0]] = int(e.content[1])
@@ -139,7 +248,13 @@ class Top:
             sect_mol = self.get_molecule(mol)
             natoms += molecules[mol] * sect_mol.natoms
             charge += molecules[mol] * sect_mol.charge
-        return molecules, charge, natoms
+        self.system, self.charge, self.natoms = molecules, charge, natoms
+    
+    def recalc_sys_params(self):
+        sub_mol = [sub for sect in self.sections for sub in sect.subsections if isinstance(sub, gml.SubsectionAtom)]
+        for sub in sub_mol:
+            sub.calc_properties()
+        self.read_system_properties()
         
     def get_molecule(self, mol_name):
         """
@@ -148,32 +263,64 @@ class Top:
         :param mol_name: name of the molecule
         :return: SectionMol instance
         """
-        mol = [s for s in self.sections if isinstance(s, SectionMol) and s.mol_name == mol_name]
+        mol = [s for s in self.sections if isinstance(s, gml.SectionMol) and s.mol_name == mol_name]
         if len(mol) == 0:
-            raise KeyError
+            raise KeyError("Molecule {} is not defined in topology".format(mol_name))
         elif len(mol) > 1:
             raise RuntimeError("Molecule {} is duplicated in topology".format(mol_name))
         return mol[0]
     
-    def check_pdb(self, pdb_object):
+    def check_pdb(self):
         """
         Compares the topology with a PDB object to check
         for consistency, just as gmx grompp does;
         if inconsistencies are found, prints a report
-        :param pdb_object: a PDB instance # TODO either make our own or import from mdtraj, or make optional
-        :return: int, 1 is consistent, 0 is not, -1 means naming incostistencies within the same element (C5T/C7 etc.)
+        :return: None
         """
-        pass
+        if self.pdb:
+            self.pdb.check_top()
+        else:
+            raise AttributeError("No PDB file has been bound to this topology")
     
-    def save_top(self, outname):
+    def save_top(self, outname, split=False):
         """
         Saves the combined topology to the specified file
         :param outname: str, file name for output
+        :param split: bool, whether to split into individual .top files
         :return: None
         """
-        with open(outname, 'w') as outfile:
+        outfile = open(outname, 'w')
+        self._write_header(outfile)
+        if not split:
             for section in self.sections:
-                for subsection in section.subsections:
-                    outfile.write('\n[ {} ]\n'.format(subsection.write_header))
-                    for line in subsection:
-                        outfile.write(line)
+                self._write_section(outfile, section)
+        else:
+            for section in self.sections:
+                if isinstance(section, gml.SectionParam):
+                    with open('ffparams.itp', 'w') as out_itp:
+                        self._write_section(out_itp, section)
+                    outfile.write('\n; Include ff parameters\n#include "ffparams.itp"\n')
+                elif isinstance(section, gml.SectionMol):
+                    with open('{}.itp'.format(section.mol_name), 'w') as out_itp:
+                        self._write_section(out_itp, section)
+                    outfile.write('\n; Include {mn} topology\n#include "{mn}.itp"\n'.format(mn=section.mol_name))
+                else:
+                    self._write_section(outfile, section)
+        outfile.close()
+
+    @staticmethod
+    def _write_section(outfile, section):
+        for subsection in section.subsections:
+            outfile.write('\n[ {} ]\n'.format(subsection.write_header))
+            for entry in subsection:
+                str_entry = str(entry).rstrip() + '\n'
+                outfile.write(str_entry)
+                
+    @staticmethod
+    def _write_header(outfile):
+        outname = outfile.name.split('/')[-1]
+        outfile.write(";\n;  File {} was generated with the gromologist library\n"
+                      ";  by user: {}\n;  on host: {}\n;  at date: {} \n;".format(outname,
+                                                                                  os.getenv("USER"),
+                                                                                  os.uname()[1],
+                                                                                  datetime.datetime.now()))

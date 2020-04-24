@@ -231,9 +231,9 @@ class EntryAtom(Entry):
         else:
             self.type_b, self.charge_b, self.mass_b = None, None, None
         if self.type_b:
-            self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}{:>11s}{:>7s}{:>7d}"
+            self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}{:>13.6f}{:>13.6f}{:>11s}{:>13.6f}{:>13.6f}"
         else:
-            self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}"
+            self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}{:>13.6f}{:>13.6f}"
     
     def __str__(self):
         fstring = self.fstring + self.float_fmt(self.charge) + self.float_fmt(self.mass) + '   '

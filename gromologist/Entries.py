@@ -61,6 +61,7 @@ class EntryBonded(Entry):
                  ('dihedrals', '9'): (float, float, int),
                  ('dihedrals', '4'): (float, float, int),
                  ('dihedrals', '2'): (float, float),
+                 ('cmap', '1'): (float, float, float, float, float),
                  ('position_restraints', '1'): (int, int, int)}
     
     def __init__(self, content, subsection):

@@ -264,7 +264,8 @@ class SectionMol(Section):
 
     def merge_two(self, other, anchor_own, anchor_other):
         """
-        Creates a new bond by either merging two distinct molecules
+        Creates a new bond by either merging two distinct
+        molecules (both being part of the same topology)
         or adding a new bond within a single molecule
         :param other: an SectionMol instance, the other molecule that participates in the bond (can be self)
         :param anchor_own: int, number of the atom that will form the new bond in self
@@ -282,7 +283,7 @@ class SectionMol(Section):
             self.top.sections.remove(other)
             # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
             system_setup = self.top.sections[-1].get_subsection('molecules')
-            system_setup._entries = [e for e in system_setup if other.mol_name not in e]
+            system_setup.entries = [e for e in system_setup if other.mol_name not in e]
             self.top.read_system_properties()
 
     def _merge_fields(self, other):
@@ -348,7 +349,7 @@ class SectionMol(Section):
                           if (c, d) in self.bonds or (d, c) in self.bonds]
         return new_pairs, new_dihedrals
     
-    def add_params(self, add_section='all'):
+    def add_ff_params(self, add_section='all'):
         if add_section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:

@@ -18,6 +18,16 @@ class Pdb:
 
     def __repr__(self):
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
+
+    @classmethod
+    def from_selection(cls, pdb, selection):
+        selected_indices = pdb.select_atoms(selection)
+        new_pdb = Pdb()
+        new_pdb.atoms = [atom for n, atom in enumerate(pdb.atoms) if n in selected_indices]
+        new_pdb.box = pdb.box
+        new_pdb._remarks = pdb._remarks
+        new_pdb.altloc = pdb.altloc
+        return new_pdb
     
     def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100):
         """

@@ -4,7 +4,7 @@ import datetime
 import gromologist as gml
 from collections import OrderedDict
 
-
+# TODO add processing of CMAP
 class Top:
     def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False):
         """
@@ -32,7 +32,7 @@ class Top:
         self.sections = []
         self._parse_sections()
         if self.top.endswith('top'):
-            self.system, self.charge, self.natoms = self.read_system_properties()
+            self.read_system_properties()
         else:
             self.system, self.charge, self.natoms = None, 0, 0
         
@@ -93,8 +93,12 @@ class Top:
         :return: None
         """
         self.pdb = gml.Pdb(pdbfile, top=self)
+
+    def add_ff_params(self, section='all'):
+        for mol in self.molecules:
+            mol.add_ff_params(add_section=section)
     
-    def add_params(self, paramfile):
+    def add_params_file(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))
         paramsect_own = self.parameters[0]
         paramsect_other = prmtop.parameters[0]
@@ -235,7 +239,8 @@ class Top:
             raise KeyError
         elif len(system_subsection) > 1:
             print("Section 'molecules' not present in the topology")
-            return None, None, None
+            self.system, self.charge, self.natoms = None, 0, 0
+            return
         for e in system_subsection[0]:
             if e.content:
                 molecules[e.content[0]] = int(e.content[1])
@@ -243,13 +248,13 @@ class Top:
             sect_mol = self.get_molecule(mol)
             natoms += molecules[mol] * sect_mol.natoms
             charge += molecules[mol] * sect_mol.charge
-        return molecules, charge, natoms
+        self.system, self.charge, self.natoms = molecules, charge, natoms
     
     def recalc_sys_params(self):
         sub_mol = [sub for sect in self.sections for sub in sect.subsections if isinstance(sub, gml.SubsectionAtom)]
         for sub in sub_mol:
             sub.calc_properties()
-        self.system, self.charge, self.natoms = self.read_system_properties()
+        self.read_system_properties()
         
     def get_molecule(self, mol_name):
         """
@@ -306,7 +311,7 @@ class Top:
     @staticmethod
     def _write_section(outfile, section):
         for subsection in section.subsections:
-            outfile.write('\n[ {} ]\n'.format(subsection.header))
+            outfile.write('\n[ {} ]\n'.format(subsection.write_header))
             for entry in subsection:
                 str_entry = str(entry).rstrip() + '\n'
                 outfile.write(str_entry)

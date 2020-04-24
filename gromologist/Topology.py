@@ -4,7 +4,7 @@ import datetime
 import gromologist as gml
 from collections import OrderedDict
 
-# TODO add processing of CMAP
+
 class Top:
     def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False):
         """

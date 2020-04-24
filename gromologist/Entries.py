@@ -224,13 +224,22 @@ class EntryAtom(Entry):
         except ValueError:
             self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge = self.content[:7]
             self.mass = 0  # TODO get mass as the default from the ffnonbonded 'atomtypes' section
-        self.type_b, self.charge_b, self.mass_b = None, None, None
         self.num, self.resid = int(self.num), int(self.resid)
         self.charge, self.mass = float(self.charge), float(self.mass)
-        len(str(self.charge).split('.')[1])
-        self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}"
+        if len(self.content) == 11:
+            self.type_b, self.charge_b, self.mass_b = self.content[8], float(self.content[9]), float(self.content[10])
+        else:
+            self.type_b, self.charge_b, self.mass_b = None, None, None
+        if self.type_b:
+            self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}{:>11s}{:>7s}{:>7d}"
+        else:
+            self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}"
     
     def __str__(self):
         fstring = self.fstring + self.float_fmt(self.charge) + self.float_fmt(self.mass) + '   '
-        return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
-                              self.charge, self.mass) + self.comment
+        if self.type_b:
+            return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
+                                  self.charge, self.mass, self.type_b, self.charge_b, self.mass_b) + self.comment
+        else:
+            return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
+                                  self.charge, self.mass) + self.comment

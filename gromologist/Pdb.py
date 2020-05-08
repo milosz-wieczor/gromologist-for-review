@@ -140,6 +140,18 @@ class Pdb:
                 pass
             self.atoms[n].resnum = count
             count = temp
+
+    def reposition_atom_from_hook(self, atomsel, hooksel, bondlength, p1_sel, p2_sel):
+        assert 1 == len(self.select_atoms(atomsel)) == len(self.select_atoms(hooksel))
+        assert 1 == len(self.select_atoms(p1_sel)) == len(self.select_atoms(p2_sel))
+        movable = self.atoms[self.select_atoms(atomsel)[0]]
+        hook_xyz = self.get_coords()[self.select_atoms(hooksel)[0]]
+        p1_xyz = self.get_coords()[self.select_atoms(p1_sel)[0]]
+        p2_xyz = self.get_coords()[self.select_atoms(p2_sel)[0]]
+        vec = [x2 - x1 for x1, x2 in zip(p1_xyz, p2_xyz)]
+        vec_len = sum([x**2 for x in vec])**0.5
+        scale = bondlength/vec_len
+        movable.set_coords([h + scale*v for h, v in zip(hook_xyz, vec)])
     
     def match_order_by_top_names(self, arange=None):
         """

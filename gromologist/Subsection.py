@@ -137,7 +137,7 @@ class SubsectionBonded(Subsection):
     e.g., bonds or dihedrals; should be included in SectionMol
     """
     n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'impropers': 4,
-               'cmap': 5, 'settles': 2, 'exclusions': 2, 'position_restraints': 1}
+               'cmap': 5, 'settles': 1, 'exclusions': 2, 'position_restraints': 1}
     
     def __init__(self, content, section):
         super().__init__(content, section)
@@ -187,7 +187,7 @@ class SubsectionBonded(Subsection):
         :param entry: Entry, an EntryBonded instance to add FF params to
         :param subsect_params: list, SubsectionParam instances that hold all FF params
         :return: None
-        """  # TODO add some info to comments
+        """
         int_type = entry.interaction_type
         entry.read_types()
         wildcard_present = []
@@ -249,6 +249,7 @@ class SubsectionParam(Subsection):
         self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
         self.prmtype = self._check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
+        self.ordering = {}
         if self.header == 'cmaptypes':
             self._process_cmap()
         
@@ -271,6 +272,25 @@ class SubsectionParam(Subsection):
             raise TypeError("Cannot merge subsections with different headers: {} and {}".format(self.header,
                                                                                                 other.header))
         return SubsectionParam(["[ {} ]\n".format(self.header)] + self.entries + other.entries, self.section)
+
+    def sort(self):
+        """
+        In case we want to sort entries after some are added at the end of the section
+        :return: None
+        """
+        self.ordering = {str(entry): n for n, entry in enumerate(self.entries)}
+        self.entries.sort(key=self._sorting_fn)
+
+    def _sorting_fn(self, entry):
+        """
+        Comments should go first, then we sort based on first, second,
+        ... column of the section
+        :param entry: Entry, entry to be sorted
+        :return: int, ordering number
+        """
+        line_number = self.ordering[str(entry)]
+        return line_number if not hasattr(entry, 'types') or 'X' not in entry.types \
+            else line_number + len(self.ordering.keys())
     
     def _check_parm_type(self):
         """

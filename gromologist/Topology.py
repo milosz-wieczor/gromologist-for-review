@@ -76,7 +76,7 @@ class Top:
     
     @property
     def parameters(self):
-        return [s for s in self.sections if isinstance(s, gml.SectionParam)]
+        return [s for s in self.sections if isinstance(s, gml.SectionParam)][0]
     
     def list_molecules(self):
         """
@@ -96,7 +96,7 @@ class Top:
 
     def add_ff_params(self, section='all'):
         for mol in self.molecules:
-            mol.add_ff_params(add_section=section)
+            mol.add_ff_params(add_section=section)  # TODO do not if already present!
     
     def add_params_file(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))

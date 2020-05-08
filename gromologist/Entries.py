@@ -61,22 +61,28 @@ class EntryBonded(Entry):
                  ('dihedrals', '9'): (float, float, int),
                  ('dihedrals', '4'): (float, float, int),
                  ('dihedrals', '2'): (float, float),
-                 ('cmap', '1'): (float, float, float, float, float),
-                 ('position_restraints', '1'): (int, int, int)}
-    
+                 # ('cmap', '1'): (float, float, float, float, float),  # TODO not quite right, fix maybe?
+                 ('position_restraints', '1'): (int, int, int),
+                 ('settles', '1'): (float, float)}
+
     def __init__(self, content, subsection):
         super().__init__(content, subsection)
         self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.atom_numbers = tuple([int(x) for x in self.content[:self.atoms_per_entry]])
         self.interaction_type = self.content[self.atoms_per_entry]
-        # type assignment should only be performed when asked to, i.e. outside of constructor, with read_types
+        try:
+            self.params_per_entry = len(EntryBonded.fstr_suff[(subsection.header, str(self.interaction_type))])
+        except KeyError:
+            self.params_per_entry = 0
+            # type assignment should only be performed when asked to, i.e. outside of constructor, with read_types
         self.types_state_a = None
         self.types_state_b = None
-        self.params_state_a = [] if len(self.content) == self.atoms_per_entry + 1 \
-            else self.parse_params_state_a(self.content[self.atoms_per_entry + 1:])
-        self.params_state_b = []  # TODO checks for int_type and self.subsection.header to determine if needed
-        self.fstring = " ".join("{:>5d}" for n in range(self.atoms_per_entry)) + " {:>5s}"
-    
+        self.params_state_a = []
+        self.params_state_b = []
+        if len(self.content) > self.atoms_per_entry + 1:
+            self.parse_bonded_params(self.content[self.atoms_per_entry + 1:])
+        self.fstring = " ".join("{:>5d}" for _ in range(self.atoms_per_entry)) + " {:>5s}"
+
     def read_types(self):
         atoms_sub = self.subsection.section.get_subsection('atoms')
         atoms_sub._get_dicts()
@@ -84,37 +90,40 @@ class EntryBonded(Entry):
         num_to_type_b = atoms_sub.num_to_type_b
         self.types_state_a = tuple(num_to_type_a[num] for num in self.atom_numbers)
         self.types_state_b = tuple(num_to_type_b[num] for num in self.atom_numbers)
-    
-    def parse_params_state_a(self, excess_params):
+
+    def parse_bonded_params(self, excess_params):
         try:
             types = EntryBonded.fstr_suff[(self.subsection.header, self.interaction_type)]
         except KeyError:
-            return [float(x) for x in excess_params]
+            raise RuntimeError("Line '{}' contains unrecognized parameters".format(self.content))
         else:
-            excess_params = excess_params[:len(types)]
-            try:
-                return [t(p) for p, t in zip(excess_params, types)]
-            except ValueError:
+            if len(excess_params) == 1 and len(types) > 1:
                 try:
                     params = self.subsection.section.top.defines[excess_params[0]]
                 except KeyError:
                     raise RuntimeError("Cannot process: ", excess_params)
                 else:
-                    return [float(x) for x in params]
-    
+                    self.params_state_a = [types[n](prm) for n, prm in params]
+            if len(excess_params) == len(types):
+                self.params_state_a = [types[n](prm) for n, prm in enumerate(excess_params[:len(types)])]
+            elif len(excess_params) == 2 * len(types):
+                self.params_state_a = [types[n](prm) for n, prm in enumerate(excess_params[:len(types)])]
+                self.params_state_b = [types[n](prm) for n, prm in enumerate(excess_params[len(types):])]
+            else:
+                raise RuntimeError("Cannot process: ", excess_params)
+
     def __str__(self):
-        if self.params_state_a:
-            fmt_suff = ""
-            for parm in self.params_state_a:
+        fmt_suff = ""
+        for params in [self.params_state_a, self.params_state_b]:
+            for parm in params:
                 if isinstance(parm, int):
                     fmt_suff = fmt_suff + "{:>6d} "
                 elif isinstance(parm, float):
                     fmt_suff = fmt_suff + self.float_fmt(parm)
-            fstring = self.fstring + fmt_suff
-            return fstring.format(*self.atom_numbers, self.interaction_type, *self.params_state_a) + self.comment
-        else:
-            return self.fstring.format(*self.atom_numbers, self.interaction_type) + self.comment
-        
+        fstring = self.fstring + fmt_suff
+        return fstring.format(*self.atom_numbers, self.interaction_type, *self.params_state_a, *self.params_state_b) \
+            + self.comment
+
         
 class EntryParam(Entry):
     """
@@ -230,14 +239,13 @@ class EntryAtom(Entry):
             self.type_b, self.charge_b, self.mass_b = self.content[8], float(self.content[9]), float(self.content[10])
         else:
             self.type_b, self.charge_b, self.mass_b = None, None, None
-        if self.type_b:
-            self.alch_fstring = "{:>11s}" + self.float_fmt(self.charge_b) + self.float_fmt(self.mass_b)
         self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}"
     
     def __str__(self):
         fstring = self.fstring + self.float_fmt(self.charge) + self.float_fmt(self.mass) + '   '
         if self.type_b:
-            fstring += self.alch_fstring
+            alch_fstring = "{:>11s}" + self.float_fmt(self.charge_b) + self.float_fmt(self.mass_b)
+            fstring += alch_fstring
             return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
                                   self.charge, self.mass, self.type_b, self.charge_b, self.mass_b) + self.comment
         else:

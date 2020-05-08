@@ -1,4 +1,4 @@
-from itertools import product
+from itertools import product, combinations
 from functools import reduce
 
 import gromologist as gml
@@ -29,7 +29,6 @@ class Section:
         :param content: list of strings, content of section
         :return: list of lists of strings, contents of individual subsections
         """
-        # TODO second "dihedral" should be renamed as "improper" to avoid confusion
         special_lines = [n for n, l in enumerate(content) if l.strip().startswith('[')] + [len(content)]
         return [content[beg:end] for beg, end in zip(special_lines[:-1], special_lines[1:])]
         
@@ -50,7 +49,7 @@ class Section:
                 self.dih_processed = True
                 return gml.SubsectionBonded(content, self)
             else:
-                return gml.SubsectionBonded([l.replace('dihedrals', 'impropers') for l in content], self)
+                return gml.SubsectionBonded([line.replace('dihedrals', 'impropers') for line in content], self)
         elif header in {'bonds', 'pairs', 'angles', 'settles', 'exclusions', 'cmap', 'position_restraints'}:
             return gml.SubsectionBonded(content, self)
         elif header == 'atoms':
@@ -137,6 +136,19 @@ class SectionMol(Section):
             for entry_num, entry in enumerate(subsection):
                 if isinstance(entry, gml.EntryBonded):
                     entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
+
+    def gen_state_b(self, atomname=None, resname=None, resid=None, atomtype=None, new_type=None, new_charge=None,
+                    new_mass=None):
+        sub = self.get_subsection('atoms')
+        for entries in [entry for entry in sub if isinstance(entry, gml.EntryAtom)]:
+            criteria = all([(atomname is None or entries.atomname == atomname),
+                            (resname is None or entries.resname == resname),
+                            (resid is None or int(entries.resid) == int(resid)),
+                            (type is None or entries.type == atomtype)])
+            if criteria:
+                entries.type_b = new_type if new_type is not None else entries.type
+                entries.mass_b = new_mass if new_mass is not None else entries.mass
+                entries.charge_b = new_charge if new_charge is not None else entries.charge
     
     def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None):
         """
@@ -181,7 +193,7 @@ class SectionMol(Section):
         fstring = subs_atoms.fstring
         print(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number, charge, mass))
         new_entry = gml.EntryAtom(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number,
-                                             charge, mass), subs_atoms)
+                                                 charge, mass), subs_atoms)
         try:
             position = [n for n, a in enumerate(atoms) if isinstance(a, gml.EntryAtom) and a.num == atom_number][0]
         except IndexError:
@@ -288,7 +300,6 @@ class SectionMol(Section):
 
     def _merge_fields(self, other):
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
-            # TODO think of other fields as well? like, position_restraints
             # TODO merge all subsections
             try:
                 subsection_other = other.get_subsection(subs)
@@ -381,7 +392,6 @@ class SectionParam(Section):
         """
         If multiple sections (e.g. [ bondtypes ]) are present in the topology,
         this fn merges them into single sections to avoid searching in all instances
-        # TODO do not merge dihedrals if have different interaction types?
         :return: None
         """
         subsection_labels = [sub.label for sub in self.subsections]
@@ -399,3 +409,44 @@ class SectionParam(Section):
             for entry in [e for e in sub.entries if not isinstance(e, gml.EntryParam)]:
                 if entry.content and entry.content[0] == "#define":
                     self.top.defines[entry.content[1]] = entry.content[2:]
+
+    def sort_dihedrals(self):
+        for sub in self.subsections:
+            if 'dihedral' in sub.header:
+                sub.sort()
+
+    def clone_type(self, atomtype, prefix):
+        for sub in self.subsections:
+            to_add = []
+            for ent in sub:
+                if isinstance(ent, gml.EntryParam) and atomtype in ent.types and prefix + atomtype not in ent.types:
+                    to_add.append(ent)
+            for entry in to_add:
+                newlines = self.gen_clones(entry, atomtype, prefix)
+                sub.add_entries([gml.EntryParam(line, sub) for line in newlines])
+        self.sort_dihedrals()
+
+    @staticmethod
+    def gen_clones(entry, atomtype, prefix):
+        lines = []
+        nchanges = entry.types.count(atomtype)
+        changes = []
+        for i in range(nchanges):
+            changes.extend(SectionParam.gen_combs(nchanges, i + 1))
+        for mod in changes:
+            lines.append(SectionParam.mod_types(entry, mod, prefix, atomtype))
+        return lines
+
+    @staticmethod
+    def gen_combs(count, tuples):
+        return list(combinations(range(count), tuples))
+
+    @staticmethod
+    def mod_types(entry, mods, prefix, atomtype):
+        line = str(entry)
+        for num in mods[::-1]:
+            indices = [i for i in range(len(line) - len(atomtype) + 1)
+                       if line[i:i + len(atomtype)] == atomtype and (i == 0 or line[i-1].isspace())
+                       and (i+len(atomtype) == len(line) or line[i+len(atomtype)].isspace())]
+            line = line[:indices[num]] + prefix + line[indices[num]:]
+        return line

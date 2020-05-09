@@ -76,3 +76,152 @@ a leaner version can be produced that lacks unused molecule definitions:
 ```
 >>> t.clean_sections()
 ```
+
+To save a 'lightweight' .top file with all contents split into separate .itp files, 
+use the `split` parameter of `Top.save_top`:
+
+```
+>>> t.save_top('md/new_topol.top', split=True) 
+```
+
+### Editing topologies
+
+Let's start with a generic topology file:
+
+```
+>>> t = Top('md/topol.top')
+```
+
+##### Adding bonds within or between molecules
+
+One useful application of Gromologist is adding bonds (and, automatically, other bonded terms)
+either within a molecule or between them:
+
+```
+>>> protein = t.get_molecule("Protein")
+>>> ligand = t.get_molecule("Other")
+>>> t.list_molecules()
+Protein                      1
+Other                        1
+>>> protein.merge_two(ligand, anhor_own=5, anchor_other=1)
+>>> t.list_molecules()
+Protein                      1
+```
+
+The above script merges Protein and Other into a single Protein molecule, adding a bond
+between atom 5 of Protein and atom 1 of Other (here, indices are 1-based, corresponding
+to numbering in .itp files).
+
+To add a bond within a single e.g. Protein molecule, one can use `protein.merge_two(protein, anhor_own=2, anchor_other=3)`
+or, more simply, `protein.add_bond(5,3)`.
+
+##### Adding and removing atoms while maintaining ordered numbering
+
+When an atom is removed, other atom numbers are modified accordingly, something that has to be
+considered when removing multiple atoms. For instance, one can remove the first three atoms
+in the following manner:
+
+```
+>>> protein.del_atom(1)
+>>> protein.del_atom(1)
+>>> protein.del_atom(1)
+```
+
+Note that all parameters involving this atom are automatically removed as well.
+
+To add an atom, one should specify its desired placement within the molecule, and at least 
+a minimal set of parameters:
+
+```
+>>> protein.add_atom(atom_number=20, atom_name="CA", atom_type="CT")
+By default, atom will be assigned to residue MET1. Proceed? [y/n]
+y
+>>> protein.add_bond(20,8)
+```
+
+If residue data is not specified, Gromologist will attempt to guess the residue based on
+neighboring atoms.
+
+##### Adding alchemical B-states
+
+To generate alchemical states for a subset of atoms, one can use `gen_state_b`:
+
+```
+>>> protein.gen_state_b(atomtype='CT',new_type="CE")
+```
+
+The arguments for `gen_state_b` are divided into two subgroups:
+
+ + `atomname`, `resname`, `resid` and `atomtype` behave as selectors, allowing to specify
+ one or many atoms that should have its B-type specified;
+ + `new_type`, `new_charge` and `new_mass` act as setters, allowing to specify the values
+ in the B-state.
+ 
+If the selectors point to multiple atoms (e.g. `atomtype=CT` selects all atoms with type CT),
+all will be modified as specified. In turn, if a given setter is not specified, the respective 
+value will be identical to that for state A.
+
+##### Duplicating types
+
+Often it's useful to duplicate an atomtype exactly, i.e., assign it a different name while
+retaining all bonded and nonbonded parameters of the original. This can be done easily with:
+
+```
+>>> params = t.parameters
+>>> params.clone_type("CT", prefix="Y")
+```
+
+This will create a type "YCT" that shares all properties with "CT" but can be modified independently.
+
+##### Explicitly listing parameters in topology 
+
+To explicitly include all parameters in sections `[ bonds ]`, `[ angles ]` and `[ dihedrals ]`,
+one can use:
+
+```
+>>> t.add_ff_params()
+>>> t.save_top('with_params.top')
+```
+
+### Editing structures
+
+Let's start by reading a PDB file:
+
+```
+>>> p = PDB('md/other.pdb')
+```
+
+##### Adding atoms along a vector specified by other atoms
+
+To add e.g. a hydrogen atom to an existing atom CB, with a bond length of 1 A in the direction
+specified by a vector from atom C to atom CA, one can use:
+
+```
+>>> p.insert_atom(len(p.atoms), base_atom=p.atoms[11], atomname='HX')
+>>> p.reposition_atom_from_hook('name HX', 'name CB', 1.0, p1_sel='name C', p2_sel='name CA')
+```
+
+All the selections should be unique (corresponding to a single atom), and combinations can be
+used like in VMD, e.g. `name CB and resid 10 and chain A`.
+
+##### Filling beta-values with custom data (for visualization)
+
+To use the PDB's beta column for color-mapping of observables e.g. in VMD, use the following:
+
+```
+>>> ca_atom_indices = p.select_atoms('name CA')
+>>> p.fill_beta(per_residue_data, serials=[x+1 for x in ca_atom_indices])
+>>> p.save_pdb('with_betas.pdb')
+```
+
+By adding the `smooth=...` parameter to `Pdb.fill_beta`, data can be spatially smoothed
+using a Gaussian kernel with a specified standard deviation (in A).
+
+##### Creating new PDB as a subset of existing one
+
+To choose and save e.g. only the DNA atoms from a protein-DNA complex, use:
+
+```
+>>> dna =  Pdb.from_selection(p, 'dna')
+>>> dna.save_pdb('dna.pdb')
+```

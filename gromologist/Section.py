@@ -187,9 +187,13 @@ class SectionMol(Section):
             resname = ref_entry.resname
         if not mass:
             param_sect = [s for s in self.top.sections if isinstance(s, SectionParam)][0]
-            param_entry = [e for e in param_sect.get_subsection('atomtypes').entries if isinstance(e, gml.EntryParam)
-                           and e.content[0] == atom_type][0]
-            mass = param_entry.content[2]
+            try:
+                param_entry = [e for e in param_sect.get_subsection('atomtypes').entries
+                               if isinstance(e, gml.EntryParam) and e.content[0] == atom_type][0]
+                mass = param_entry.content[2]
+            except IndexError:
+                print("Could not assign mass for type {}, proceeding with 1.008 AU".format(atom_type))
+                mass = 1.008
         fstring = subs_atoms.fstring
         print(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number, charge, mass))
         new_entry = gml.EntryAtom(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number,

@@ -62,7 +62,7 @@ class EntryBonded(Entry):
                  ('dihedrals', '4'): (float, float, int),
                  ('dihedrals', '2'): (float, float),
                  # ('cmap', '1'): (float, float, float, float, float),  # TODO not quite right, fix maybe?
-                 ('position_restraints', '1'): (int, int, int),
+                 ('position_restraints', '1'): (float, float, float),
                  ('settles', '1'): (float, float)}
 
     def __init__(self, content, subsection):
@@ -79,9 +79,16 @@ class EntryBonded(Entry):
         self.types_state_b = None
         self.params_state_a = []
         self.params_state_b = []
+        self.fstr_mod = []
         if len(self.content) > self.atoms_per_entry + 1:
             self.parse_bonded_params(self.content[self.atoms_per_entry + 1:])
         self.fstring = " ".join("{:>5d}" for _ in range(self.atoms_per_entry)) + " {:>5s}"
+
+    def _fstr_suff(self, query):
+        if self.fstr_mod:
+            return self.fstr_mod
+        else:
+            return EntryBonded.fstr_suff[query]
 
     def read_types(self):
         atoms_sub = self.subsection.section.get_subsection('atoms')
@@ -104,6 +111,16 @@ class EntryBonded(Entry):
                     raise RuntimeError("Cannot process: ", excess_params)
                 else:
                     self.params_state_a = [types[n](prm) for n, prm in params]
+            try:
+                _ = [float(x) for x in excess_params]
+            except ValueError:
+                self.fstr_mod = list(EntryBonded.fstr_suff[(self.subsection.header, self.interaction_type)])
+                for n in range(len(excess_params)):
+                    try:
+                        _ = float(excess_params[n])
+                    except ValueError:
+                        self.fstr_mod[n] = str
+            types = self._fstr_suff((self.subsection.header, self.interaction_type))
             if len(excess_params) == len(types):
                 self.params_state_a = [types[n](prm) for n, prm in enumerate(excess_params[:len(types)])]
             elif len(excess_params) == 2 * len(types):
@@ -120,6 +137,8 @@ class EntryBonded(Entry):
                     fmt_suff = fmt_suff + "{:>6d} "
                 elif isinstance(parm, float):
                     fmt_suff = fmt_suff + self.float_fmt(parm)
+                elif isinstance(parm, str):
+                    fmt_suff = fmt_suff + "{:>15s} "
         fstring = self.fstring + fmt_suff
         return fstring.format(*self.atom_numbers, self.interaction_type, *self.params_state_a, *self.params_state_b) \
             + self.comment
@@ -232,7 +251,12 @@ class EntryAtom(Entry):
             self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge, self.mass = self.content[:8]
         except ValueError:
             self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge = self.content[:7]
-            self.mass = 0  # TODO get mass as the default from the ffnonbonded 'atomtypes' section
+            atomtypes = self.subsection.section.top.parameters.get_subsection('atomtypes')
+            matching = [atype for atype in atomtypes if isinstance(atype, EntryParam) and atype.types[0] == self.type]
+            try:
+                self.mass = float(matching[0].modifiers[1])
+            except IndexError:
+                self.mass = 0
         self.num, self.resid = int(self.num), int(self.resid)
         self.charge, self.mass = float(self.charge), float(self.mass)
         if len(self.content) == 11:

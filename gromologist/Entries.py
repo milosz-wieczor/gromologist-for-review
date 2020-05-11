@@ -32,6 +32,20 @@ class Entry:
         if nf > dpmax:
             nf = dpmax
         return "{:>" + str(fields) + "." + str(nf) + "f}"
+
+    @staticmethod
+    def infer_type(val):
+        try:
+            _ = int(val)
+        except ValueError:
+            try:
+                _ = float(val)
+            except ValueError:
+                return str
+            else:
+                return float
+        else:
+            return int
         
     def __bool__(self):
         if not self.content and not self.comment:
@@ -81,7 +95,11 @@ class EntryBonded(Entry):
         self.params_state_b = []
         self.fstr_mod = []
         if len(self.content) > self.atoms_per_entry + 1:
-            self.parse_bonded_params(self.content[self.atoms_per_entry + 1:])
+            try:
+                self.parse_bonded_params(self.content[self.atoms_per_entry + 1:])
+            except Exception as e:
+                print("While trying to process line {}, subsection {}:".format(content, self.subsection.header))
+                raise e
         self.fstring = " ".join("{:>5d}" for _ in range(self.atoms_per_entry)) + " {:>5s}"
 
     def _fstr_suff(self, query):
@@ -104,22 +122,23 @@ class EntryBonded(Entry):
         except KeyError:
             raise RuntimeError("Line '{}' contains unrecognized parameters".format(self.content))
         else:
-            if len(excess_params) == 1 and len(types) > 1:
-                try:
-                    params = self.subsection.section.top.defines[excess_params[0]]
-                except KeyError:
-                    raise RuntimeError("Cannot process: ", excess_params)
-                else:
-                    self.params_state_a = [types[n](prm) for n, prm in params]
+            # if len(excess_params) == 1 and len(types) > 1:
+            #     try:
+            #         params = self.subsection.section.top.defines[excess_params[0]]
+            #     except KeyError:
+            #         raise RuntimeError("Cannot process: ", excess_params)
+            #     else:
+            #         self.params_state_a = [types[n](prm) for n, prm in enumerate(params)]
             try:
                 _ = [float(x) for x in excess_params]
             except ValueError:
-                self.fstr_mod = list(EntryBonded.fstr_suff[(self.subsection.header, self.interaction_type)])
+                # self.fstr_mod = list(EntryBonded.fstr_suff[(self.subsection.header, self.interaction_type)])
                 for n in range(len(excess_params)):
                     try:
                         _ = float(excess_params[n])
                     except ValueError:
-                        self.fstr_mod[n] = str
+                        assert excess_params[n] in self.subsection.section.top.defines.keys()
+                self.fstr_mod = [self.infer_type(x) for x in excess_params]
             types = self._fstr_suff((self.subsection.header, self.interaction_type))
             if len(excess_params) == len(types):
                 self.params_state_a = [types[n](prm) for n, prm in enumerate(excess_params[:len(types)])]
@@ -138,7 +157,10 @@ class EntryBonded(Entry):
                 elif isinstance(parm, float):
                     fmt_suff = fmt_suff + self.float_fmt(parm)
                 elif isinstance(parm, str):
-                    fmt_suff = fmt_suff + "{:>15s} "
+                    if len(parm) > 14:
+                        fmt_suff = fmt_suff + "{{:>{}s}} ".format(len(parm)+2)
+                    else:
+                        fmt_suff = fmt_suff + "{:>15s} "
         fstring = self.fstring + fmt_suff
         return fstring.format(*self.atom_numbers, self.interaction_type, *self.params_state_a, *self.params_state_b) \
             + self.comment

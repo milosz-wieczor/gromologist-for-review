@@ -149,6 +149,49 @@ class SectionMol(Section):
                 entries.type_b = new_type if new_type is not None else entries.type
                 entries.mass_b = new_mass if new_mass is not None else entries.mass
                 entries.charge_b = new_charge if new_charge is not None else entries.charge
+
+    def state_b_to_a(self):
+        for sub in self.subsections:
+            for entry in sub:
+                if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
+                    entry.type, entry.mass, entry.charge = entry.type_b, entry.mass_b, entry.charge_b
+                    entry.type_b, entry.mass_b, entry.charge_b = 3 * [None]
+                elif isinstance(entry, gml.EntryBonded) and entry.params_state_b:
+                    entry.params_state_a = entry.params_state_b
+                    entry.params_state_b = []
+                if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
+                    entry.types_state_a = entry.types_state_b
+                    entry.types_state_b = None
+
+    def swap_states(self):
+        for sub in self.subsections:
+            for entry in sub:
+                if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
+                    (entry.type, entry.mass, entry.charge, entry.type_b, entry.mass_b, entry.charge_b) = \
+                        (entry.type_b, entry.mass_b, entry.charge_b, entry.type, entry.mass, entry.charge)
+                elif isinstance(entry, gml.EntryBonded) and entry.params_state_b:
+                    entry.params_state_a, entry.params_state_b = entry.params_state_b, entry.params_state_a
+                if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
+                    entry.types_state_a, entry.types_state_b = entry.types_state_b, entry.types_state_a
+
+    def drop_state_b(self, remove_dummies=False):
+        print("Warning: dropping all state B parameters, but keeping dummies (if exist). To remove all atoms with"
+              "names starting with D, rerun this fn with 'remove_dummies=False'.")
+        for sub in self.subsections:
+            for entry in sub:
+                if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
+                    entry.type_b, entry.mass_b, entry.charge_b = 3 * [None]
+                elif isinstance(entry, gml.EntryBonded) and entry.params_state_b:
+                    entry.params_state_b = []
+                if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
+                    entry.types_state_b = None
+        if remove_dummies:
+            sub = self.get_subsection('atoms')
+            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
+            while dummies:
+                to_remove = dummies[0]
+                self.del_atom(to_remove.num)
+                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
     
     def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None):
         """

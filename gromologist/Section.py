@@ -96,6 +96,11 @@ class SectionMol(Section):
         return self.name
     
     def select_atoms(self, selection_string):
+        """
+        Returns atoms' indices according to the specified selection string
+        :param selection_string: str, a VMD-compatible selection
+        :return: list, 0-based indices of atoms compatible with the selection
+        """
         sel = gml.SelectionParser(self)
         return sel(selection_string)
     
@@ -139,6 +144,18 @@ class SectionMol(Section):
 
     def gen_state_b(self, atomname=None, resname=None, resid=None, atomtype=None, new_type=None, new_charge=None,
                     new_mass=None):
+        """
+        Generates alchemical state B for a subset of atoms,
+        with specified types/charges/masses
+        :param atomname: str, these atomnames will be selected
+        :param resname: str, these residue names will be selected
+        :param resid: int, these residue IDs will be selected
+        :param atomtype: str, these atomtypes will be selected
+        :param new_type: str, new value for atomtype (default is copy from state A)
+        :param new_charge: float, new value for charge (default is copy from state A)
+        :param new_mass: float, new value for mass (default is copy from state A)
+        :return: None
+        """
         sub = self.get_subsection('atoms')
         for entries in [entry for entry in sub if isinstance(entry, gml.EntryAtom)]:
             criteria = all([(atomname is None or entries.atomname == atomname),
@@ -150,7 +167,16 @@ class SectionMol(Section):
                 entries.mass_b = new_mass if new_mass is not None else entries.mass
                 entries.charge_b = new_charge if new_charge is not None else entries.charge
 
-    def state_b_to_a(self):
+    def state_b_to_a(self, remove_dummies=False):
+        """
+        Collapses alchemical B states, making state B
+        the new non-alchemical default state A
+        :param remove_dummies: bool, whether to remove B-state dummies
+        :return: None
+        """
+        if not remove_dummies:
+            print("Warning: dropping state A parameters, but keeping dummies (if exist). To remove all atoms with"
+                  "type names starting with D, rerun this fn with 'remove_dummies=True'.")
         for sub in self.subsections:
             for entry in sub:
                 if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
@@ -162,8 +188,19 @@ class SectionMol(Section):
                 if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
                     entry.types_state_a = entry.types_state_b
                     entry.types_state_b = None
+        if remove_dummies:
+            sub = self.get_subsection('atoms')
+            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b[0] == "D"]
+            while dummies:
+                to_remove = dummies[0]
+                self.del_atom(to_remove.num)
+                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b[0] == "D"]
 
     def swap_states(self):
+        """
+        Swaps alchemical states A and B
+        :return: None
+        """
         for sub in self.subsections:
             for entry in sub:
                 if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
@@ -175,8 +212,15 @@ class SectionMol(Section):
                     entry.types_state_a, entry.types_state_b = entry.types_state_b, entry.types_state_a
 
     def drop_state_b(self, remove_dummies=False):
-        print("Warning: dropping all state B parameters, but keeping dummies (if exist). To remove all atoms with"
-              "names starting with D, rerun this fn with 'remove_dummies=False'.")
+        """
+        Makes the topology non-alchemical again, just dropping
+        all parameters for state B
+        :param remove_dummies: bool, whether to remove A-state dummies
+        :return: None
+        """
+        if not remove_dummies:
+            print("Warning: dropping all state B parameters, but keeping dummies (if exist). To remove all atoms with"
+                  "names starting with D, rerun this fn with 'remove_dummies=True'.")
         for sub in self.subsections:
             for entry in sub:
                 if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
@@ -255,6 +299,13 @@ class SectionMol(Section):
         self.top.recalc_sys_params()
     
     def del_atom(self, atom_number, del_in_pdb=True):
+        """
+        Removes an atom from the topology, as specified using
+        topology numbering (1-based)
+        :param atom_number: int, atom number in topology
+        :param del_in_pdb: bool, whether to also remove in the bound PDB file
+        :return: None
+        """
         self._del_atom(atom_number)
         self._del_params(atom_number)
         self.offset_numbering(-1, atom_number)
@@ -408,7 +459,13 @@ class SectionMol(Section):
         return new_pairs, new_dihedrals
     
     def add_ff_params(self, add_section='all'):
-        if add_section == 'all':
+        """
+        Looks for FF parameters to be put for every bonded term in the topology,
+        then adds them so that they can be explicitly seen/modified
+        :param add_section: str, to which section should the FF params be added
+        :return: None
+        """
+        if add_section == 'all':  # TODO optionally add type/atomname labels in comment
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
             subsections_to_add = [add_section]
@@ -458,11 +515,23 @@ class SectionParam(Section):
                     self.top.defines[entry.content[1]] = entry.content[2:]
 
     def sort_dihedrals(self):
+        """
+        Sorts dihedrals to make sure wildcards are
+        moved to the very end of the file
+        :return:
+        """
         for sub in self.subsections:
             if 'dihedral' in sub.header:
                 sub.sort()
 
     def clone_type(self, atomtype, prefix):
+        """
+        Generates an exact type of a selected atomtype,
+        preserving all interactions with other types
+        :param atomtype: str, atomtype to be duplicated
+        :param prefix: str, new name will be generated as prefix + original atomtype
+        :return: None
+        """
         for sub in self.subsections:
             to_add = []
             for ent in sub:

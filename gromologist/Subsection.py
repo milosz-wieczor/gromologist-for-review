@@ -141,6 +141,7 @@ class SubsectionBonded(Subsection):
     
     def __init__(self, content, section):
         super().__init__(content, section)
+        self.bkp_entries = None
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
         self.prmtype = self._check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
@@ -176,7 +177,7 @@ class SubsectionBonded(Subsection):
                           if sub.header == matchings[self.header]]
         self.bkp_entries = self.entries[:]
         for entry in self.entries:
-            if isinstance(entry, gml.EntryBonded):
+            if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:
                 self._add_ff_params_to_entry(entry, subsect_params)
         self.entries = self.bkp_entries[:]
     
@@ -307,6 +308,11 @@ class SubsectionParam(Subsection):
         return '0'
     
     def _process_cmap(self):
+        """
+        Reads a multiline entry from the [ cmaptypes ] section
+        and converts it into an array that can be later properly printed
+        :return: None
+        """
         new_entries = []
         current = []
         for e in self.entries:
@@ -336,6 +342,10 @@ class SubsectionAtom(Subsection):
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
     
     def calc_properties(self):
+        """
+        Recalculates molecule properties: number of atoms and total charge
+        :return: None
+        """
         self.nat = self.section.natoms = self._calc_nat()
         self.charge = self.section.charge = self._calc_charge()
         
@@ -351,9 +361,13 @@ class SubsectionAtom(Subsection):
         return total_charge
     
     def _calc_nat(self):
+        """
+        Counts atoms in molecules
+        :return:
+        """
         return len([e for e in self.entries if isinstance(e, gml.EntryAtom)])
 
-    def _get_dicts(self):
+    def get_dicts(self):
         """
         dicts are not always needed and are costly to calculate,
         so only fill in the values when explicitly asked to

@@ -100,8 +100,8 @@ class Top:
     
     def add_params_file(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))
-        paramsect_own = self.parameters[0]
-        paramsect_other = prmtop.parameters[0]
+        paramsect_own = self.parameters
+        paramsect_other = prmtop.parameters
         paramsect_own.subsections.extend(paramsect_other.subsections)
         paramsect_own._merge()
     

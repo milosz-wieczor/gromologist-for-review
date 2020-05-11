@@ -21,11 +21,12 @@ class Entry:
         """
         When a float of unknown precision is read, we do not want
         to clip off significant digits, but neither do we want
-        to add too many decimal points. This function calculates
+        to add too many decimal places. This function calculates
         how many dps we need to keep not to lose precision when
         handling ff params (by default, we clip to 8).
         :param flt: float, the number to be formatted
         :param fields: how many fields do we need overall in the fmt specifier
+        :param dpmax: default limit on the number of decimal places
         :return: str, format specifier
         """
         nf = len(str(flt).split('.')[1])
@@ -110,7 +111,7 @@ class EntryBonded(Entry):
 
     def read_types(self):
         atoms_sub = self.subsection.section.get_subsection('atoms')
-        atoms_sub._get_dicts()
+        atoms_sub.get_dicts()
         num_to_type_a = atoms_sub.num_to_type
         num_to_type_b = atoms_sub.num_to_type_b
         self.types_state_a = tuple(num_to_type_a[num] for num in self.atom_numbers)
@@ -208,7 +209,7 @@ class EntryParam(Entry):
                ('dihedraltypes', '2'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}",
                ('atomtypes', ''): "{:>6s}{}{:>6s}{:>13s}{:>9s}{:>3s}{:>16.12f}{:>9.5f}",
                ('pairtypes', '1'): "{:>8s} {:>8s}{:>3s}{:>16.12f}{:>16.12f}",
-               ('nonbond_params', '1'): "{:>8s} {:>8s}{:>3s}{:>16.12f}{:>16.12f}",
+               ('nonbond_params', '1'): "{:>8s} {:>8s}{:>3s}{:>20.16f}{:>20.16f}",
                ('implicit_genborn_params', ''): " {:8s}{:8.4f}{:8.4f}{:8.4f}{:8.4f}{:8.4f}"}
         if (self.subsection.header, self.interaction_type) in fmt.keys():
             return fmt[(self.subsection.header, self.interaction_type)]
@@ -220,11 +221,11 @@ class EntryParam(Entry):
             return False
         if self.interaction_type == int_type:
             if ext_typelist[0] == self.types[0] or ext_typelist[1] == self.types[1]:
-                if all(ext_typelist[i] == self.types[i] for i in range(len(self.types)) if self.types[i] !='X'):
+                if all(ext_typelist[i] == self.types[i] for i in range(len(self.types)) if self.types[i] != 'X'):
                     return True
             elif ext_typelist[0] == self.types[-1] or ext_typelist[1] == self.types[-2]:
                 if all(ext_typelist[i] == self.types[len(self.types)-i-1] for i in range(len(self.types))
-                       if self.types[i] !='X'):
+                       if self.types[i] != 'X'):
                     return True
         return False
     

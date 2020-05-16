@@ -16,7 +16,6 @@ class Top:
         :param ignore_ifdef: bool, whether to ignore #include statements within #ifdef blocks (e.g. posre.itp)
         """
         # TODO maybe allow for construction of a blank top with a possibility to read data later?
-        # TODO need to take care of #define keywords such as e.g. in amber-ILDN force fields
         if not gmx_dir:
             self._gromacs_dir = self._find_gmx_dir()
         else:
@@ -96,7 +95,7 @@ class Top:
 
     def add_ff_params(self, section='all'):
         for mol in self.molecules:
-            mol.add_ff_params(add_section=section)  # TODO do not if already present!
+            mol.add_ff_params(add_section=section)
     
     def add_params_file(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))

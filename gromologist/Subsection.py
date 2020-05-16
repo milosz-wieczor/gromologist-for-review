@@ -172,14 +172,12 @@ class SubsectionBonded(Subsection):
     def add_ff_params(self):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
-        sections = [sect for sect in self.section.top.sections if sect.name == 'Parameters']
-        subsect_params = [sub for sect in sections for sub in sect.subsections
-                          if sub.header == matchings[self.header]]
-        self.bkp_entries = self.entries[:]
+        subsect_params = [sub for sub in self.section.top.parameters if sub.header == matchings[self.header]]
+        self.bkp_entries = self.entries[:]  # we can't change what we're iterating over, so we modify the copy
         for entry in self.entries:
             if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:
                 self._add_ff_params_to_entry(entry, subsect_params)
-        self.entries = self.bkp_entries[:]
+        self.entries = self.bkp_entries[:]  # now restore the modified copy
     
     def _add_ff_params_to_entry(self, entry, subsect_params):
         """
@@ -235,6 +233,20 @@ class SubsectionBonded(Subsection):
             if isinstance(entry, gml.EntryBonded):
                 return entry.interaction_type
         return '0'
+
+    def add_type_labels(self):
+        for entry in self.entries:
+            if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:
+                self._add_type_label(entry)
+
+    @staticmethod
+    def _add_type_label(entry):
+        entry.read_types()
+        entry.comment += " ; "
+        entry.comment += " ".join(entry.types_state_a)
+        if entry.types_state_b is not None:
+            entry.comment += " ; "
+            entry.comment += " ".join(entry.types_state_b)
 
 
 class SubsectionParam(Subsection):
@@ -299,12 +311,15 @@ class SubsectionParam(Subsection):
         while Amber uses angletype '1' (simple harmonic)
         :return: str, interaction type
         """
-        if self.header not in SubsectionParam.n_atoms.keys():
+        if self.header not in SubsectionParam.n_atoms.keys() or self.header in ['atomtypes', 'implicit_genborn_params']:
             return '0'
         npar = SubsectionParam.n_atoms[self.header]
         for entry in self:
-            if len(entry.content) > npar and isinstance(entry, gml.EntryParam):
-                return entry.content[npar]
+            try:
+                return entry.interaction_type
+            except:
+                if len(entry.content) > npar and isinstance(entry, gml.EntryParam):
+                    return entry.content[npar]
         return '0'
     
     def _process_cmap(self):

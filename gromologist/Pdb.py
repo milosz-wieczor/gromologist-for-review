@@ -5,9 +5,9 @@ class Pdb:
     def __init__(self, filename=None, top=None, altloc='A', **kwargs):
         self.fname = filename
         if self.fname:
-            self.atoms, self.box, self._remarks = self._parse_contents([line.strip() for line in open(self.fname)])
+            self.atoms, self.box, self.remarks = self._parse_contents([line.strip() for line in open(self.fname)])
         else:
-            self.atoms, self.box, self._remarks = [], 3*[10] + 3*[90], []
+            self.atoms, self.box, self.remarks = [], 3 * [10] + 3 * [90], []
         self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
         if self.top and not self.top.pdb:
             self.top.pdb = self
@@ -25,7 +25,7 @@ class Pdb:
         new_pdb = Pdb()
         new_pdb.atoms = [atom for n, atom in enumerate(pdb.atoms) if n in selected_indices]
         new_pdb.box = pdb.box
-        new_pdb._remarks = pdb._remarks
+        new_pdb.remarks = pdb.remarks
         new_pdb.altloc = pdb.altloc
         return new_pdb
     
@@ -285,19 +285,23 @@ class Pdb:
             if len(serials) > 10000 and not ignore_mem:
                 raise RuntimeError("Try to restrict the number of atoms (e.g. selecting CA only), or you're risking "
                                    "running out of memory. To proceed anyway, run again with ignore_mem=True")
-            import numpy as np
-            atomnums = [n for n, atom in enumerate(self.atoms) if atom.serial in serials]
-            coords = np.array(self.get_coords())[atomnums]
-            for atom in self.atoms:
-                dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
-                weights = np.exp(-(dists**2/(2*smooth)))
-                weights /= np.sum(weights)
-                atom.beta = np.sum(values * weights)
+            try:
+                import numpy as np
+            except ImportError:
+                print("Needs numpy for smoothing, try installing it")
+            else:
+                atomnums = [n for n, atom in enumerate(self.atoms) if atom.serial in serials]
+                coords = np.array(self.get_coords())[atomnums]
+                for atom in self.atoms:
+                    dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
+                    weights = np.exp(-(dists**2/(2*smooth)))
+                    weights /= np.sum(weights)
+                    atom.beta = np.sum(values * weights)
 
     def save_pdb(self, outname='out.pdb'):
         with open(outname, 'w') as outfile:
             outfile.write(self._cryst_format.format(*self.box))
-            for line in self._remarks:
+            for line in self.remarks:
                 outfile.write(line.strip() + '\n')
             for atom in self.atoms:
                 outfile.write(self._write_atom(atom))

@@ -161,6 +161,28 @@ If the selectors point to multiple atoms (e.g. `atomtype=CT` selects all atoms w
 all will be modified as specified. In turn, if a given setter is not specified, the respective 
 value will be identical to that for state A.
 
+##### Removing or swapping alchemical states
+
+To make an alchemical topology non-alchemical again, one has two options:
+
++ To preserve state A, use:
+
+```
+>>> protein.drop_state_b()
+```
+
++ To preserve state B as the only non-alchemical state, use:
+
+```
+>>> protein.drop_state_a()
+```
+
+If you want to invert the direction of the alchemical change by swapping states A and B, use:
+
+```
+>>> protein.swap_states()
+```
+
 ##### Duplicating types
 
 Often it's useful to duplicate an atomtype exactly, i.e., assign it a different name while

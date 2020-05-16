@@ -11,7 +11,7 @@ class Entry:
         semicol_index = content.find(';')
         if semicol_index >= 0:
             self.content = content[:semicol_index].strip().split()
-            self.comment = content[semicol_index:]
+            self.comment = ' ' + content[semicol_index:]
         else:
             self.content = content.strip().split()
             self.comment = ''
@@ -61,7 +61,7 @@ class Entry:
         Fallback if no explicit formatting is implemented
         :return: str
         """
-        return ' '.join(self.content) + self.comment + '\n'
+        return ' '.join(self.content) + ' ' + self.comment + '\n'
     
     
 class EntryBonded(Entry):
@@ -75,8 +75,10 @@ class EntryBonded(Entry):
                  ('angles', '5'): (float, float, float, float),
                  ('dihedrals', '9'): (float, float, int),
                  ('dihedrals', '4'): (float, float, int),
+                 ('dihedrals', '1'): (float, float, int),
+                 ('dihedrals', '3'): (float, float, float, float, float, float),
                  ('dihedrals', '2'): (float, float),
-                 # ('cmap', '1'): (float, float, float, float, float),  # TODO not quite right, fix maybe?
+                 ('cmap', '1'): (float,),
                  ('position_restraints', '1'): (float, float, float),
                  ('settles', '1'): (float, float)}
 
@@ -119,7 +121,7 @@ class EntryBonded(Entry):
 
     def parse_bonded_params(self, excess_params):
         try:
-            types = EntryBonded.fstr_suff[(self.subsection.header, self.interaction_type)]
+            _ = EntryBonded.fstr_suff[(self.subsection.header, self.interaction_type)]
         except KeyError:
             raise RuntimeError("Line '{}' contains unrecognized parameters".format(self.content))
         else:
@@ -164,7 +166,7 @@ class EntryBonded(Entry):
                         fmt_suff = fmt_suff + "{:>15s} "
         fstring = self.fstring + fmt_suff
         return fstring.format(*self.atom_numbers, self.interaction_type, *self.params_state_a, *self.params_state_b) \
-            + self.comment
+            + ' ' + self.comment
 
         
 class EntryParam(Entry):
@@ -197,20 +199,28 @@ class EntryParam(Entry):
             self.params = [float(x) for x in self.content[self.atoms_per_entry + 1:]]
             self.modifiers = []
             self.interaction_type = self.content[self.atoms_per_entry]
+        if self.subsection.header == 'dihedraltypes':
+            if any([self.infer_type(x) == float for x in self.types]):
+                self.types = self.content[:2]
+                self.interaction_type = self.content[2]
+                self.params = [float(x) for x in self.content[3:]]
         if self.subsection.header == 'dihedraltypes' and self.interaction_type in ('9', '4'):
             self.params[-1] = int(self.params[-1])
             
     def format(self):
-        fmt = {('bondtypes', '1'): "{:>8s} {:>8s}{:>6s}{:>13.8f}{:>13.2f}",
-               ('angletypes', '5'): "{:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>13.8f}{:>13.2f}",
-               ('angletypes', '1'): "{:>8s} {:>8s} {:>8s}{:>6s}{:>13.8f}{:>13.2f}",
-               ('dihedraltypes', '9'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d}",
-               ('dihedraltypes', '4'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d}",
-               ('dihedraltypes', '2'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}",
-               ('atomtypes', ''): "{:>6s}{}{:>6s}{:>13s}{:>9s}{:>3s}{:>16.12f}{:>9.5f}",
-               ('pairtypes', '1'): "{:>8s} {:>8s}{:>3s}{:>16.12f}{:>16.12f}",
-               ('nonbond_params', '1'): "{:>8s} {:>8s}{:>3s}{:>20.16f}{:>20.16f}",
-               ('implicit_genborn_params', ''): " {:8s}{:8.4f}{:8.4f}{:8.4f}{:8.4f}{:8.4f}"}
+        fmt = {('bondtypes', '1'): "{:>8s} {:>8s}{:>6s}{:>13.8f}{:>13.2f} ",
+               ('angletypes', '5'): "{:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>13.8f}{:>13.2f} ",
+               ('angletypes', '1'): "{:>8s} {:>8s} {:>8s}{:>6s}{:>13.8f}{:>13.2f} ",
+               ('dihedraltypes', '9'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d} ",
+               ('dihedraltypes', '4'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d} ",
+               ('dihedraltypes', '3'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>13.6f}{:>13.6f}"
+                                       "{:>13.6f}{:>13.6f} ",
+               ('dihedraltypes', '2'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f} ",
+               ('dihedraltypes', '1'): "{:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f} ",
+               ('atomtypes', ''): "{:>6s}{}{:>6s}{:>13s}{:>9s}{:>3s}{:>16.12f}{:>9.5f} ",
+               ('pairtypes', '1'): "{:>8s} {:>8s}{:>3s}{:>16.12f}{:>16.12f} ",
+               ('nonbond_params', '1'): "{:>8s} {:>8s}{:>3s}{:>20.16f}{:>20.16f} ",
+               ('implicit_genborn_params', ''): " {:8s}{:8.4f}{:8.4f}{:8.4f}{:8.4f}{:8.4f} "}
         if (self.subsection.header, self.interaction_type) in fmt.keys():
             return fmt[(self.subsection.header, self.interaction_type)]
         else:
@@ -257,8 +267,11 @@ class EntryParam(Entry):
                        (((npar-10*int(npar/10)) * "{} ")[:-1]).format(*self.params[10*int(npar/10):]) + '\n'
             return first + last
         elif self.format():
-            return self.format().format(*self.types, self.interaction_type, *self.modifiers, *self.params) +\
-                   self.comment + '\n'
+            try:
+                return self.format().format(*self.types, self.interaction_type, *self.modifiers, *self.params) +\
+                       ' ' + self.comment + '\n'
+            except IndexError:
+                print((*self.types, self.interaction_type, *self.modifiers, *self.params))
         else:
             return super().__str__()
 
@@ -297,4 +310,4 @@ class EntryAtom(Entry):
                                   self.charge, self.mass, self.type_b, self.charge_b, self.mass_b) + self.comment
         else:
             return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
-                                  self.charge, self.mass) + self.comment
+                                  self.charge, self.mass) + ' ' + self.comment

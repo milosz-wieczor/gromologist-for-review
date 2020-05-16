@@ -167,7 +167,7 @@ class SectionMol(Section):
                 entries.mass_b = new_mass if new_mass is not None else entries.mass
                 entries.charge_b = new_charge if new_charge is not None else entries.charge
 
-    def state_b_to_a(self, remove_dummies=False):
+    def drop_state_a(self, remove_dummies=False):
         """
         Collapses alchemical B states, making state B
         the new non-alchemical default state A
@@ -476,6 +476,19 @@ class SectionMol(Section):
                 pass
             else:
                 subsection.add_ff_params()
+
+    def label_types(self, add_section='all'):
+        if add_section == 'all':
+            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
+        else:
+            subsections_to_add = [add_section]
+        for sub in subsections_to_add:
+            try:
+                subsection = [s for s in self.subsections if s.header == sub][0]
+            except IndexError:
+                pass
+            else:
+                subsection.add_type_labels()
 
 
 class SectionParam(Section):

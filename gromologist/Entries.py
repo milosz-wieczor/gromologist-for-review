@@ -75,9 +75,11 @@ class EntryBonded(Entry):
                  ('angles', '5'): (float, float, float, float),
                  ('dihedrals', '9'): (float, float, int),
                  ('dihedrals', '4'): (float, float, int),
+                 ('impropers', '4'): (float, float, int),
                  ('dihedrals', '1'): (float, float, int),
                  ('dihedrals', '3'): (float, float, float, float, float, float),
                  ('dihedrals', '2'): (float, float),
+                 ('impropers', '2'): (float, float),
                  ('cmap', '1'): (float,),
                  ('position_restraints', '1'): (float, float, float),
                  ('settles', '1'): (float, float)}
@@ -123,6 +125,7 @@ class EntryBonded(Entry):
         try:
             _ = EntryBonded.fstr_suff[(self.subsection.header, self.interaction_type)]
         except KeyError:
+            print((self.subsection.header, self.interaction_type))
             raise RuntimeError("Line '{}' contains unrecognized parameters".format(self.content))
         else:
             # if len(excess_params) == 1 and len(types) > 1:
@@ -204,7 +207,7 @@ class EntryParam(Entry):
                 self.types = self.content[:2]
                 self.interaction_type = self.content[2]
                 self.params = [float(x) for x in self.content[3:]]
-        if self.subsection.header == 'dihedraltypes' and self.interaction_type in ('9', '4'):
+        if self.subsection.header == 'dihedraltypes' and self.interaction_type in ('9', '4', '1'):
             self.params[-1] = int(self.params[-1])
             
     def format(self):
@@ -216,7 +219,7 @@ class EntryParam(Entry):
                ('dihedraltypes', '3'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>13.6f}{:>13.6f}"
                                        "{:>13.6f}{:>13.6f} ",
                ('dihedraltypes', '2'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f} ",
-               ('dihedraltypes', '1'): "{:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f} ",
+               ('dihedraltypes', '1'): "{:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d} ",
                ('atomtypes', ''): "{:>6s}{}{:>6s}{:>13s}{:>9s}{:>3s}{:>16.12f}{:>9.5f} ",
                ('pairtypes', '1'): "{:>8s} {:>8s}{:>3s}{:>16.12f}{:>16.12f} ",
                ('nonbond_params', '1'): "{:>8s} {:>8s}{:>3s}{:>20.16f}{:>20.16f} ",
@@ -299,7 +302,7 @@ class EntryAtom(Entry):
             self.type_b, self.charge_b, self.mass_b = self.content[8], float(self.content[9]), float(self.content[10])
         else:
             self.type_b, self.charge_b, self.mass_b = None, None, None
-        self.fstring = "{:>6d}{:>11s}{:>7d}{:>7s}{:>7s}{:>7d}"
+        self.fstring = "{:>6d} {:>11s} {:>7d}{:>7s}{:>7s}{:>7d}"
     
     def __str__(self):
         fstring = self.fstring + self.float_fmt(self.charge) + self.float_fmt(self.mass) + '   '

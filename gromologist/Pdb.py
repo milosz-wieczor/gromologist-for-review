@@ -1,11 +1,15 @@
 import gromologist as gml
 
 
-class Pdb:
+class Pdb:  # TODO optionally read all from .gro, save as gro?
     def __init__(self, filename=None, top=None, altloc='A', **kwargs):
         self.fname = filename
         if self.fname:
-            self.atoms, self.box, self.remarks = self._parse_contents([line.strip() for line in open(self.fname)])
+            if self.fname.endswith('gro'):
+                self.atoms, self.box, self.remarks = self._parse_contents_gro([line.rstrip()
+                                                                               for line in open(self.fname)])
+            else:
+                self.atoms, self.box, self.remarks = self._parse_contents([line.strip() for line in open(self.fname)])
         else:
             self.atoms, self.box, self.remarks = [], 3 * [10] + 3 * [90], []
         self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
@@ -254,6 +258,34 @@ class Pdb:
             elif not line.startswith('TER') and not line.startswith('END'):
                 remarks.append(line)
         return atoms, tuple(box), remarks
+
+    @staticmethod
+    def _parse_contents_gro(contents):
+        import math
+        contents = [x for x in contents if x.strip()]
+        atoms, remarks = [], []
+        header = contents[0]
+        remarks.append("TITLE     {}".format(header))
+        natoms = int(contents[1])
+        for line in contents[2:2+natoms]:
+            atoms.append(Atom.from_gro(line))
+        if len(contents[-1].split()) == 3:
+            box = [float(10*x) for x in contents[-1]] + [90., 90., 90.]
+        elif len(contents[-1].split()) == 9:
+            boxline = [float(x) for x in contents[-1].split()]
+            assert boxline[3] == boxline[4] == boxline[6] == 0
+            box = [0.0] * 6
+            box[0] = boxline[0]
+            box[-1] = math.atan(boxline[1]/boxline[5])
+            box[1] = boxline[1]/math.sin(box[-1])
+            box[2] = math.sqrt(boxline[7]**2 + boxline[8]**2 + boxline[2]**2)
+            box[-2] = math.acos(boxline[7]/box[2])
+            box[-3] = math.acos((boxline[8]*math.sin(box[-1]))/box[2] + math.cos(box[-2]) * math.cos(box[-1]))
+            box[0], box[1], box[2] = box[0]*10, box[1]*10, box[2]*10
+            box[3], box[4], box[5] = box[3]*180/math.pi, box[4]*180/math.pi, box[5]*180/math.pi
+        else:
+            raise RuntimeError('Can\'t read box properties')
+        return atoms, tuple(box), remarks
         
     def fill_beta(self, values, serials=None, smooth=False, ignore_mem=False):
         """
@@ -341,6 +373,16 @@ class Atom:
                 self.element = name[:1]
             else:
                 self.element = name[:2]
+
+    @classmethod
+    def from_gro(cls, line):
+        data = "ATOM  {:>5d} {:4s} {:4s} {:>4d}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00  0.00"
+        resnum = int(line[:5].strip())
+        resname = line[5:10].strip()
+        atomname = line[10:15].strip()
+        atomnum = int(line[15:20].strip())
+        x, y, z = [float(line[20+8*i:20+8*(i+1)].strip())*10 for i in range(3)]
+        return cls(data.format(atomnum, atomname, resname, resnum, x, y, z))
 
     @property
     def coords(self):

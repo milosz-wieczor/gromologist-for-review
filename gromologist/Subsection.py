@@ -172,7 +172,7 @@ class SubsectionBonded(Subsection):
     def add_ff_params(self):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
-        subsect_params = [sub for sub in self.section.top.parameters if sub.header == matchings[self.header]]
+        subsect_params = [sub for sub in self.section.top.parameters.subsections if sub.header == matchings[self.header]]
         self.bkp_entries = self.entries[:]  # we can't change what we're iterating over, so we modify the copy
         for entry in self.entries:
             if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:

@@ -103,6 +103,11 @@ class SectionMol(Section):
         """
         sel = gml.SelectionParser(self)
         return sel(selection_string)
+
+    def print_molecule(self):
+        sub = self.get_subsection('atoms')
+        for entry in sub:
+            print(str(entry), end='')
     
     def offset_numbering(self, offset, startfrom=0):
         """
@@ -471,11 +476,12 @@ class SectionMol(Section):
             subsections_to_add = [add_section]
         for sub in subsections_to_add:
             try:
-                subsection = [s for s in self.subsections if s.header == sub][0]
+                subsections = [s for s in self.subsections if s.header == sub]
             except IndexError:
                 pass
             else:
-                subsection.add_ff_params()
+                for ssub in subsections:
+                    ssub.add_ff_params()
 
     def label_types(self, add_section='all'):
         if add_section == 'all':

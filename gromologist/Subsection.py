@@ -129,6 +129,9 @@ class Subsection:
         :return: str, subsection entry
         """
         return self.entries[line_number]
+
+    def remove_entry(self, entry):
+        self.entries.remove(entry)
         
         
 class SubsectionBonded(Subsection):

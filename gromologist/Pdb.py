@@ -1,7 +1,7 @@
 import gromologist as gml
 
 
-class Pdb:  # TODO optionally read all from .gro, save as gro?
+class Pdb:  # TODO optionally save as gro? & think of trajectories
     def __init__(self, filename=None, top=None, altloc='A', **kwargs):
         self.fname = filename
         if self.fname:
@@ -32,6 +32,29 @@ class Pdb:  # TODO optionally read all from .gro, save as gro?
         new_pdb.remarks = pdb.remarks
         new_pdb.altloc = pdb.altloc
         return new_pdb
+
+    def print_protein_sequence(self):
+        mapping = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
+                   'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
+                   'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
+                   'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
+        chains = list({a.chain for a in self.atoms if a.atomname == 'CA'})
+        for ch in sorted(chains):
+            cas = set(self.select_atoms(f'name CA and chain {ch}'))
+            atoms = [a for n, a in enumerate(self.atoms) if n in cas]
+            print(''.join([mapping[i.resname] for i in atoms]))
+
+    def print_nucleic_sequence(self):
+        mapping = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
+                   'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
+                   'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
+                   'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
+                   'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"}
+        chains = list({a.chain for a in self.atoms if a.atomname == "O4'"})
+        for ch in sorted(chains):
+            cas = set(self.select_atoms(f"name O4' and chain {ch}"))
+            atoms = [a for n, a in enumerate(self.atoms) if n in cas]
+            print(''.join([mapping[i.resname] for i in atoms]))
     
     def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100):
         """
@@ -377,7 +400,7 @@ class Atom:
     @classmethod
     def from_gro(cls, line):
         data = "ATOM  {:>5d} {:4s} {:4s} {:>4d}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00  0.00"
-        resnum = int(line[:5].strip())
+        resnum = int(line[:5].strip()) % 10000
         resname = line[5:10].strip()
         atomname = line[10:15].strip()
         atomnum = int(line[15:20].strip())

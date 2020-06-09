@@ -399,7 +399,16 @@ class SectionMol(Section):
             # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
             system_setup = self.top.sections[-1].get_subsection('molecules')
             system_setup.entries = [e for e in system_setup if other.mol_name not in e]
-            self.top.read_system_properties()
+            self.top.recalc_sys_params()
+
+    def merge_molecules(self, other):
+        other.offset_numbering(self.natoms)
+        self._merge_fields(other)
+        self.top.sections.remove(other)
+        # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
+        system_setup = self.top.sections[-1].get_subsection('molecules')
+        system_setup.entries = [e for e in system_setup if other.mol_name not in e]
+        self.top.recalc_sys_params()
 
     def _merge_fields(self, other):
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
@@ -407,7 +416,7 @@ class SectionMol(Section):
             try:
                 subsection_other = other.get_subsection(subs)
                 subsection_own = self.get_subsection(subs)
-                subsection_own.add_entries([str(entry) for entry in subsection_other if entry])
+                subsection_own.add_entries([entry for entry in subsection_other if entry])
             except KeyError:
                 pass
     
@@ -560,6 +569,44 @@ class SectionParam(Section):
                 newlines = self.gen_clones(entry, atomtype, prefix)
                 sub.add_entries([gml.EntryParam(line, sub) for line in newlines])
         self.sort_dihedrals()
+
+    def add_nbfix(self, type1, type2, mod_sigma=0.0, mod_epsilon=0.0, action_default='x'):
+        atp = self.get_subsection('atomtypes')
+        sigma1, eps1, sigma2, eps2 = [None] * 4
+        for entry in atp:
+            if isinstance(entry, gml.EntryParam):
+                if entry.types[0] == type1:
+                    sigma1, eps1 = entry.params
+                elif entry.types[0] == type2:
+                    sigma2, eps2 = entry.params
+        if sigma1 is None:
+            raise KeyError('Type {} was not found in the atomtype definitions'.format(type1))
+        if sigma2 is None:
+            raise KeyError('Type {} was not found in the atomtype definitions'.format(type2))
+        new_sigma = 0.5*(sigma1 + sigma2) + mod_sigma
+        new_epsilon = (eps1*eps2)**0.5 + mod_epsilon
+        try:
+            nbsub = self.get_subsection('nonbond_params')
+        except KeyError:
+            self.subsections.append(self._yield_sub(['[ nonbond_params ]']))
+            nbsub = self.get_subsection('nonbond_params')
+        comment = ''
+        for entry in nbsub:
+            if isinstance(entry, gml.EntryParam):
+                if (entry.types[0], entry.types[1]) in [(type1, type2), (type2, type1)]:
+                    action = action_default
+                    while action not in 'mrt':
+                        action = input("An entry already exists, shall we replace it (r), modify (m) or terminate (t)?")
+                    if action == 't':
+                        return
+                    elif action == 'm':
+                        new_sigma = entry.params[0] + mod_sigma
+                        new_epsilon = entry.params[1] + mod_epsilon
+                        comment = entry.comment
+                    nbsub.remove_entry(entry)
+        entry_line = "{} {} 1 {} {} ; sigma chg by {}, eps chg by {} {}".format(type1, type2, new_sigma, new_epsilon,
+                                                                                mod_sigma, mod_epsilon, comment)
+        nbsub.add_entry(gml.Subsection.yield_entry(nbsub, entry_line))
 
     @staticmethod
     def gen_clones(entry, atomtype, prefix):

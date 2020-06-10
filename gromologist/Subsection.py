@@ -171,6 +171,11 @@ class SubsectionBonded(Subsection):
             return -1
         val = sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
         return val
+
+    def explicit_defines(self):
+        for entry in self.entries:
+            if isinstance(entry, gml.EntryBonded):
+                entry.explicit_defines()
     
     def add_ff_params(self):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',

@@ -254,6 +254,13 @@ class Top:
         for sub in sub_mol:
             sub.calc_properties()
         self.read_system_properties()
+
+    def explicit_defines(self):
+        self.parameters._get_defines()
+        for m in self.molecules:
+            for s in m.subsections:
+                if isinstance(s, gml.SubsectionBonded):
+                    s.explicit_defines()
         
     def get_molecule(self, mol_name):
         """

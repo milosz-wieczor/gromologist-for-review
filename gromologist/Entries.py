@@ -113,6 +113,14 @@ class EntryBonded(Entry):
         else:
             return EntryBonded.fstr_suff[query]
 
+    def explicit_defines(self):
+        if self.params_state_a and isinstance(self.params_state_a[0], str):
+            try:
+                self.params_state_a = self.subsection.section.top.defines[self.params_state_a[0]]
+                self.fstr_mod = [self.infer_type(x) for x in self.params_state_a]
+            except:
+                pass
+
     def read_types(self):
         atoms_sub = self.subsection.section.get_subsection('atoms')
         atoms_sub.get_dicts()

@@ -91,7 +91,7 @@ class Subsection:
         :param position: where to add the entry (None is at the end)
         :return: None
         """
-        if position:
+        if position is not None:
             position = int(position)
             self.entries.insert(position, new_entry)
         else:
@@ -105,7 +105,7 @@ class Subsection:
         :param position: where to add the entries (None is at the end)
         :return: None
         """
-        if position:
+        if position is not None:
             position = int(position)
             for new_entry in new_entries_list:
                 self.entries.insert(position, new_entry)

@@ -29,9 +29,10 @@ class Top:
         self.defines = {}
         self._include_all(ignore_ifdef)
         self.sections = []
+        self.header = []
         self._parse_sections()
         if self.top.endswith('top'):
-            self.read_system_properties()
+            self._read_system_properties()
         else:
             self.system, self.charge, self.natoms = None, 0, 0
         
@@ -207,7 +208,12 @@ class Top:
         special_lines.append(len(self._contents))
         for beg, end in zip(special_lines[:-1], special_lines[1:]):
             self.sections.append(self._yield_sec(self._contents[beg:end]))
-    
+        # in case there are #defines at the very beginning (e.g. CHARMM36):
+        for lnum in range(0, special_lines[0]):
+            if not self._contents[lnum].lstrip().startswith(';') and self._contents[lnum].strip():
+                entry = gml.Entry(self._contents[lnum].strip(), self.sections[0].subsections[0])
+                self.header.append(entry)
+
     def _yield_sec(self, content):
         """
         Chooses which class (Section or derived classes)
@@ -222,7 +228,7 @@ class Top:
         else:
             return gml.Section(content, self)
         
-    def read_system_properties(self):
+    def _read_system_properties(self):
         """
         Reads in system composition based on the [ molecules ] section
         and calculates the number of atoms and charge of the system
@@ -250,12 +256,22 @@ class Top:
         self.system, self.charge, self.natoms = molecules, charge, natoms
     
     def recalc_sys_params(self):
+        """
+        Wrapper around read_system_properties that also
+        recalculates relevant molecule properties after changes
+        :return: None
+        """
         sub_mol = [sub for sect in self.sections for sub in sect.subsections if isinstance(sub, gml.SubsectionAtom)]
         for sub in sub_mol:
             sub.calc_properties()
-        self.read_system_properties()
+        self._read_system_properties()
 
     def explicit_defines(self):
+        """
+        Changes pre-defined keywords in parameter sets
+        according to #define entries in FF params
+        :return: None
+        """
         self.parameters._get_defines()
         for m in self.molecules:
             for s in m.subsections:
@@ -322,11 +338,13 @@ class Top:
                 str_entry = str(entry).rstrip() + '\n'
                 outfile.write(str_entry)
                 
-    @staticmethod
-    def _write_header(outfile):
+    def _write_header(self, outfile):
         outname = outfile.name.split('/')[-1]
         outfile.write(";\n;  File {} was generated with the gromologist library\n"
-                      ";  by user: {}\n;  on host: {}\n;  at date: {} \n;".format(outname,
-                                                                                  os.getenv("USER"),
-                                                                                  os.uname()[1],
-                                                                                  datetime.datetime.now()))
+                      ";  by user: {}\n;  on host: {}\n;  at date: {} \n;\n".format(outname,
+                                                                                    os.getenv("USER"),
+                                                                                    os.uname()[1],
+                                                                                    datetime.datetime.now()))
+        for entry in self.header:
+            str_entry = str(entry).rstrip() + '\n'
+            outfile.write(str_entry)

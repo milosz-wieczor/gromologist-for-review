@@ -33,12 +33,31 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         new_pdb.altloc = pdb.altloc
         return new_pdb
 
+    @classmethod
+    def from_text(cls, text, orig_pdb):
+        new_pdb = Pdb()
+        try:
+            ftype = orig_pdb.fname[-3:]
+        except:
+            ftype = orig_pdb.sfname[-3:]
+        if ftype == 'pdb':
+            new_pdb.atoms = cls._parse_contents([line.strip() for line in text.split('\n')])
+        elif ftype == 'gro':
+            new_pdb.atoms = cls._parse_contents_gro([line.strip() for line in text.split('\n')])
+        new_pdb.box = orig_pdb.box
+        new_pdb.remarks = orig_pdb.remarks
+        new_pdb.altloc = orig_pdb.altloc
+        return new_pdb
+
     def print_protein_sequence(self):
         mapping = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
                    'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
                    'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
                    'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
         chains = list({a.chain for a in self.atoms if a.atomname == 'CA'})
+        if chains == [' ']:
+            print("No chains in the molecule, run Pdb.add_chains() first")
+            return
         for ch in sorted(chains):
             cas = set(self.select_atoms(f'name CA and chain {ch}'))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
@@ -71,28 +90,34 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         :param maxwarn: int, max number of warnings before an error shows up
         :return: None
         """
-        self.check_top(maxwarn=maxwarn)
-        if (serials is None and chain is not None) or (serials is not None and chain is None):
-            raise ValueError("Both serials and chain have to be specified simultaneously")
-        excluded = {'SOL', 'HOH', 'TIP3', 'K', 'NA', 'CL', 'POT'}
-        base_char = 65 + offset  # 65 is ASCII for "A"
-        index = 0
-        for mol_name in self.top.system.keys():
-            if mol_name.upper() not in excluded:
-                n_mols = self.top.system[mol_name]
-                mol = self.top.get_molecule(mol_name)
-                n_atoms = mol.natoms
-                for m in range(n_mols):
-                    for a in range(n_atoms):
-                        if serials is None and chain is None:
-                            self.atoms[index].chain = chr(base_char)
-                        else:
-                            if self.atoms[index].serial in serials:
-                                self.atoms[index].chain = chain
-                        index += 1
-                    base_char += 1
-                    if base_char > 90:
-                        return
+        if not self.top:
+            ch = chain if chain is not None else 'X'
+            for atom in self.atoms:
+                if atom.chain == ' ':
+                    atom.chain = ch
+        else:
+            self.check_top(maxwarn=maxwarn)
+            if (serials is None and chain is not None) or (serials is not None and chain is None):
+                raise ValueError("Both serials and chain have to be specified simultaneously")
+            excluded = {'SOL', 'HOH', 'TIP3', 'K', 'NA', 'CL', 'POT'}
+            base_char = 65 + offset  # 65 is ASCII for "A"
+            index = 0
+            for mol_name in self.top.system.keys():
+                if mol_name.upper() not in excluded:
+                    n_mols = self.top.system[mol_name]
+                    mol = self.top.get_molecule(mol_name)
+                    n_atoms = mol.natoms
+                    for m in range(n_mols):
+                        for a in range(n_atoms):
+                            if serials is None and chain is None:
+                                self.atoms[index].chain = chr(base_char)
+                            else:
+                                if self.atoms[index].serial in serials:
+                                    self.atoms[index].chain = chain
+                            index += 1
+                        base_char += 1
+                        if base_char > 90:
+                            return
 
     def check_top(self, maxwarn=20, fix_pdb=False, fix_top=False):
         if fix_pdb and fix_top:
@@ -280,6 +305,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                       [float(line[33+7*a:33+7*(a+1)]) for a in range(3)]
             elif not line.startswith('TER') and not line.startswith('END'):
                 remarks.append(line)
+            if line.startswith('END') or line.startswith('ENDMDL'):
+                break
         return atoms, tuple(box), remarks
 
     @staticmethod
@@ -417,3 +444,59 @@ class Atom:
     def __repr__(self):
         chain = self.chain if self.chain != " " else "unspecified"
         return "Atom {} in residue {}{} of chain {}".format(self.atomname, self.resname, self.resnum, chain)
+
+
+class Traj(Pdb):
+
+    def __init__(self, structfile=None, compressed_traj=None, top=None, altloc='A', **kwargs):
+        super().__init__(structfile, top, altloc, **kwargs)
+        self.sfname = structfile
+        self.ctfname = compressed_traj
+        self.box_traj = []
+        if self.sfname is None and self.ctfname is None:
+            self.coords = [[[]]]
+        elif self.sfname.endswith('.pdb'):
+            if self.sfname is None:
+                self.coords = self.get_coords_from_pdb()
+        elif self.sfname.endswith('.gro'):
+            if self.sfname is None:
+                self.coords = self.get_coords_from_gro()
+        if self.ctfname.endswith('.xtc') and self.sfname is not None:
+            import mdtraj as md
+            traj = md.load(self.ctfname, top=self.sfname)
+            self.coords = [frame.xyz[0] for frame in traj]
+        self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
+        if self.top and not self.top.pdb:
+            self.top.pdb = self
+        self.altloc = altloc
+        self.nframes = len(self.coords)
+        self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
+                            "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
+        self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
+
+    def __repr__(self):
+        return "trajectory file {} with {} frames and {} atoms".format(self.fname, self.nframes, len(self.atoms))
+
+    def get_coords_from_pdb(self):
+        coords = []
+        content = [line for line in open(self.sfname)]
+        term_lines = [0] + [n for n, line in enumerate(content)
+                            if line.startswith('END') or line.startswith('ENDMDL')]
+        for i, j in zip(term_lines[:-1], term_lines[1:]):
+            frame = ''.join(content[i:j])
+            struct = Pdb.from_text(frame, self)
+            coords.append(struct.get_coords())
+            # TODO extract box size & append to self.box_traj
+        return coords
+
+    def get_coords_from_gro(self):
+        coords = []
+        content = [line for line in open(self.sfname)]
+        natoms = int(content[1].strip())
+        per_frame = natoms + 3
+        term_lines = range(0, len(content)+1, per_frame)
+        for i, j in zip(term_lines[:-1], term_lines[1:]):
+            struct = Pdb.from_text('\n'.join(content[i:j]), self)
+            coords.append(struct.get_coords())
+            # TODO extract box size & append to self.box_traj
+        return coords

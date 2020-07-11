@@ -411,7 +411,9 @@ class SectionMol(Section):
         self.top.recalc_sys_params()
 
     def _merge_fields(self, other):
-        for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
+        # TODO important: watch for POSRES
+        print('WARNING watch out for #ifdef POSRES keywords that might get misplaced')
+        for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap', 'position_restraints']:
             # TODO merge all subsections
             try:
                 subsection_other = other.get_subsection(subs)

@@ -299,7 +299,9 @@ class SubsectionParam(Subsection):
         In case we want to sort entries after some are added at the end of the section
         :return: None
         """
-        self.ordering = {str(entry): n for n, entry in enumerate(self.entries)}
+        self.ordering = {tuple(str(entry).split()[:SubsectionParam.n_atoms[self.header]])
+                         if isinstance(entry, gml.EntryParam) else str(entry): n
+                         for n, entry in enumerate(self.entries)}
         self.entries.sort(key=self._sorting_fn)
 
     def _sorting_fn(self, entry):
@@ -309,8 +311,10 @@ class SubsectionParam(Subsection):
         :param entry: Entry, entry to be sorted
         :return: int, ordering number
         """
-        line_number = self.ordering[str(entry)]
-        return line_number if not hasattr(entry, 'types') or 'X' not in entry.types \
+        types = tuple(str(entry).split()[:SubsectionParam.n_atoms[self.header]]) if isinstance(entry, gml.EntryParam) \
+            else str(entry)
+        line_number = self.ordering[types]
+        return line_number if not hasattr(entry, 'types_state_a') or 'X' not in entry.types \
             else line_number + len(self.ordering.keys())
     
     def _check_parm_type(self):
@@ -329,6 +333,26 @@ class SubsectionParam(Subsection):
                 if len(entry.content) > npar and isinstance(entry, gml.EntryParam):
                     return entry.content[npar]
         return '0'
+
+    def _remove_symm(self, prefix):
+        for n in range(len(self.entries)):
+            if n >= len(self.entries):
+                break
+            if isinstance(self.entries[n], gml.EntryParam) and any([x.startswith(prefix)
+                                                                    for x in self.entries[n].types]):
+                limit = min(8, len(self.entries)-n-1)
+                next_other = [q for q in range(1, limit) if isinstance(self.entries[n+q], gml.EntryParam)
+                              and self.entries[n].types != self.entries[n+q]]
+                if not next_other:
+                    continue
+                else:
+                    next_other = next_other[0]
+                for other in range(n+next_other, len(self.entries)):
+                    if other < len(self.entries) and isinstance(self.entries[other], gml.EntryParam) \
+                            and any([x.startswith(prefix) for x in self.entries[other].types]):
+                        if self.entries[n].types == self.entries[other].types[::-1] \
+                                and self.entries[n].params == self.entries[other].params:
+                            _ = self.entries.pop(other)
     
     def _process_cmap(self):
         """

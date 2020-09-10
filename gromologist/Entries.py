@@ -29,7 +29,10 @@ class Entry:
         :param dpmax: default limit on the number of decimal places
         :return: str, format specifier
         """
-        nf = len(str(flt).split('.')[1])
+        try:
+            nf = len(str(flt).split('.')[1])
+        except IndexError:
+            nf = 3
         if nf > dpmax:
             nf = dpmax
         return "{:>" + str(fields) + "." + str(nf) + "f}"

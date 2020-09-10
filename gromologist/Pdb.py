@@ -74,7 +74,47 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             cas = set(self.select_atoms(f"name O4' and chain {ch}"))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
             print(''.join([mapping[i.resname] for i in atoms]))
-    
+
+    def find_missing(self):
+        map_pro = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
+                   'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
+                   'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
+                   'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
+        map_nuc = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
+                   'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
+                   'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
+                   'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
+                   'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"}
+        pro_bb = ['N', 'O', 'C', 'CA']
+        pro_sc = {'A': ['CB'], 'C': ['CB', 'SG'], 'D': ['CB', 'CG', 'OD1', 'OD2'], 'E': ['CB', 'CG', 'CD', 'OE1',
+                  'OE2'], 'F': ['CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ'], 'G': [], 'H': ['CB', 'CG', 'ND1', 'CE1',
+                  'CD2', 'NE2'], 'I': ['CB', 'CG1', 'CG2', 'CD'], 'K': ['CB', 'CG', 'CD', 'CE', 'NZ'], 'L': ['CB', 'CG',
+                  'CD1', 'CD2'], 'M': ['CB', 'CG', 'SD', 'CE'], 'N': ['CB', 'CG', 'OD1', 'ND2'], 'P': ['CB', 'CG',
+                  'CD'], 'Q': ['CB', 'CG', 'CD', 'OE1', 'NE2'], 'R': ['CB', 'CG', 'CD', 'NE', 'CZ', 'NH1', 'NH2'],
+                  'S': ['CB', 'OG'], 'T': ['CB', 'CG2', 'OG1'], 'V': ['CB', 'CG1', 'CG2'], 'W': ['CB', 'CG', 'CD1',
+                  'CD2', 'NE1', 'CE2', 'CE3', 'CH2', 'CZ2', 'CZ3'], 'Y': ['CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ',
+                  'OH']}
+        alt = {'I': ['CD', 'CD1']}  # pretty temporary and non-extensible, need to rethink
+        curr_res = ('X', 0)
+        atomlist = []
+        for at in self.atoms:
+            if (at.resname, at.resnum) != curr_res:
+                if 'CA' in atomlist:
+                    full = set(pro_bb + pro_sc[map_pro[curr_res[0]]])
+                    if not full.issubset(set(atomlist)):
+                        if map_pro[curr_res[0]] in alt.keys():
+                            modfull = set([alt[map_pro[curr_res[0]]][1] if x == alt[map_pro[curr_res[0]]][0] else x
+                                           for x in full])
+                            if not modfull.issubset(set(atomlist)):
+                                print(f"atoms {modfull.difference(set(atomlist))} missing from residue {curr_res}")
+                        else:
+                            print(f"atoms {full.difference(set(atomlist))} missing from residue {curr_res}")
+
+                # TODO implement for nucleic
+                curr_res = (at.resname, at.resnum)
+                atomlist = []
+            atomlist.append(at.atomname)
+
     def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100):
         """
         Given a matching Top instance, adds chain identifiers to atoms

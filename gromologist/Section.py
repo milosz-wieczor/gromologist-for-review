@@ -102,7 +102,7 @@ class SectionMol(Section):
         :return: list, 0-based indices of atoms compatible with the selection
         """
         sel = gml.SelectionParser(self)
-        return sel(selection_string)
+        return sel(selection_string)  # TODO enable getting atoms' properties
 
     def print_molecule(self):
         sub = self.get_subsection('atoms')
@@ -166,13 +166,13 @@ class SectionMol(Section):
             criteria = all([(atomname is None or entries.atomname == atomname),
                             (resname is None or entries.resname == resname),
                             (resid is None or int(entries.resid) == int(resid)),
-                            (type is None or entries.type == atomtype)])
+                            (atomtype is None or entries.type == atomtype)])
             if criteria:
                 entries.type_b = new_type if new_type is not None else entries.type
                 entries.mass_b = new_mass if new_mass is not None else entries.mass
                 entries.charge_b = new_charge if new_charge is not None else entries.charge
 
-    def drop_state_a(self, remove_dummies=False):
+    def drop_state_a(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
         """
         Collapses alchemical B states, making state B
         the new non-alchemical default state A
@@ -182,26 +182,41 @@ class SectionMol(Section):
         if not remove_dummies:
             print("Warning: dropping state A parameters, but keeping dummies (if exist). To remove all atoms with"
                   "type names starting with D, rerun this fn with 'remove_dummies=True'.")
+        if atomname or resname or resid or atomtype:
+            selected = set()
+            sub = self.get_subsection('atoms')
+            for entries in [entry for entry in sub if isinstance(entry, gml.EntryAtom)]:
+                criteria = all([(atomname is None or entries.atomname == atomname),
+                                (resname is None or entries.resname == resname),
+                                (resid is None or int(entries.resid) == int(resid)),
+                                (atomtype is None or entries.type == atomtype)])
+                if criteria:
+                    selected.add(entries.num)
+        else:
+            selected = list(range(1, self.natoms+1))
         for sub in self.subsections:
             for entry in sub:
-                if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
-                    entry.type, entry.mass, entry.charge = entry.type_b, entry.mass_b, entry.charge_b
-                    entry.type_b, entry.mass_b, entry.charge_b = 3 * [None]
-                elif isinstance(entry, gml.EntryBonded) and entry.params_state_b:
-                    entry.params_state_a = entry.params_state_b
-                    entry.params_state_b = []
-                if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
-                    entry.types_state_a = entry.types_state_b
-                    entry.types_state_b = None
+                if (isinstance(entry, gml.EntryAtom) and entry.num in selected) \
+                        or (isinstance(entry, gml.EntryBonded) and any([x in selected for x in entry.atom_numbers])):
+                    if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
+                        entry.type, entry.mass, entry.charge = entry.type_b, entry.mass_b, entry.charge_b
+                        entry.type_b, entry.mass_b, entry.charge_b = 3 * [None]
+                    elif isinstance(entry, gml.EntryBonded) and entry.params_state_b:
+                        entry.params_state_a = entry.params_state_b
+                        entry.params_state_b = []
+                    if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
+                        entry.types_state_a = entry.types_state_b
+                        entry.types_state_b = None
         if remove_dummies:
             sub = self.get_subsection('atoms')
-            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b[0] == "D"]
+            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b[0] == "D"
+                       and entry.num in selected]
             while dummies:
                 to_remove = dummies[0]
                 self.del_atom(to_remove.num)
                 dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b[0] == "D"]
 
-    def swap_states(self):
+    def swap_states(self):  # TODO optionally choose selected residues
         """
         Swaps alchemical states A and B
         :return: None
@@ -216,7 +231,7 @@ class SectionMol(Section):
                 if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
                     entry.types_state_a, entry.types_state_b = entry.types_state_b, entry.types_state_a
 
-    def drop_state_b(self, remove_dummies=False):
+    def drop_state_b(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
         """
         Makes the topology non-alchemical again, just dropping
         all parameters for state B
@@ -226,14 +241,28 @@ class SectionMol(Section):
         if not remove_dummies:
             print("Warning: dropping all state B parameters, but keeping dummies (if exist). To remove all atoms with"
                   "names starting with D, rerun this fn with 'remove_dummies=True'.")
+        if atomname or resname or resid or atomtype:
+            selected = set()
+            sub = self.get_subsection('atoms')
+            for entries in [entry for entry in sub if isinstance(entry, gml.EntryAtom)]:
+                criteria = all([(atomname is None or entries.atomname == atomname),
+                                (resname is None or entries.resname == resname),
+                                (resid is None or int(entries.resid) == int(resid)),
+                                (atomtype is None or entries.type == atomtype)])
+                if criteria:
+                    selected.add(entries.num)
+        else:
+            selected = list(range(1, self.natoms + 1))
         for sub in self.subsections:
             for entry in sub:
-                if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
-                    entry.type_b, entry.mass_b, entry.charge_b = 3 * [None]
-                elif isinstance(entry, gml.EntryBonded) and entry.params_state_b:
-                    entry.params_state_b = []
-                if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
-                    entry.types_state_b = None
+                if (isinstance(entry, gml.EntryAtom) and entry.num in selected) \
+                        or (isinstance(entry, gml.EntryBonded) and any([x in selected for x in entry.atom_numbers])):
+                    if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
+                        entry.type_b, entry.mass_b, entry.charge_b = 3 * [None]
+                    elif isinstance(entry, gml.EntryBonded) and entry.params_state_b:
+                        entry.params_state_b = []
+                    if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
+                        entry.types_state_b = None
         if remove_dummies:
             sub = self.get_subsection('atoms')
             dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
@@ -571,6 +600,12 @@ class SectionParam(Section):
                 newlines = self.gen_clones(entry, atomtype, prefix)
                 sub.add_entries([gml.EntryParam(line, sub) for line in newlines])
         self.sort_dihedrals()
+        self._remove_symm_dupl(prefix)
+
+    def _remove_symm_dupl(self, prefix):
+        for sub in self.subsections:
+            if 'dihedral' in sub.header:
+                sub._remove_symm(prefix)
 
     def add_nbfix(self, type1, type2, mod_sigma=0.0, mod_epsilon=0.0, action_default='x'):
         atp = self.get_subsection('atomtypes')
@@ -579,7 +614,7 @@ class SectionParam(Section):
             if isinstance(entry, gml.EntryParam):
                 if entry.types[0] == type1:
                     sigma1, eps1 = entry.params
-                elif entry.types[0] == type2:
+                if entry.types[0] == type2:
                     sigma2, eps2 = entry.params
         if sigma1 is None:
             raise KeyError('Type {} was not found in the atomtype definitions'.format(type1))

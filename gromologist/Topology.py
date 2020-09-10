@@ -132,7 +132,7 @@ class Top:
         ignore_set = set()
         counter = 0
         for n, line in enumerate(self._contents):
-            if line.strip().startswith("#ifdef"):
+            if line.strip().startswith("#ifdef") or line.strip().startswith("#ifndef"):
                 counter += 1
             elif line.strip().startswith("#endif"):
                 counter -= 1
@@ -173,7 +173,7 @@ class Top:
             return self._gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
         else:
             raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'
-                                    'If the file is included in an #ifdef block, please try setting'
+                                    'If the file is included in an #ifdef/#ifndef block, please try setting'
                                     ' ignore_ifdef=True'.format(filename))
     
     @staticmethod
@@ -304,7 +304,7 @@ class Top:
         else:
             raise AttributeError("No PDB file has been bound to this topology")
     
-    def save_top(self, outname, split=False):
+    def save_top(self, outname='merged.top', split=False):
         """
         Saves the combined topology to the specified file
         :param outname: str, file name for output

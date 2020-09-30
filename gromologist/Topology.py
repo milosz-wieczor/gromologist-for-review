@@ -55,13 +55,13 @@ class Top:
         #include statement
         :return: str, path to share/gromacs/top directory
         """
-        gmx = os.popen('which gmx').read().strip()
+        gmx = os.popen('which gmx 2> /dev/null').read().strip()
         if not gmx:
-            gmx = os.popen('which gmx_mpi').read().strip()
+            gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
         if not gmx:
-            gmx = os.popen('which gmx_d').read().strip()
+            gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
         if not gmx:
-            gmx = os.popen('which grompp').read().strip()
+            gmx = os.popen('which grompp 2> /dev/null').read().strip()
         if gmx:
             gmx = '/'.join(gmx.split('/')[:-2]) + '/share/gromacs/top'
             print('Gromacs files found in directory {}'.format(gmx))

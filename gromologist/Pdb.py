@@ -366,7 +366,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             assert boxline[3] == boxline[4] == boxline[6] == 0
             box = [0.0] * 6
             box[0] = boxline[0]
-            box[-1] = math.atan(boxline[1]/boxline[5])
+            box[-1] = math.atan(boxline[1]/boxline[5]) if boxline[5] != 0 else 90.0  # TODO check twice
             box[1] = boxline[1]/math.sin(box[-1])
             box[2] = math.sqrt(boxline[7]**2 + boxline[8]**2 + boxline[2]**2)
             box[-2] = math.acos(boxline[7]/box[2])

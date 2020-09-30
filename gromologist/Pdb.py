@@ -1,4 +1,5 @@
 import gromologist as gml
+from collections import defaultdict
 
 
 class Pdb:  # TODO optionally save as gro? & think of trajectories
@@ -64,11 +65,12 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             print(''.join([mapping[i.resname] for i in atoms]))
 
     def print_nucleic_sequence(self):
-        mapping = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
-                   'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
-                   'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
-                   'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
-                   'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"}
+        mapping = defaultdict(lambda x: '<' + str(x) + '>')
+        mapping.update({'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
+                        'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
+                        'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
+                        'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
+                        'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"})
         chains = list({a.chain for a in self.atoms if a.atomname == "O4'"})
         for ch in sorted(chains):
             cas = set(self.select_atoms(f"name O4' and chain {ch}"))

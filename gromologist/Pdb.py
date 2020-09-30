@@ -65,7 +65,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             print(''.join([mapping[i.resname] for i in atoms]))
 
     def print_nucleic_sequence(self):
-        mapping = defaultdict(lambda x: '<' + str(x) + '>')
+        mapping = defaultdict(lambda: 'X')
         mapping.update({'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
                         'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
                         'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",

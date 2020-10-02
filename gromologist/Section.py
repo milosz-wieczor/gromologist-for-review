@@ -1,5 +1,6 @@
 from itertools import product, combinations
 from functools import reduce
+from copy import deepcopy
 
 import gromologist as gml
 
@@ -358,9 +359,8 @@ class SectionMol(Section):
         self.offset_numbering(-1, atom_number)
         self.offset_numbering(1, new_position)
         self._return_atom(new_position)
+        entry_final_ind = [n for n, e in enumerate(atom_entry_list) if isinstance(e, gml.EntryAtom)][new_position - 1]
         entry = subsect_atoms.entries.pop(entry_ind)
-        atom_entry_list = [e for e in subsect_atoms.entries]
-        entry_final_ind = [n for n, e in enumerate(atom_entry_list) if isinstance(e, gml.EntryAtom)][new_position-1]
         subsect_atoms.entries.insert(entry_final_ind, entry)
         if swap_in_pdb:
             if self.top.pdb:

@@ -348,6 +348,64 @@ class SectionMol(Section):
             if self.top.pdb:
                 for to_remove in self._match_pdb_to_top(atom_number):
                     self.top.pdb.delete_atom(to_remove)
+
+    def swap_atom(self, atom_number, new_position, swap_in_pdb=True):
+        subsect_atoms = self.get_subsection('atoms')
+        atom_entry_list = [e for e in subsect_atoms.entries]
+        entry_ind = [n for n, e in enumerate(atom_entry_list) if isinstance(e, gml.EntryAtom)
+                     and e.num == atom_number][0]
+        self._hide_atom(atom_number, new_position)
+        self.offset_numbering(-1, atom_number)
+        self.offset_numbering(1, new_position)
+        self._return_atom(new_position)
+        entry = subsect_atoms.entries.pop(entry_ind)
+        atom_entry_list = [e for e in subsect_atoms.entries]
+        entry_final_ind = [n for n, e in enumerate(atom_entry_list) if isinstance(e, gml.EntryAtom)][new_position-1]
+        subsect_atoms.entries.insert(entry_final_ind, entry)
+        if swap_in_pdb:
+            if self.top.pdb:
+                old_loc = self._match_pdb_to_top(atom_number)
+                new_loc = self._match_pdb_to_top(new_position)
+                atom = self.top.pdb.atoms.pop(old_loc-1)  # TODO check
+                self.top.pdb.atoms.insert(new_loc+1, atom)
+
+    def _hide_atom(self, old_pos, new_pos):
+        subsect_atoms = self.get_subsection('atoms')
+        chosen = [e for e in subsect_atoms.entries if isinstance(e, gml.EntryAtom) and e.num == old_pos][0]
+        chosen.num = -new_pos
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
+            try:
+                subsection = self.get_subsection(subs)
+                for entry in subsection:
+                    if isinstance(entry, gml.EntryBonded):
+                        if old_pos in entry.atom_numbers:
+                            index = entry.atom_numbers.index(old_pos)
+                            temp = list(entry.atom_numbers)
+                            temp[index] = -new_pos
+                            entry.atom_numbers = tuple(temp)
+            except KeyError:
+                pass
+
+    def _return_atom(self, new_pos):
+        subsect_atoms = self.get_subsection('atoms')
+        chosen = [e for e in subsect_atoms.entries if isinstance(e, gml.EntryAtom) and e.num < 0][0]
+        assert chosen.num == -new_pos
+        chosen.num *= -1
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
+            try:
+                subsection = self.get_subsection(subs)
+                for entry in subsection:
+                    if isinstance(entry, gml.EntryBonded):
+                        if any([x < 0 for x in entry.atom_numbers]):
+                            if -new_pos in entry.atom_numbers:
+                                index = entry.atom_numbers.index(-new_pos)
+                                temp = list(entry.atom_numbers)
+                                temp[index] *= -1
+                                entry.atom_numbers = tuple(temp)
+                            else:
+                                print("Caution, found strange negative atom index in line {}".format(entry))
+            except KeyError:
+                pass
     
     def _match_pdb_to_top(self, atom_number):
         """

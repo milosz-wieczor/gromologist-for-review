@@ -195,6 +195,16 @@ class SectionMol(Section):
                     selected.add(entries.num)
         else:
             selected = list(range(1, self.natoms+1))
+        if remove_dummies:
+            sub = self.get_subsection('atoms')
+            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b and
+                       entry.type_b[0] == "D" and entry.num in selected]
+            print(dummies)
+            while dummies:
+                to_remove = dummies[0]
+                self.del_atom(to_remove.num)
+                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b and
+                           entry.type_b[0] == "D" and entry.num in selected]
         for sub in self.subsections:
             for entry in sub:
                 if (isinstance(entry, gml.EntryAtom) and entry.num in selected) \
@@ -208,14 +218,7 @@ class SectionMol(Section):
                     if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
                         entry.types_state_a = entry.types_state_b
                         entry.types_state_b = None
-        if remove_dummies:
-            sub = self.get_subsection('atoms')
-            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b[0] == "D"
-                       and entry.num in selected]
-            while dummies:
-                to_remove = dummies[0]
-                self.del_atom(to_remove.num)
-                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b[0] == "D"]
+
 
     def swap_states(self):  # TODO optionally choose selected residues
         """

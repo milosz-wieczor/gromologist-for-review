@@ -219,6 +219,10 @@ class SubsectionBonded(Subsection):
                                 params += parm_entry.params
                             else:
                                 pass
+        if not entry.params_state_a and any('DUM' in t for t in entry.types_state_a):
+            entry.params_state_a = [0.0, 0.0, '1']
+        if not entry.params_state_b and entry.types_state_b and any('DUM' in t for t in entry.types_state_b):
+            entry.params_state_b = [0.0, 0.0, '1']
         if entry.params_state_a and entry.subsection.header == 'dihedrals' and (not entry.params_state_b) \
                 and entry.interaction_type in ('9', '4', '1'):
             if len(entry.params_state_a) > 3:
@@ -235,8 +239,8 @@ class SubsectionBonded(Subsection):
                     counter += 1
         if entry.params_state_a and entry.subsection.header == 'dihedrals' and entry.params_state_b \
                 and entry.interaction_type in ('9', '4', '1'):
-            if len(entry.params_state_a) > 3 or len(entry.params_state_b) > 3:
-                print('x', str(entry), entry.params_state_a, entry.params_state_b)
+            if len(entry.params_state_a) > 3 or len(entry.params_state_b) > 3 \
+                    or entry.params_state_a[2] != entry.params_state_b[2]:
                 assert len(entry.params_state_a) % 3 == 0 and len(entry.params_state_b) % 3 == 0
                 multiplicities_a = entry.params_state_a[2::3]
                 multiplicities_b = entry.params_state_b[2::3]
@@ -247,8 +251,8 @@ class SubsectionBonded(Subsection):
                             for i in range(len(entry.params_state_b) // 3)}
                 counter = 1
                 m = all_multiplicities[-1]
-                entry.params_state_a = params_a[m] if m in params_a.keys() else [0, 0, m]
-                entry.params_state_b = params_b[m] if m in params_b.keys() else [0, 0, m]
+                entry.params_state_a = params_a[m] if m in params_a.keys() else [0.0, 0.0, m]
+                entry.params_state_b = params_b[m] if m in params_b.keys() else [0.0, 0.0, m]
                 _ = all_multiplicities.pop()
                 while all_multiplicities:
                     m = all_multiplicities[-1]
@@ -256,9 +260,9 @@ class SubsectionBonded(Subsection):
                     entry_location = entry.subsection.bkp_entries.index(entry)
                     entry.subsection.bkp_entries.insert(entry_location + counter, new_entry)
                     entry.subsection.bkp_entries[entry_location + counter].params_state_a = params_a[m] \
-                        if m in params_a.keys() else [0, 0, m]
+                        if m in params_a.keys() else [0.0, 0.0, m]
                     entry.subsection.bkp_entries[entry_location + counter].params_state_b = params_b[m] \
-                        if m in params_b.keys() else [0, 0, m]
+                        if m in params_b.keys() else [0.0, 0.0, m]
                     counter += 1
                     _ = all_multiplicities.pop()
         if not entry.params_state_a and entry.subsection.header == 'dihedrals' and entry.params_state_b \

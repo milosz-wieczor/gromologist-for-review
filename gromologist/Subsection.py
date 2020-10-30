@@ -197,27 +197,30 @@ class SubsectionBonded(Subsection):
         """
         int_type = entry.interaction_type
         entry.read_types()
-        wildcard_present = []
-        non_wildcard_present = []
-        for subsections in subsect_params:
-            for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
-                if parm_entry.match(entry.types_state_a, int_type):
-                    is_wildcard = 'X' in parm_entry.types
-                    if not wildcard_present and not is_wildcard:
-                        entry.params_state_a += parm_entry.params
-                        non_wildcard_present += parm_entry.types
-                    elif not wildcard_present and is_wildcard and not non_wildcard_present:
-                        entry.params_state_a += parm_entry.params
-                        wildcard_present = parm_entry.types
-                    elif wildcard_present and not is_wildcard:
-                        raise RuntimeError("Wildcard ('X') entries were found prior to regular ones, please fix"
-                                           "your FF parameters")
-                    elif wildcard_present and is_wildcard:  # only add if there are multiple entries per given wildcard
-                        if parm_entry.types == wildcard_present:
-                            entry.params_state_a += parm_entry.params
-                        else:
-                            pass
-        if entry.params_state_a and entry.subsection.header == 'dihedrals':
+        for types, params in zip([entry.types_state_a, entry.types_state_b],
+                                 [entry.params_state_a, entry.params_state_b]):
+            wildcard_present = []
+            non_wildcard_present = []
+            for subsections in subsect_params:
+                for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
+                    if parm_entry.match(types, int_type):
+                        is_wildcard = 'X' in parm_entry.types
+                        if not wildcard_present and not is_wildcard:
+                            params += parm_entry.params
+                            non_wildcard_present += parm_entry.types
+                        elif not wildcard_present and is_wildcard and not non_wildcard_present:
+                            params += parm_entry.params
+                            wildcard_present = parm_entry.types
+                        elif wildcard_present and not is_wildcard:
+                            raise RuntimeError("Wildcard ('X') entries were found prior to regular ones, please fix"
+                                               "your FF parameters")
+                        elif wildcard_present and is_wildcard:  # only add if multiple entries per given wildcard
+                            if parm_entry.types == wildcard_present:
+                                params += parm_entry.params
+                            else:
+                                pass
+        if entry.params_state_a and entry.subsection.header == 'dihedrals' and (not entry.params_state_b) \
+                and entry.interaction_type in ('9', '4', '1'):
             if len(entry.params_state_a) > 3:
                 assert len(entry.params_state_a) % 3 == 0
                 leftover = entry.params_state_a[3:]
@@ -230,6 +233,38 @@ class SubsectionBonded(Subsection):
                     entry.subsection.bkp_entries[entry_location+counter].params_state_a = leftover[:3]
                     leftover = leftover[3:]
                     counter += 1
+        if entry.params_state_a and entry.subsection.header == 'dihedrals' and entry.params_state_b \
+                and entry.interaction_type in ('9', '4', '1'):
+            if len(entry.params_state_a) > 3 or len(entry.params_state_b) > 3:
+                print('x', str(entry), entry.params_state_a, entry.params_state_b)
+                assert len(entry.params_state_a) % 3 == 0 and len(entry.params_state_b) % 3 == 0
+                multiplicities_a = entry.params_state_a[2::3]
+                multiplicities_b = entry.params_state_b[2::3]
+                all_multiplicities = list(set(multiplicities_a + multiplicities_b))
+                params_a = {entry.params_state_a[3*i+2]: entry.params_state_a[3*i:3*(i+1)]
+                            for i in range(len(entry.params_state_a)//3)}
+                params_b = {entry.params_state_b[3 * i + 2]: entry.params_state_b[3 * i:3 * (i + 1)]
+                            for i in range(len(entry.params_state_b) // 3)}
+                counter = 1
+                m = all_multiplicities[-1]
+                entry.params_state_a = params_a[m] if m in params_a.keys() else [0, 0, m]
+                entry.params_state_b = params_b[m] if m in params_b.keys() else [0, 0, m]
+                _ = all_multiplicities.pop()
+                while all_multiplicities:
+                    m = all_multiplicities[-1]
+                    new_entry = gml.EntryBonded(' '.join(str(x) for x in entry.content), self)
+                    entry_location = entry.subsection.bkp_entries.index(entry)
+                    entry.subsection.bkp_entries.insert(entry_location + counter, new_entry)
+                    entry.subsection.bkp_entries[entry_location + counter].params_state_a = params_a[m] \
+                        if m in params_a.keys() else [0, 0, m]
+                    entry.subsection.bkp_entries[entry_location + counter].params_state_b = params_b[m] \
+                        if m in params_b.keys() else [0, 0, m]
+                    counter += 1
+                    _ = all_multiplicities.pop()
+        if not entry.params_state_a and entry.subsection.header == 'dihedrals' and entry.params_state_b \
+                and entry.interaction_type in ('9', '4', '1'):
+            raise RuntimeError(f'Warning: in line {entry}, parameters were found for state A, but not for state B.'
+                               f'Try to add parameters for types {entry.types_state_a}')
     
     def _check_parm_type(self):
         """

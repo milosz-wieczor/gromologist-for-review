@@ -89,7 +89,10 @@ class EntryBonded(Entry):
 
     def __init__(self, content, subsection):
         super().__init__(content, subsection)
-        self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
+        if subsection.header == 'exclusions':
+            self.atoms_per_entry = len(self.content) - 1
+        else:
+            self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.atom_numbers = tuple([int(x) for x in self.content[:self.atoms_per_entry]])
         self.interaction_type = self.content[self.atoms_per_entry]
         try:
@@ -130,7 +133,8 @@ class EntryBonded(Entry):
         num_to_type_a = atoms_sub.num_to_type
         num_to_type_b = atoms_sub.num_to_type_b
         self.types_state_a = tuple(num_to_type_a[num] for num in self.atom_numbers)
-        self.types_state_b = tuple(num_to_type_b[num] for num in self.atom_numbers)
+        types_state_b = tuple(num_to_type_b[num] for num in self.atom_numbers)
+        self.types_state_b = types_state_b if types_state_b != self.types_state_a else None
 
     def parse_bonded_params(self, excess_params):
         try:
@@ -154,7 +158,9 @@ class EntryBonded(Entry):
                     try:
                         _ = float(excess_params[n])
                     except ValueError:
-                        assert excess_params[n] in self.subsection.section.top.defines.keys()
+                        if not excess_params[n] in self.subsection.section.top.defines.keys():
+                            print(f'undefined parameter {excess_params} was found, try adding define={"KEY": value}'
+                                  f'when initializing Top()')
                 self.fstr_mod = [self.infer_type(x) for x in excess_params]
             types = self._fstr_suff((self.subsection.header, self.interaction_type))
             if len(excess_params) == len(types):
@@ -241,13 +247,13 @@ class EntryParam(Entry):
             return None
     
     def match(self, ext_typelist, int_type):
-        if len(ext_typelist) != len(self.types):
+        if not ext_typelist or len(ext_typelist) != len(self.types):
             return False
         if self.interaction_type == int_type:
             if ext_typelist[0] == self.types[0] or ext_typelist[1] == self.types[1]:
                 if all(ext_typelist[i] == self.types[i] for i in range(len(self.types)) if self.types[i] != 'X'):
                     return True
-            elif ext_typelist[0] == self.types[-1] or ext_typelist[1] == self.types[-2]:
+            if ext_typelist[0] == self.types[-1] or ext_typelist[1] == self.types[-2]:
                 if all(ext_typelist[i] == self.types[len(self.types)-i-1] for i in range(len(self.types))
                        if self.types[i] != 'X'):
                     return True

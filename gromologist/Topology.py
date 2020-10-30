@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 
 class Top:
-    def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False):
+    def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False, define=None):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
@@ -14,6 +14,7 @@ class Top:
         :param gmx_dir: str, Gromacs FF directory
         :param pdb: str, path to a matching PDB file
         :param ignore_ifdef: bool, whether to ignore #include statements within #ifdef blocks (e.g. posre.itp)
+        :param define: dict, key:value pairs with variables that will be defined in .mdp
         """
         # TODO maybe allow for construction of a blank top with a possibility to read data later?
         if not gmx_dir:
@@ -27,6 +28,8 @@ class Top:
         self.dir = os.getcwd() + '/' + '/'.join(self.fname.split('/')[:-1])
         self._contents = open(self.fname).readlines()
         self.defines = {}
+        if define is not None:
+            self.defines.update(define)
         self._include_all(ignore_ifdef)
         self.sections = []
         self.header = []
@@ -240,10 +243,10 @@ class Top:
                              if 'molecules' in [ss.header for ss in s.subsections]]
         molecules = OrderedDict()  # we want to preserve the order of molecules in the system for e.g. PDB checking
         natoms, charge = 0, 0
-        if len(system_subsection) == 0:
-            raise KeyError
-        elif len(system_subsection) > 1:
-            print("Section 'molecules' not present in the topology")
+        if len(system_subsection) > 1:
+            raise RuntimeError("Multiple 'molecules' subsection found in the topology, this is not allowed")
+        elif len(system_subsection) == 0:
+            print("Section 'molecules' not present in the topology, assuming this is an isolated .itp")
             self.system, self.charge, self.natoms = None, 0, 0
             return
         for e in system_subsection[0]:

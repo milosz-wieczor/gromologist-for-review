@@ -100,6 +100,10 @@ class Top:
     def add_ff_params(self, section='all'):
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
+
+    def find_missing_ff_params(self, section='all'):
+        for mol in self.molecules:
+            mol.find_missing_ff_params(add_section=section)
     
     def add_params_file(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))

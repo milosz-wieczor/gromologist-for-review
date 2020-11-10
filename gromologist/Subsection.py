@@ -186,6 +186,37 @@ class SubsectionBonded(Subsection):
             if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:
                 self._add_ff_params_to_entry(entry, subsect_params)
         self.entries = self.bkp_entries[:]  # now restore the modified copy
+
+    def find_missing_ff_params(self):
+        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
+                     'impropers': 'dihedraltypes'}
+        subsect_params = [sub for sub in self.section.top.parameters.subsections if
+                          sub.header == matchings[self.header]]
+        for entry in self.entries:
+            if isinstance(entry, gml.EntryBonded):
+                self._find_missing_ff_params(entry, subsect_params)
+
+    @staticmethod
+    def _find_missing_ff_params(entry, subsect_params):
+        int_type = entry.interaction_type
+        entry.read_types()
+        found_a = False
+        for subsections in subsect_params:
+            for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
+                if parm_entry.match(entry.types_state_a, int_type):
+                    found_a = True
+        if not found_a and not entry.params_state_a:
+            print(f'Couldn\'t find params for interaction type {entry.subsection.header} {int_type}, '
+                  f'atom types {entry.types_state_a}, atom numbers {entry.atom_numbers}')
+        if entry.types_state_b:
+            found_b = False
+            for subsections in subsect_params:
+                for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
+                    if parm_entry.match(entry.types_state_a, int_type):
+                        found_b = True
+            if not found_b and not entry.params_state_b:
+                print(f'Couldn\'t find params for interaction type {entry.subsection.header} {int_type}, '
+                      f'atom types {entry.types_state_b}, atom numbers {entry.atom_numbers}')
     
     def _add_ff_params_to_entry(self, entry, subsect_params):
         """
@@ -219,9 +250,11 @@ class SubsectionBonded(Subsection):
                                 params += parm_entry.params
                             else:
                                 pass
-        if not entry.params_state_a and any('DUM' in t for t in entry.types_state_a):
+        if not entry.params_state_a and entry.subsection.header == 'dihedrals' \
+                and any('DUM' in t for t in entry.types_state_a):
             entry.params_state_a = [0.0, 0.0, '1']
-        if not entry.params_state_b and entry.types_state_b and any('DUM' in t for t in entry.types_state_b):
+        if not entry.params_state_b and entry.subsection.header == 'dihedrals' and entry.types_state_b \
+                and any('DUM' in t for t in entry.types_state_b):
             entry.params_state_b = [0.0, 0.0, '1']
         if entry.params_state_a and entry.subsection.header == 'dihedrals' and (not entry.params_state_b) \
                 and entry.interaction_type in ('9', '4', '1'):

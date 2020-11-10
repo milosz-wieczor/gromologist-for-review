@@ -103,7 +103,7 @@ either within a molecule or between them:
 >>> t.list_molecules()
 Protein                      1
 Other                        1
->>> protein.merge_two(ligand, anhor_own=5, anchor_other=1)
+>>> protein.merge_two(ligand, anchor_own=5, anchor_other=1)
 >>> t.list_molecules()
 Protein                      1
 ```
@@ -112,7 +112,7 @@ The above script merges Protein and Other into a single Protein molecule, adding
 between atom 5 of Protein and atom 1 of Other (here, indices are 1-based, corresponding
 to numbering in .itp files).
 
-To add a bond within a single e.g. Protein molecule, one can use `protein.merge_two(protein, anhor_own=2, anchor_other=3)`
+To add a bond within a single e.g. Protein molecule, one can use `protein.merge_two(protein, anchor_own=2, anchor_other=3)`
 or, more simply, `protein.add_bond(5,3)`.
 
 ##### Adding and removing atoms while maintaining ordered numbering
@@ -127,7 +127,7 @@ in the following manner:
 >>> protein.del_atom(1)
 ```
 
-Note that all parameters involving this atom are automatically removed as well.
+Note that all bonds, pairs, angles and dihedrals involving this atom are automatically removed as well.
 
 To add an atom, one should specify its desired placement within the molecule, and at least 
 a minimal set of parameters:

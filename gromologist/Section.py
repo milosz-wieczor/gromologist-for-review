@@ -178,6 +178,10 @@ class SectionMol(Section):
         Collapses alchemical B states, making state B
         the new non-alchemical default state A
         :param remove_dummies: bool, whether to remove B-state dummies
+        :param atomname: str, name of the selected atom(s) for which state B will be dropped
+        :param resname: str, name of the selected residue(s) for which state B will be dropped
+        :param resid: int, number of the selected residue(s) for which state B will be dropped
+        :param atomtype: str, type of the selected atom(s) for which state B will be dropped
         :return: None
         """
         if not remove_dummies:
@@ -219,27 +223,48 @@ class SectionMol(Section):
                         entry.types_state_a = entry.types_state_b
                         entry.types_state_b = None
 
-
-    def swap_states(self):  # TODO optionally choose selected residues
+    def swap_states(self, atomname=None, resname=None, resid=None, atomtype=None):
         """
         Swaps alchemical states A and B
+        :param atomname: str, name of the selected atom(s) for which state B will be swapped
+        :param resname: str, name of the selected residue(s) for which state B will be swapped
+        :param resid: int, number of the selected residue(s) for which state B will be swapped
+        :param atomtype: str, type of the selected atom(s) for which state B will be swapped
         :return: None
         """
+        if atomname or resname or resid or atomtype:
+            selected = set()
+            sub = self.get_subsection('atoms')
+            for entries in [entry for entry in sub if isinstance(entry, gml.EntryAtom)]:
+                criteria = all([(atomname is None or entries.atomname == atomname),
+                                (resname is None or entries.resname == resname),
+                                (resid is None or int(entries.resid) == int(resid)),
+                                (atomtype is None or entries.type == atomtype)])
+                if criteria:
+                    selected.add(entries.num)
+        else:
+            selected = list(range(1, self.natoms + 1))
         for sub in self.subsections:
             for entry in sub:
-                if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
-                    (entry.type, entry.mass, entry.charge, entry.type_b, entry.mass_b, entry.charge_b) = \
-                        (entry.type_b, entry.mass_b, entry.charge_b, entry.type, entry.mass, entry.charge)
-                elif isinstance(entry, gml.EntryBonded) and entry.params_state_b:
-                    entry.params_state_a, entry.params_state_b = entry.params_state_b, entry.params_state_a
-                if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
-                    entry.types_state_a, entry.types_state_b = entry.types_state_b, entry.types_state_a
+                if (isinstance(entry, gml.EntryAtom) and entry.num in selected) \
+                        or (isinstance(entry, gml.EntryBonded) and any([x in selected for x in entry.atom_numbers])):
+                    if isinstance(entry, gml.EntryAtom) and entry.type_b is not None:
+                        (entry.type, entry.mass, entry.charge, entry.type_b, entry.mass_b, entry.charge_b) = \
+                            (entry.type_b, entry.mass_b, entry.charge_b, entry.type, entry.mass, entry.charge)
+                    elif isinstance(entry, gml.EntryBonded) and entry.params_state_b:
+                        entry.params_state_a, entry.params_state_b = entry.params_state_b, entry.params_state_a
+                    if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
+                        entry.types_state_a, entry.types_state_b = entry.types_state_b, entry.types_state_a
 
     def drop_state_b(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
         """
         Makes the topology non-alchemical again, just dropping
         all parameters for state B
         :param remove_dummies: bool, whether to remove A-state dummies
+        :param atomname: str, name of the selected atom(s) for which state B will be dropped
+        :param resname: str, name of the selected residue(s) for which state B will be dropped
+        :param resid: int, number of the selected residue(s) for which state B will be dropped
+        :param atomtype: str, type of the selected atom(s) for which state B will be dropped
         :return: None
         """
         if not remove_dummies:
@@ -583,6 +608,21 @@ class SectionMol(Section):
             else:
                 for ssub in subsections:
                     ssub.add_ff_params()
+
+    def find_missing_ff_params(self, add_section='all'):
+        if add_section == 'all':  # TODO optionally add type/atomname labels in comment
+            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
+        else:
+            subsections_to_add = [add_section]
+        for sub in subsections_to_add:
+            try:
+                subsections = [s for s in self.subsections if s.header == sub]
+            except IndexError:
+                pass
+            else:
+                for ssub in subsections:
+                    print(f"Searching in molecule {self.mol_name}, section {ssub}...")
+                    ssub.find_missing_ff_params()
 
     def label_types(self, add_section='all'):
         if add_section == 'all':

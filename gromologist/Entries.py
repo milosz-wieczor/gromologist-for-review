@@ -250,10 +250,12 @@ class EntryParam(Entry):
         if not ext_typelist or len(ext_typelist) != len(self.types):
             return False
         if self.interaction_type == int_type:
-            if ext_typelist[0] == self.types[0] or ext_typelist[1] == self.types[1]:
+            if ext_typelist[0] == self.types[0] or ext_typelist[1] == self.types[1] \
+                    or ext_typelist[-1] == self.types[-1] or ext_typelist[-2] == self.types[-2]:
                 if all(ext_typelist[i] == self.types[i] for i in range(len(self.types)) if self.types[i] != 'X'):
                     return True
-            if ext_typelist[0] == self.types[-1] or ext_typelist[1] == self.types[-2]:
+            if ext_typelist[0] == self.types[-1] or ext_typelist[1] == self.types[-2] \
+                    or ext_typelist[-1] == self.types[0] or ext_typelist[-2] == self.types[1]:
                 if all(ext_typelist[i] == self.types[len(self.types)-i-1] for i in range(len(self.types))
                        if self.types[i] != 'X'):
                     return True

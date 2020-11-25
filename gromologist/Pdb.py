@@ -422,6 +422,28 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                     weights /= np.sum(weights)
                     atom.beta = np.sum(values * weights)
 
+    def interpolate_struct(self, other, num_inter, write=False):
+        inter = []
+        try:
+            import numpy as np
+            from copy import deepcopy
+        except ImportError:
+            raise RuntimeError("Needs numpy & deepcopy for interpolating, try installing it")
+        else:
+            self_atoms = np.array(self.get_coords())
+            other_atoms = np.array(other.get_coords())
+            for i in range(1, num_inter+1):
+                incr = (other_atoms - self_atoms)/(num_inter + 1)
+                pdb = deepcopy(self)
+                pdb.set_coords(self_atoms + i * incr)
+                inter.append(pdb)
+        if write:
+            for n, struct in enumerate([self] + inter + [other]):
+                struct.save_pdb(f'interpolated_structure_{n}.pdb')
+            return
+        else:
+            return [self] + inter + [other]
+
     def save_pdb(self, outname='out.pdb'):
         with open(outname, 'w') as outfile:
             outfile.write(self._cryst_format.format(*self.box))

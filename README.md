@@ -210,7 +210,7 @@ one can use:
 Let's start by reading a PDB file:
 
 ```
->>> p = PDB('md/other.pdb')
+>>> p = Pdb('md/other.pdb')
 ```
 
 ##### Adding atoms along a vector specified by other atoms
@@ -224,7 +224,22 @@ specified by a vector from atom C to atom CA, one can use:
 ```
 
 All the selections should be unique (corresponding to a single atom), and combinations can be
-used like in VMD, e.g. `name CB and resid 10 and chain A`.
+used like in VMD, e.g. `name CB and resid 10 and chain A`. This way you can e.g. automate
+the addition of dummy atoms, DNA/RNA conversions etc.
+
+##### Interpolating between two pre-aligned structures
+
+To generate intermediate structures emulating a continuous conformational transition,
+try the following snippet:
+
+```
+>>> p1 = Pdb('conf1_aligned.pdb')
+>>> p2 = Pdb('conf2_aligned.pdb')
+>>> p1.interpolate_struct(p2, num_inter=50, write=True)
+```
+
+This will create a total of 52 structures (1 starting + 50 intermediate + 1 final) named 
+`interpolated_structure_{0..51}.pdb` that sample the transition through linear interpolation.
 
 ##### Filling beta-values with custom data (for visualization)
 

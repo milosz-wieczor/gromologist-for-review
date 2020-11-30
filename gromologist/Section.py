@@ -109,6 +109,14 @@ class SectionMol(Section):
         sub = self.get_subsection('atoms')
         for entry in sub:
             print(str(entry), end='')
+
+    @property
+    def is_alchemical(self):
+        sect = self.get_subsection('atoms')
+        for ent in sect.entries:
+            if isinstance(ent, gml.EntryAtom) and ent.type_b is not None:
+                return True
+        return False
     
     def offset_numbering(self, offset, startfrom=0):
         """
@@ -185,7 +193,7 @@ class SectionMol(Section):
         :return: None
         """
         if not remove_dummies:
-            print("Warning: dropping state A parameters, but keeping dummies (if exist). To remove all atoms with"
+            print("Warning: dropping state A parameters, but keeping dummies (if exist). To remove all atoms with "
                   "type names starting with D, rerun this fn with 'remove_dummies=True'.")
         if atomname or resname or resid or atomtype:
             selected = set()
@@ -268,7 +276,7 @@ class SectionMol(Section):
         :return: None
         """
         if not remove_dummies:
-            print("Warning: dropping all state B parameters, but keeping dummies (if exist). To remove all atoms with"
+            print("Warning: dropping all state B parameters, but keeping dummies (if exist). To remove all atoms with "
                   "names starting with D, rerun this fn with 'remove_dummies=True'.")
         if atomname or resname or resid or atomtype:
             selected = set()

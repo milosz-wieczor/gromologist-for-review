@@ -76,6 +76,10 @@ class Top:
     @property
     def molecules(self):
         return [s for s in self.sections if isinstance(s, gml.SectionMol)]
+
+    @property
+    def alchemical_molecules(self):
+        return [s for s in self.sections if isinstance(s, gml.SectionMol) and s.is_alchemical]
     
     @property
     def parameters(self):

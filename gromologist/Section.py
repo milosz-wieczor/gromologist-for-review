@@ -645,13 +645,29 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
-    def list_bonds(self):
-        subsection = self.get_subsection('bonds')
+    def list_bonds(self, by_types=False):
+        self._list_bonded('bonds', by_types)
+
+    def list_angles(self, by_types=False):
+        self._list_bonded('angles', by_types)
+
+    def list_impropers(self, by_types=False):
+        self._list_bonded('impropers', by_types)
+
+    def list_dihedrals(self, by_types=False):
+        self._list_bonded('dihedrals', by_types)
+
+    def _list_bonded(self, term, by_types):
+        subsection = self.get_subsection(term)
+        formatstring = {'bonds': "{:>5s} {:>5s}", 'angles': "{:>5s} {:>5s} {:>5s}",
+                        'dihedrals': '{:>5s} {:>5s} {:>5s} {:>5s}', 'impropers': '{:>5s} {:>5s} {:>5s} {:>5s}'}
         for entry in subsection:
             if isinstance(entry, gml.EntryBonded):
                 entry.read_types()
-                print("{:>5s} {:>5s}".format(*entry.atom_names))
-
+                if not by_types:
+                    print(formatstring[term].format(*entry.atom_names))
+                else:
+                    print(formatstring[term].format(*entry.types_state_a))
 
 class SectionParam(Section):
     """

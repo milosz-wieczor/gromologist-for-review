@@ -650,7 +650,7 @@ class SectionMol(Section):
         for entry in subsection:
             if isinstance(entry, gml.EntryBonded):
                 entry.read_types()
-                print("{} {}".format(*entry.atom_names))
+                print("{:>5s} {:>5s}".format(*entry.atom_names))
 
 
 class SectionParam(Section):

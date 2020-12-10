@@ -645,6 +645,13 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
+    def list_bonds(self):
+        subsection = self.get_subsection('bonds')
+        for entry in subsection:
+            if isinstance(entry, gml.EntryBonded):
+                entry.read_types()
+                print("{} {}".format(*entry.atom_names))
+
 
 class SectionParam(Section):
     """

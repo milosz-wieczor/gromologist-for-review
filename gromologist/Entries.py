@@ -102,6 +102,7 @@ class EntryBonded(Entry):
             # type assignment should only be performed when asked to, i.e. outside of constructor, with read_types
         self.types_state_a = None
         self.types_state_b = None
+        self.atom_names = None
         self.params_state_a = []
         self.params_state_b = []
         self.fstr_mod = []
@@ -132,9 +133,11 @@ class EntryBonded(Entry):
         atoms_sub.get_dicts()
         num_to_type_a = atoms_sub.num_to_type
         num_to_type_b = atoms_sub.num_to_type_b
+        num_to_name = atoms_sub.num_to_name
         self.types_state_a = tuple(num_to_type_a[num] for num in self.atom_numbers)
         types_state_b = tuple(num_to_type_b[num] for num in self.atom_numbers)
         self.types_state_b = types_state_b if types_state_b != self.types_state_a else None
+        self.atom_names = tuple(num_to_name[num] for num in self.atom_numbers)
 
     def parse_bonded_params(self, excess_params):
         try:

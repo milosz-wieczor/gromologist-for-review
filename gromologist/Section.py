@@ -95,6 +95,11 @@ class SectionMol(Section):
         
     def __repr__(self):
         return self.name
+
+    @property
+    def atoms(self):
+        sub = self.get_subsection('atoms')
+        return [entry for entry in sub if isinstance(entry, gml.EntryAtom)]
     
     def select_atoms(self, selection_string):
         """
@@ -387,6 +392,32 @@ class SectionMol(Section):
                     self.top.pdb.delete_atom(to_remove)
 
     def swap_atom(self, atom_number, new_position, swap_in_pdb=True):
+        """
+        Changes the position of a chosen atom (1-based index atom_number)
+        so that it now has index new_position (and other atoms are renumbered).
+        If the topology has a corresponding structure, atoms can also be
+        moved in the .pdb object.
+        :param atom_number: int, atom to be moved (1-based)
+        :param new_position: int, target index of the atom (1-based)
+        :param swap_in_pdb: bool, whether to try moving the atom in Top.pdb
+        :return: None
+        """
+        if swap_in_pdb:
+            if self.top.pdb:
+                if len(self._match_pdb_to_top(atom_number)) > 1:
+                    raise RuntimeError("Two or more atoms in PDB matching the requested atom {} "
+                                       "in .top".format(atom_number))
+                elif len(self._match_pdb_to_top(atom_number)) == 0:
+                    raise RuntimeError("Could not match .top atom {} to a corresponding PDB atom".format(atom_number))
+                if len(self._match_pdb_to_top(new_position)) > 1:
+                    raise RuntimeError("Two or more atoms in PDB matching the requested atom {} "
+                                       "in .top".format(new_position))
+                elif len(self._match_pdb_to_top(new_position)) == 0:
+                    raise RuntimeError("Could not match .top atom {} to a corresponding PDB atom".format(new_position))
+                old_loc = self._match_pdb_to_top(atom_number)[0]
+                new_loc = self._match_pdb_to_top(new_position)
+                atom = self.top.pdb.atoms.pop(old_loc-1)  # TODO check
+                self.top.pdb.atoms.insert(new_loc + 1, atom)
         subsect_atoms = self.get_subsection('atoms')
         atom_entry_list = [e for e in subsect_atoms.entries]
         entry_ind = [n for n, e in enumerate(atom_entry_list) if isinstance(e, gml.EntryAtom)
@@ -398,12 +429,6 @@ class SectionMol(Section):
         entry_final_ind = [n for n, e in enumerate(atom_entry_list) if isinstance(e, gml.EntryAtom)][new_position - 1]
         entry = subsect_atoms.entries.pop(entry_ind)
         subsect_atoms.entries.insert(entry_final_ind, entry)
-        if swap_in_pdb:
-            if self.top.pdb:
-                old_loc = self._match_pdb_to_top(atom_number)
-                new_loc = self._match_pdb_to_top(new_position)
-                atom = self.top.pdb.atoms.pop(old_loc-1)  # TODO check
-                self.top.pdb.atoms.insert(new_loc+1, atom)
 
     def _hide_atom(self, old_pos, new_pos):
         subsect_atoms = self.get_subsection('atoms')
@@ -617,6 +642,22 @@ class SectionMol(Section):
                 for ssub in subsections:
                     ssub.add_ff_params()
 
+    def find_used_ff_params(self, section='all'):
+        used_params = []
+        if section == 'all':  # TODO optionally add type/atomname labels in comment
+            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
+        else:
+            subsections_to_add = [section]
+        for sub in subsections_to_add:
+            try:
+                subsections = [s for s in self.subsections if s.header == sub]
+            except IndexError:
+                pass
+            else:
+                for ssub in subsections:
+                    used_params.extend(ssub.find_used_ff_params())
+        return used_params
+
     def find_missing_ff_params(self, add_section='all'):
         if add_section == 'all':  # TODO optionally add type/atomname labels in comment
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
@@ -741,10 +782,34 @@ class SectionParam(Section):
         self.sort_dihedrals()
         self._remove_symm_dupl(prefix)
 
+    def clean_unused(self, used_params, section='all'):
+        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
+                     'impropers': 'dihedraltypes'}
+        if section == 'all':
+            subs = list(matchings.values())
+        else:
+            subs = [matchings[section]]
+        for sub in subs:
+            ssects = [sb for sb in self.subsections if sb.header == sub]
+            for ssect in ssects:
+                new_entries = []
+                for entry in ssect.entries:
+                    if not isinstance(entry, gml.EntryParam) or entry.identifier in used_params:
+                        new_entries.append(entry)
+                ssect.entries = new_entries
+
     def _remove_symm_dupl(self, prefix):
         for sub in self.subsections:
             if 'dihedral' in sub.header:
                 sub._remove_symm(prefix)
+
+    def get_opt_dih(self):
+        ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
+        return ss.get_opt_dih()
+
+    def set_opt_dih(self, values):
+        ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
+        ss.set_opt_dih(values)
 
     def add_nbfix(self, type1, type2, mod_sigma=0.0, mod_epsilon=0.0, action_default='x'):
         atp = self.get_subsection('atomtypes')

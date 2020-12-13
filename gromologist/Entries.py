@@ -229,6 +229,7 @@ class EntryParam(Entry):
                 self.params = [float(x) for x in self.content[3:]]
         if self.subsection.header == 'dihedraltypes' and self.interaction_type in ('9', '4', '1'):
             self.params[-1] = int(self.params[-1])
+        self.identifier = self.subsection.header + '-' + '-'.join(self.types) + '-' + self.interaction_type
             
     def format(self):
         fmt = {('bondtypes', '1'): "{:>8s} {:>8s}{:>6s}{:>13.8f}{:>13.2f} ",

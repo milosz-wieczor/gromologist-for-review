@@ -187,6 +187,45 @@ class SubsectionBonded(Subsection):
                 self._add_ff_params_to_entry(entry, subsect_params)
         self.entries = self.bkp_entries[:]  # now restore the modified copy
 
+    def find_used_ff_params(self):
+        used_parm_entries = []
+        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
+                     'impropers': 'dihedraltypes'}
+        subsect_params = [sub for sub in self.section.top.parameters.subsections if
+                          sub.header == matchings[self.header]]
+        for entry in self.entries:
+            if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:
+                used_parm_entries.extend(self._find_used_ff_params(entry, subsect_params))
+        return used_parm_entries
+
+    @staticmethod
+    def _find_used_ff_params(entry, subsect_params):
+        entries = []
+        int_type = entry.interaction_type
+        entry.read_types()
+        for types in [entry.types_state_a, entry.types_state_b]:
+            wildcard_present = []
+            non_wildcard_present = []
+            for subsections in subsect_params:
+                for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
+                    if parm_entry.match(types, int_type):
+                        is_wildcard = 'X' in parm_entry.types
+                        if not wildcard_present and not is_wildcard:
+                            entries.append(parm_entry.identifier)
+                            non_wildcard_present += parm_entry.types
+                        elif not wildcard_present and is_wildcard and not non_wildcard_present:
+                            entries.append(parm_entry.identifier)
+                            wildcard_present = parm_entry.types
+                        elif wildcard_present and not is_wildcard:
+                            raise RuntimeError("Wildcard ('X') entries were found prior to regular ones, please fix"
+                                               "your FF parameters")
+                        elif wildcard_present and is_wildcard:  # only add if multiple entries per given wildcard
+                            if parm_entry.types == wildcard_present:
+                                entries.append(parm_entry.identifier)
+                            else:
+                                pass
+        return entries
+
     def find_missing_ff_params(self):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
@@ -405,6 +444,16 @@ class SubsectionParam(Subsection):
                 if len(entry.content) > npar and isinstance(entry, gml.EntryParam):
                     return entry.content[npar]
         return '0'
+
+    def get_opt_dih(self):
+        dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]
+        return [e.params[x] for e in dopts for x in [0, 1]]
+
+    def set_opt_dih(self, values):
+        dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]
+        for e, ang, k in zip(dopts, values[::2], values[1::2]):
+            e.params[0] = ang
+            e.params[1] = k
 
     def _remove_symm(self, prefix):
         for n in range(len(self.entries)):

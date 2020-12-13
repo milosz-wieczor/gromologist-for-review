@@ -12,10 +12,12 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             else:
                 self.atoms, self.box, self.remarks = self._parse_contents([line.strip() for line in open(self.fname)])
         else:
-            self.atoms, self.box, self.remarks = [], 3 * [10] + 3 * [90], []
+            self.atoms, self.box, self.remarks = [], 3 * [100] + 3 * [90], []
         self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
         if self.top and not self.top.pdb:
             self.top.pdb = self
+        if not self.atoms and self.top:
+            self.atoms = [Atom.from_top_entry(entry) for mol in self.top.molecules for entry in mol.atoms]
         self.altloc = altloc
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                             "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
@@ -498,6 +500,16 @@ class Atom:
         x, y, z = [float(line[20+8*i:20+8*(i+1)].strip())*10 for i in range(3)]
         return cls(data.format(atomnum, atomname, resname, resnum, x, y, z))
 
+    @classmethod
+    def from_top_entry(cls, entry):
+        data = "ATOM  {:>5d} {:4s} {:4s} {:>4d}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00  0.00"
+        resnum = entry.resid
+        resname = entry.resname
+        atomname = entry.atomname
+        atomnum = entry.num
+        x, y, z = [0, 0, 0]
+        return cls(data.format(atomnum, atomname, resname, resnum, x, y, z))
+
     @property
     def coords(self):
         return [self.x, self.y, self.z]
@@ -511,24 +523,24 @@ class Atom:
 
 
 class Traj(Pdb):
-
-    def __init__(self, structfile=None, compressed_traj=None, top=None, altloc='A', **kwargs):
+    def __init__(self, structfile=None, compressed_traj=None, top=None, array=None, altloc='A', **kwargs):
         super().__init__(structfile, top, altloc, **kwargs)
         self.sfname = structfile
         self.ctfname = compressed_traj
+        self.array = array
         self.box_traj = []
         if self.sfname is None and self.ctfname is None:
             self.coords = [[[]]]
-        elif self.sfname.endswith('.pdb'):
-            if self.sfname is None:
-                self.coords = self.get_coords_from_pdb()
-        elif self.sfname.endswith('.gro'):
-            if self.sfname is None:
-                self.coords = self.get_coords_from_gro()
-        if self.ctfname.endswith('.xtc') and self.sfname is not None:
+        elif self.sfname is None and self.sfname.endswith('.pdb'):
+            self.coords = self.get_coords_from_pdb()
+        elif self.sfname is None and self.sfname.endswith('.gro'):
+            self.coords = self.get_coords_from_gro()
+        if self.ctfname is not None and self.ctfname.endswith('.xtc') and self.sfname is not None:
             import mdtraj as md
             traj = md.load(self.ctfname, top=self.sfname)
             self.coords = [frame.xyz[0] for frame in traj]
+        if self.array and self.coords:
+            self.coords = self.array
         self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
         if self.top and not self.top.pdb:
             self.top.pdb = self
@@ -564,3 +576,20 @@ class Traj(Pdb):
             coords.append(struct.get_coords())
             # TODO extract box size & append to self.box_traj
         return coords
+
+    def __str__(self):
+        if not self.box_traj:
+            text = self._cryst_format.format(*self.box)
+        else:
+            raise NotImplementedError("Variable box size not yet implemented")
+        for frame in range(len(self.coords)):
+            text = text + 'MODEL     {:>4d}\n'.format(frame+1)
+            self.set_coords(self.coords[frame])
+            for atom in self.atoms:
+                text = text + self._write_atom(atom)
+            text = text + 'ENDMDL\n'
+        return text
+
+    def save_traj_as_pdb(self, filename='traj.pdb'):
+        with open(filename, 'w') as outfile:
+            outfile.write(str(self))

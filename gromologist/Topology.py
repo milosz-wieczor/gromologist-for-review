@@ -92,6 +92,12 @@ class Top:
         """
         for mol in self.system.keys():
             print("{:20s}{:>10d}".format(mol, self.system[mol]))
+
+    def clear_ff_params(self, section='all'):
+        used_params = []  # TODO add one more layer to clean atomtypes/pairtypes/nonbondeds
+        for mol in self.molecules:
+            used_params.extend(mol.find_used_ff_params(section=section))
+        self.parameters.clean_unused(used_params, section=section)
     
     def add_pdb(self, pdbfile):
         """

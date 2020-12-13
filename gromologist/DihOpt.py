@@ -222,6 +222,19 @@ class DihOpt:
         call('rm opt{s}/mdout.mdp opt{s}/mod.xvg opt{s}/mod.edr opt{s}/mod.tpr opt{s}/mod.log'.format(s=sys),
              shell=True)
 
+    def plot_fit(self):
+        """
+        If optimization is complete, plots the resulting energy profile against
+        both original MM energies and the QM reference
+        :return: None
+        """
+        import matplotlib.pyplot as plt
+        if self.opt_vals is not None:
+            plt.plot(self.orig_vals, label='original MM')
+            plt.plot(self.opt_vals, label='optimized MM')
+            plt.plot(self.qm_ref, label='QM reference', c='k')
+            plt.show()
+
     @staticmethod
     def write_mdp():
         """

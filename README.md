@@ -1,6 +1,7 @@
 # Gromologist
 
-Gromologist is a package designed to facilitate handling, editing and manipulating GROMACS topology files (.top and .itp).
+Gromologist is a package designed to facilitate handling, editing and manipulating GROMACS topology files 
+(.top and .itp), as well as compatible structures (.pdb and .gro).
 
 ## Installation
 
@@ -9,6 +10,8 @@ the package can be installed into Python by typing `pip install .` in the main G
 If you're using Anaconda, the same will work with `path/to/anaconda/bin/pip`.
 
 ## Usage
+
+##### Reading and writing files
 
 `Top` and `Pdb` are the core classes of the library, and are supposed to provide representation
 for topology and structure objects, respectively. To initialize them, a path to the file
@@ -39,6 +42,15 @@ PDB file md/conf.pdb with 100 atoms
 PDB file md/other.pdb with 105 atoms
 ```
 
+After changes have been made, modified files can be saved:
+
+```
+>>> t.save_top('md/new_topol.top')
+>>> t.pdb.save_pdb('md/new_conf.pdb')
+```
+
+##### File inspection, checks and printing
+
 If `Pdb` is bound to `Top`, a number of diagnostic and fixing options are available,
 including name consistency checks:
 
@@ -63,18 +75,41 @@ With `Pdb.select_atoms()`, selections can be made in a VMD-like manner:
 [5, 60, 72, 88]
 ```
 
-After changes have been made, modified files can be saved:
+Several 'convenience' functions exist to list relevant properties of the topology:
 
 ```
->>> t.save_top('md/new_topol.top')
->>> t.pdb.save_pdb('md/new_conf.pdb')
+>>> t.list_molecules()
+Protein                      1
+Other                        1
+>>> protein = t.molecules[0]
+>>> protein.print_molecule()
+# prints all atoms in the molecule
+>>> protein.list_bonds()
+# lists bonds, labeling bonded atoms by atom name
+>>> protein.list_bonds(by_types=True)
+# lists bonds, labeling bonded atoms by atom type
+>>> protein.list_bonds(by_params=True)
+# lists bonds, adding FF parameter values alongside
 ```
+
+By analogy, the `.list_bonds()` method can be used to `list_angles`, `list_dihedrals`
+and `list_impropers`.
+
+
+##### Producing lightweight files
 
 If the topology contains too many parts irrelevant to the system at hand,
 a leaner version can be produced that lacks unused molecule definitions:
 
 ```
->>> t.clean_sections()
+>>> t.clear_sections()
+```
+
+Similarly, to remove FF parameters that are not used in the molecule definition,
+another 'clearing' method can be used:
+
+```
+>>> t.clear_ff_params()
 ```
 
 To save a 'lightweight' .top file with all contents split into separate .itp files, 
@@ -82,6 +117,28 @@ use the `split` parameter of `Top.save_top`:
 
 ```
 >>> t.save_top('md/new_topol.top', split=True) 
+```
+
+##### Dealing with unspecified 'define' keywords in topologies
+
+If some FF terms are assumed to be defined elsewhere, e.g. in .mdp files, their values
+can be explicitly specified at construction:
+
+```
+>>> t = Top('topol.top', define={'POSRES_FC_BB':400.0})
+```
+
+On the other hand, some `#define` keywords are included in topology files, and are correctly
+read/processed by Gromologist - cf. the case of ILDN dihedral values:
+```
+#define torsion_ILE_N_CA_CB_CG2_mult1 0.0 0.8158800 1  ; Proteins 78, 1950 (2010)
+```
+
+To convert the keywords/variable names (like `torsion_ILE_N_CA_CB_CG2_mult1`) into their corresponding
+values (like `0.0 0.8158800 1`) in the topology at hand, use:
+
+```
+>>> t.explicit_defines()
 ```
 
 ### Editing topologies
@@ -195,6 +252,17 @@ retaining all bonded and nonbonded parameters of the original. This can be done 
 
 This will create a type "YCT" that shares all properties with "CT" but can be modified independently.
 
+##### Adding NBFIX terms
+
+To generate an NBFIX (custom combination rule) entry, use the following snippet:
+
+```
+>>> t.parameters.add_nbfix(type1=CT, type2=HA, mod_sigma=0.01, mod_epsilon=-0.1)
+```
+
+This will introduce a term modifying the CT-HA Lennard-Jones interaction, increasing the default 
+(Lorenz-Berthelot) sigma by 0.01 nm, and decreasing the default epsilon by 0.1 kJ/mol.
+
 ##### Explicitly listing parameters in topology 
 
 To explicitly include all parameters in sections `[ bonds ]`, `[ angles ]` and `[ dihedrals ]`,
@@ -204,6 +272,34 @@ one can use:
 >>> t.add_ff_params()
 >>> t.save_top('with_params.top')
 ```
+
+### Dihedral optimization
+
+With a completed Gaussian dihedral scan results at hand (.log file), we can use Gromologist
+to run dihedral fitting. To select dihedral terms for refinement, add the `DIHOPT` keyword
+anywhere in the dihedral term's comment (as many as you like, within reason) in the `.top` file
+(or in `ffbonded.itp` in the FF directory you're using):
+
+```
+    CT    CT     N     C    9    0.000000   2.217520   1  ; phi,psi,parm94 DIHOPT
+```
+
+To run the optimization, simply use:
+
+```
+>>> from gromologist import DihOpt
+>>> d = DihOpt(top='topol.top', qm_ref='gaussian_scan.log')
+>>> d.optimize()
+```
+
+Upon termination, you will see a brief summary, and the resulting `opt1_topol.top` will 
+contain optimized parameters. You can run `d.plot_fit()` to visualize the results,
+and `d.restart()` to run refinement again starting from the optimized values.
+
+To perform multiple optimizations in parallel, add `processes=N` as a parameter to `DihOpt()`;
+in this case, `N` runs will be initialized with different random seeds, and the best result
+will be kept.
+
 
 ### Editing structures
 

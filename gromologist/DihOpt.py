@@ -33,14 +33,18 @@ class DihOpt:
         """
         self.orig_top = top if isinstance(top, gml.Top) else gml.Top(top, **kwargs)
         self.orig_vals = None
-        self.orig_rmse = None
+        self.best_rmse = None
         self.best_top = self.orig_top
         self.optimizable_params = self.orig_top.parameters.get_opt_dih()
         self.traj = None
         self.frame = None
-        self.opt_vals = None
+        self.lowest_iter_rmse = 1000000
+        self.curr_iter = 0
+        self.opt_results = None
+        self.print_progress = False
         self.all_opts = None
         self.energy_term = 0
+        self.energy_profiles_opt = []
         # TODO so far only works with Gaussian outputs
         qm_unit = qm_unit.lower()
         if qm_unit not in ['kj/mol', 'kcal/mol', 'hartree']:
@@ -78,7 +82,7 @@ class DihOpt:
         :param cleanup: bool, whether to remove all files after the iteration
         :return: np.array, classical (MM) potential energies in kJ/mol for each frame in the trajectory
         """
-        ff_values = self.orig_top.parameters.get_opt_dih() if ff_values is None else ff_values
+        ff_values = self.best_top.parameters.get_opt_dih() if ff_values is None else ff_values
         self.mod_tops[sys].parameters.set_opt_dih(ff_values)
         self.mod_tops[sys].save_top('opt{}/mod.top'.format(sys))
         self.gmx_grompp(sys)
@@ -97,11 +101,17 @@ class DihOpt:
         :param cleanup: bool, whether to remove all files after the iteration
         :return: float, root-mean-square-error (in kJ/mol) between the QM and MM potential energy profiles
         """
-        ff_values = self.orig_top.parameters.get_opt_dih() if ff_values is None else ff_values
+        ff_values = self.best_top.parameters.get_opt_dih() if ff_values is None else ff_values
         energies = self.calc_energy(ff_values, sys, cleanup)
         rmse = [(x-y)**2 for x, y in zip(energies, self.qm_ref) if y < self.cutoff]
         rmse = (sum(rmse)/len(rmse))**0.5
         call('echo {r} >> opt{s}/rmse'.format(s=sys, r=rmse), shell=True)
+        if self.curr_iter % 10 == 0 and int(self.curr_iter) > 0 and self.print_progress:
+            print("Iteration {} in process {}, current lowest RMSE is {}".format(int(self.curr_iter), sys,
+                                                                                 self.lowest_iter_rmse))
+            self.print_progress = False
+        if abs(self.curr_iter % 10) > 0 and not self.print_progress:
+            self.print_progress = True
         return rmse
 
     def get_bounds(self, sys=0):
@@ -124,36 +134,39 @@ class DihOpt:
         """
         # check for imports first
         self.run_count += 1
-        self.orig_vals = self.calc_energy()
-        self.orig_rmse = self.calc_rmse()
+        self.orig_vals = self.calc_energy() if self.orig_vals is None else self.orig_vals
+        self.best_rmse = self.calc_rmse()
+        print("Running optimization in {} process{}, initial RMSE "
+              "is {}".format(self.processes, 'es' if self.processes > 1 else '', self.best_rmse))
         if self.processes == 1:
-            self.opt_vals = dual_annealing(self.calc_rmse, bounds=self.get_bounds(0), maxiter=maxiter,
-                                           x0=self.best_top.parameters.get_opt_dih())
+            self.opt_results = dual_annealing(self.calc_rmse, bounds=self.get_bounds(0), maxiter=maxiter,
+                                              x0=self.best_top.parameters.get_opt_dih(), callback=self.progress)
             # opt_vals = shgo(self.calc_rmse, args=(0,), bounds=self.get_bounds(0), options={'maxev': 1000})
             self.best_top = self.mod_tops[0]
-            self.best_top.save_top('opt{}_topol.top'.format(self.run_count))
-            print("Optimized parameters:\n")
-            print("    RMSE:       {:10.3f}".format(self.opt_vals.fun))
-            print("    Parameters: {}\n".format(self.opt_vals.x))
+            print("\nOptimized parameters:\n")
+            print("    RMSE:       {:10.3f}".format(self.opt_results.fun))
+            print("    Parameters: {}\n".format([round(x, 6) for x in self.opt_results.x]))
             print("Initial parameters:\n")
-            print("    RMSE:       {:10.3f}".format(self.orig_rmse))
-            print("    Parameters: {}\n".format(self.orig_top.molecules.get_opt_dih()))
+            print("    RMSE:       {:10.3f}".format(self.best_rmse))
+            print("    Parameters: {}\n".format([round(x, 6) for x in self.orig_top.parameters.get_opt_dih()]))
         else:
             p = Pool()
             self.all_opts = p.map(mappable, [(i, self, maxiter) for i in range(self.processes)])
             best_model_index = int(np.argmin([q.fun for q in self.all_opts]))
-            print("Obtained {} models with the following RMSE values:\n".format(len(self.all_opts)))
+            self.opt_results = self.all_opts[best_model_index]
+            self.best_top = self.mod_tops[best_model_index]
+            print("\nObtained {} models with the following RMSE values:\n".format(len(self.all_opts)))
             for i in range(len(self.all_opts)):
                 print("    Model {}".format(i))
                 print("    RMSE:       {:10.3f}".format(self.all_opts[i].fun))
-                print("    Parameters: {}\n".format(self.all_opts[i].x))
+                print("    Parameters: {}\n".format([round(x, 6) for x in self.all_opts[i].x]))
             print("Initial parameters:\n")
-            print("    RMSE:       {:10.3f}".format(self.orig_rmse))
-            print("    Parameters: {}\n".format(self.orig_top.molecules.get_opt_dih()))
+            print("    RMSE:       {:10.3f}".format(self.best_rmse))
+            print("    Parameters: {}\n".format([round(x, 6) for x in self.orig_top.parameters.get_opt_dih()]))
             print("Choosing the lowest-RMSE model {}".format(best_model_index))
-            self.opt_vals = self.all_opts[best_model_index]
-            self.best_top = self.mod_tops[best_model_index]
-            self.best_top.save_top('opt{}_topol.top'.format(self.run_count))
+        self.best_top.parameters.set_opt_dih(self.opt_results.x)
+        self.best_top.save_top('opt{}_topol.top'.format(self.run_count))
+        self.energy_profiles_opt.append(self.calc_energy(self.opt_results.x))
 
     def restart(self, maxiter=200):
         """
@@ -213,7 +226,8 @@ class DihOpt:
         self.energy_term = os.popen('cat legend.log | grep Potential | awk \'{for (i=1;i<=NF;i++){if ($i=="Potential")'
                                     ' {print $(i-1)}}}\'').read().strip()
 
-    def cleanup(self, sys=0):
+    @staticmethod
+    def cleanup(sys=0):
         """
         Removes files on-the-fly to prevent errors at 99 backups
         :param sys: int, index of the system
@@ -229,11 +243,20 @@ class DihOpt:
         :return: None
         """
         import matplotlib.pyplot as plt
-        if self.opt_vals is not None:
+        if self.opt_results is not None:
+            plt.clf()
             plt.plot(self.orig_vals, label='original MM')
-            plt.plot(self.opt_vals, label='optimized MM')
+            for n, array in enumerate(self.energy_profiles_opt, 1):
+                plt.plot(array, label='optimized MM (round {})'.format(n))
             plt.plot(self.qm_ref, label='QM reference', c='k')
+            plt.legend()
             plt.show()
+
+    def progress(self, _, f, context):
+        if context in [0, 1, 2]:
+            self.curr_iter += 1.0
+            if f < self.lowest_iter_rmse:
+                self.lowest_iter_rmse = f
 
     @staticmethod
     def write_mdp():
@@ -319,4 +342,4 @@ def mappable(arg):
     """
     sys, dihopt, maxiter = arg
     return dual_annealing(dihopt.calc_rmse, args=(sys, True), bounds=dihopt.get_bounds(0), maxiter=maxiter, seed=sys,
-                          x0=dihopt.mod_tops[0].parameters.get_opt_dih())
+                          x0=dihopt.best_top.parameters.get_opt_dih(), callback=dihopt.progress)

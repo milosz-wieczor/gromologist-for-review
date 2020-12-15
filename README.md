@@ -294,12 +294,17 @@ To run the optimization, simply use:
 
 Upon termination, you will see a brief summary, and the resulting `opt1_topol.top` will 
 contain optimized parameters. You can run `d.plot_fit()` to visualize the results,
-and `d.restart()` to run refinement again starting from the optimized values.
+and `d.restart()` to run refinement again starting from the optimized values. To control how
+exhaustive the optimization is, both `.optimize()` and `.restart()` methods accept a `maxiter=N`
+parameter determining the maximum number of iterations.
 
 To perform multiple optimizations in parallel, add `processes=N` as a parameter to `DihOpt()`;
 in this case, `N` runs will be initialized with different random seeds, and the best result
 will be kept.
 
+With Molywood installed, it is possible to use `d.make_movie()` to produce a movie illustrating
+the structural aspects of the optimization (actively optimized dihedrals are highlighted in green)
+along with a plot of the energy values.
 
 ### Editing structures
 

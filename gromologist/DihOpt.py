@@ -253,6 +253,13 @@ class DihOpt:
             plt.show()
 
     def progress(self, _, f, context):
+        """
+        Constantly updates the curr_iter and lowest_iter_rmse attributes used for reporting
+        :param _: discarded
+        :param f: float, current function value (RMSE)
+        :param context: int, key corresponding to different outcomes in the optimization algorithm
+        :return: None
+        """
         if context in [0, 1, 2]:
             self.curr_iter += 1.0
             if f < self.lowest_iter_rmse:

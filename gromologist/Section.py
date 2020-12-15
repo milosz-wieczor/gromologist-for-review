@@ -807,6 +807,10 @@ class SectionParam(Section):
         ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
         return ss.get_opt_dih()
 
+    def get_opt_dih_indices(self):
+        ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
+        return ss.get_opt_dih_indices()
+
     def set_opt_dih(self, values):
         ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
         ss.set_opt_dih(values)

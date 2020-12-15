@@ -267,8 +267,9 @@ class SubsectionBonded(Subsection):
         """
         int_type = entry.interaction_type
         entry.read_types()
-        for types, params in zip([entry.types_state_a, entry.types_state_b],
-                                 [entry.params_state_a, entry.params_state_b]):
+        for types, params, parmentry in zip([entry.types_state_a, entry.types_state_b],
+                                        [entry.params_state_a, entry.params_state_b],
+                                        [entry.params_state_a_entry, entry.params_state_b_entry]):
             wildcard_present = []
             non_wildcard_present = []
             for subsections in subsect_params:
@@ -277,9 +278,11 @@ class SubsectionBonded(Subsection):
                         is_wildcard = 'X' in parm_entry.types
                         if not wildcard_present and not is_wildcard:
                             params += parm_entry.params
+                            parmentry.append(parm_entry)
                             non_wildcard_present += parm_entry.types
                         elif not wildcard_present and is_wildcard and not non_wildcard_present:
                             params += parm_entry.params
+                            parmentry.append(parm_entry)
                             wildcard_present = parm_entry.types
                         elif wildcard_present and not is_wildcard:
                             raise RuntimeError("Wildcard ('X') entries were found prior to regular ones, please fix"
@@ -287,6 +290,7 @@ class SubsectionBonded(Subsection):
                         elif wildcard_present and is_wildcard:  # only add if multiple entries per given wildcard
                             if parm_entry.types == wildcard_present:
                                 params += parm_entry.params
+                                parmentry.append(parm_entry)
                             else:
                                 pass
         if not entry.params_state_a and entry.subsection.header == 'dihedrals' \
@@ -448,6 +452,17 @@ class SubsectionParam(Subsection):
     def get_opt_dih(self):
         dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]
         return [e.params[x] for e in dopts for x in [0, 1]]
+
+    def get_opt_dih_indices(self):
+        dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]
+        self.section.top.add_ff_params()
+        indices = set()
+        for i in dopts:  # TODO so far only works for one molecule
+            for j in self.section.top.molecules[0].get_subsection('dihedrals'):
+                if isinstance(j, gml.EntryBonded):
+                    if i in j.params_state_a_entry:
+                        indices.add(j.atom_numbers)
+        return list(indices)
 
     def set_opt_dih(self, values):
         dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]

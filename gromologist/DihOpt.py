@@ -331,6 +331,31 @@ class DihOpt:
         self.frame = structfile
         return [2625.5 * x for x in energies]
 
+    def make_movie(self):
+        """
+        Uses Molywood to produce a movie showing the optimization results
+        along with the QM optimization trajectory, highlighting the dihedral
+        being optimized
+        :return: None
+        """
+        dihedrals_indices = self.orig_top.parameters.get_opt_dih_indices()
+        np.savetxt('energies.dat', np.vstack([np.linspace(0, len(self.orig_vals), len(self.orig_vals))] + [self.qm_ref]
+                                             + [self.orig_vals] + self.energy_profiles_opt).T)
+        moly_inp = "$ global fps={} name=dihopt\n$ scene structure={}\n\n#scene\n".format(len(self.orig_vals)/8,
+                                                                                          self.traj)
+        moly_inp = moly_inp + 'highlight selection="all" style=licorice color=type mode=u\n'
+        for dih in dihedrals_indices:
+            moly_inp = moly_inp + 'highlight selection="serial {} {} {} {}" style=licorice thickness=1.1 ' \
+                                  'alpha=0.65 mode=u color=green\n'.format(*dih)
+        moly_inp = moly_inp + 'insert_tcl code="display resetview"\nzoom_out scale=1.5\nanimate frames=0\n'
+        moly_inp = moly_inp + 'do_nothing t=2s\n'
+        moly_inp = moly_inp + '{{animate t=8s frames=0:{}; add_overlay datafile=energies.dat origin=0.65,0.65 ' \
+                              'relative_size=0.35}}\n'.format(len(self.orig_vals))
+        moly_inp = moly_inp + 'do_nothing t=2s\n'
+        with open('moly.inp', 'w') as outfile:
+            outfile.write(moly_inp)
+        call('molywood moly.inp', shell=True)
+
 
 def mappable(arg):
     """

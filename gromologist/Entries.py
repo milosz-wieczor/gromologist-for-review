@@ -104,7 +104,9 @@ class EntryBonded(Entry):
         self.types_state_b = None
         self.atom_names = None
         self.params_state_a = []
+        self.params_state_a_entry = []
         self.params_state_b = []
+        self.params_state_b_entry = []
         self.fstr_mod = []
         if len(self.content) > self.atoms_per_entry + 1:
             try:

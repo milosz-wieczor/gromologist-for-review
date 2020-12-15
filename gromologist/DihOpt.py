@@ -2,17 +2,14 @@ import gromologist as gml
 from copy import deepcopy
 import os
 from subprocess import call
+from multiprocessing import Pool
 
 try:
-    from scipy.optimize import dual_annealing, shgo
+    from scipy.optimize import dual_annealing
 except ImportError:
     pass
 try:
     import numpy as np
-except ImportError:
-    pass
-try:
-    from multiprocessing import Pool
 except ImportError:
     pass
 
@@ -45,6 +42,7 @@ class DihOpt:
         self.all_opts = None
         self.energy_term = 0
         self.energy_profiles_opt = []
+        self.check_imports()
         # TODO so far only works with Gaussian outputs
         qm_unit = qm_unit.lower()
         if qm_unit not in ['kj/mol', 'kcal/mol', 'hartree']:
@@ -72,6 +70,21 @@ class DihOpt:
         self.gen_dirs()
         self.write_mdp()
         self.opt_prof = None
+
+    def check_imports(self):
+        """
+        To keep the lib as lightweight as possible, we're not explicitly requiring scipy/numpy,
+        but to use DihOpt both are required, so here we look for them before running
+        :return: None
+        """
+        try:
+            _ = dual_annealing
+        except NameError:
+            raise ImportError("scipy needed to run dihedral optimization, run 'pip install scipy' in command line")
+        try:
+            _ = np.array
+        except NameError:
+            raise ImportError("numpy needed to run dihedral optimization, run 'pip install numpy' in command line")
 
     def calc_energy(self, ff_values=None, sys=0, cleanup=True):
         """
@@ -325,7 +338,7 @@ class DihOpt:
                     energies.append(energy_tmp)
                 else:
                     raise RuntimeError("Keyword 'Stationary point found' before first 'SCF done' in Gaussian log, check"
-                                       "your QM run")
+                                       " your QM run")
                 read_geo = True
             if read_geo and len(line) > 1 and line[0] == 'Standard' and line[1] == 'orientation:':
                 struct = np.array([[float(line[x]) for x in [3, 4, 5]] for line in log_contents[n+5:n+5+natoms]])
@@ -348,8 +361,8 @@ class DihOpt:
         dihedrals_indices = self.orig_top.parameters.get_opt_dih_indices()
         np.savetxt('energies.dat', np.vstack([np.linspace(0, len(self.orig_vals), len(self.orig_vals))] + [self.qm_ref]
                                              + [self.orig_vals] + self.energy_profiles_opt).T)
-        moly_inp = "$ global fps={} name=dihopt\n$ scene structure={}\n\n#scene\n".format(len(self.orig_vals)/8,
-                                                                                          self.traj)
+        moly_inp = "$ global fps={} name=dihopt\n$ scene structure={} resolution=700,700" \
+                   "\n\n#scene\n".format(len(self.orig_vals)/8, self.traj)
         moly_inp = moly_inp + 'highlight selection="all" style=licorice color=type mode=u\n'
         for dih in dihedrals_indices:
             moly_inp = moly_inp + 'highlight selection="serial {} {} {} {}" style=licorice thickness=1.1 ' \

@@ -273,6 +273,17 @@ one can use:
 >>> t.save_top('with_params.top')
 ```
 
+##### Finding missing parameters in topology
+
+To find FF parameters that are missing (e.g. to include them by analogy, or optimize), run:
+
+```
+>>> t.find_missing_ff_params()
+```
+
+Note that both `add_ff_params()` and `find_missing_ff_params()` have an optional `section` parameter
+that can specify you only want to look at `bonds`, `angles`, `dihedrals` or `impropers`.
+
 ### Dihedral optimization
 
 With a completed Gaussian dihedral scan results at hand (.log file), we can use Gromologist

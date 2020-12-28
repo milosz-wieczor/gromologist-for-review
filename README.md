@@ -5,9 +5,11 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
 
 ## Installation
 
-After cloning to a local repository (`git clone https://gitlab.com/KomBioMol/gromologist.git`),
-the package can be installed into Python by typing `pip install .` in the main Gromologist directory.
-If you're using Anaconda, the same will work with `path/to/anaconda/bin/pip`.
+The latest "official" release can be obtained directly through `pip` by typing `pip install gromologist`.
+
+To get the latest development version, first locally clone the git repo (`git clone https://gitlab.com/KomBioMol/gromologist.git`),
+then install the package into Python by typing `pip install .` in the main Gromologist directory.
+If you're using Anaconda, the same will work with `/path/to/anaconda/bin/pip`.
 
 ## Usage
 

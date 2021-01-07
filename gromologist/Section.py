@@ -1,6 +1,7 @@
 from itertools import product, combinations
 from functools import reduce
 from copy import deepcopy
+from glob import glob
 
 import gromologist as gml
 
@@ -109,6 +110,20 @@ class SectionMol(Section):
         """
         sel = gml.SelectionParser(self)
         return sel(selection_string)  # TODO enable getting atoms' properties
+
+    def select_atom(self, selection_string):
+        """
+        Returns atoms' indices according to the specified selection string
+        :param selection_string: str, a VMD-compatible selection
+        :return: int, 0-based index of atom compatible with the selection
+        """
+        sel = gml.SelectionParser(self)
+        result = sel(selection_string)
+        if len(result) > 1:
+            raise RuntimeError("Selection {} returned more than one atom: {}".format(selection_string, result))
+        elif len(result) < 1:
+            raise RuntimeError("Selection {} returned no atoms".format(selection_string, result))
+        return result[0]
 
     def print_molecule(self):
         sub = self.get_subsection('atoms')
@@ -686,6 +701,101 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
+    def mutate_protein_residue(self, resid, target, rtp=None):
+        if rtp is None:
+            print("Found the following .rtp files:\n")
+            for n, i in enumerate(glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')):
+                print('[', n + 1, '] ', i)
+            rtpnum = input('\nPlease select one that contains the deserved charges and types:\n')
+            try:
+                rtpnum = int(rtpnum)
+            except ValueError:
+                raise RuntimeError('Not an integer: {}'.format(rtpnum))
+            else:
+                rtp = glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')[rtpnum-1]
+        orig = self.atoms[self.select_atom('resid {} and name CA'.format(resid))]
+        mutant = gml.ProteinMutant(orig.resname, target)
+        targ = mutant.target_3l
+        atoms_add, hooks, _, _, extra_bonds = mutant.atoms_to_add()
+        atoms_remove = mutant.atoms_to_remove()
+        atoms_orig, atoms_target = mutant.atoms_to_mutate()
+        types, charges, impropers, improper_type = self.parse_rtp(rtp)
+        if targ == 'HIS':
+            targ = 'HSD' if ('HSD', 'CA') in types.keys() else 'HID'
+        impropers_to_add = []
+        impr_sub = self.get_subsection('impropers')
+        atoms_sub = self.get_subsection('atoms')
+        for at in atoms_remove:
+            print("Removing atom {} from resid {}".format(at, resid))
+            atnum = self.select_atom('resid {} and name {}'.format(resid, at))
+            self.del_atom(self.atoms[atnum].num)
+        for atom_add, hook in zip(atoms_add, hooks):
+            print("Adding atom {} to resid {}".format(atom_add, resid))
+            hooksel = 'resid {} and name {}'.format(resid, hook)
+            hnum = self.atoms[self.select_atom(hooksel)].num
+            atnum = hnum + 1
+            self.add_atom(atnum, atom_add, atom_type=types[(targ, atom_add)], charge=charges[(targ, atom_add)],
+                          resid=orig.resid, resname=targ, mass=None)
+            self.add_bond(hnum, atnum)
+            for i in impropers[targ]:
+                if atom_add in i and i not in impropers_to_add:
+                    impropers_to_add.append(i)
+        for at_or, at_tg in zip(atoms_orig, atoms_target):
+            to_change = self.atoms[self.select_atom('resid {} and name {}'.format(resid, at_or))]
+            to_change.atomname = at_tg
+            to_change.type = types[(targ, at_tg)]
+            to_change.charge = charges[(targ, at_tg)]
+        atoms_sub.get_dicts(force_update=True)
+        for imp in impropers_to_add:
+            if set(imp).intersection(set(atoms_add)):
+                numbers = [atoms_sub.name_to_num[(resid, at)] for at in imp]
+                impr_sub.add_entry('{:5d} {:5d} {:5d} {:5d} {:>5s}\n'.format(*numbers, improper_type),
+                                   position=1+[n for n, e in enumerate(impr_sub) if isinstance(e, gml.EntryBonded)][-1])
+        for atom in self.select_atoms('resid {}'.format(resid)):
+            self.atoms[atom].resname = targ
+        for bond in extra_bonds:
+            xsel = 'resid {} and name {}'.format(resid, bond[0])
+            ysel = 'resid {} and name {}'.format(resid, bond[1])
+            xnum = self.atoms[self.select_atom(xsel)].num
+            ynum = self.atoms[self.select_atom(ysel)].num
+            self.add_bond(xnum, ynum)
+
+    @staticmethod
+    def parse_rtp(rtp):
+        chargedict, typedict = {}, {}
+        impropers = {}
+        bondedtypes = 0
+        rtp_cont = [l for l in open(rtp) if not l.strip().startswith(';')]
+        resname = None
+        reading_atoms = False
+        reading_impropers = False
+        reading_bondedtypes = False
+        for line in rtp_cont:
+            if line.strip().startswith('[') and line.strip().split()[1] not in ['bondedtypes', 'atoms', 'bonds', 'impropers']:
+                resname = line.strip().split()[1]
+            if line.strip().startswith('[') and line.strip().split()[1] == 'atoms':
+                reading_atoms = True
+            if line.strip().startswith('[') and line.strip().split()[1] != 'atoms':
+                reading_atoms = False
+            if line.strip().startswith('[') and line.strip().split()[1] == 'impropers':
+                reading_impropers = True
+            if line.strip().startswith('[') and line.strip().split()[1] != 'impropers':
+                reading_impropers = False
+            if line.strip().startswith('[') and line.strip().split()[1] == 'bondedtypes':
+                reading_bondedtypes = True
+            if line.strip().startswith('[') and line.strip().split()[1] != 'bondedtypes':
+                reading_bondedtypes = False
+            if len(line.strip().split()) > 3 and resname is not None and reading_atoms:
+                typedict[(resname, line.strip().split()[0])] = line.strip().split()[1]
+                chargedict[(resname, line.strip().split()[0])] = float(line.strip().split()[2])
+            if len(line.strip().split()) > 3 and resname is not None and reading_impropers:
+                if resname not in impropers.keys():
+                    impropers[resname] = []
+                impropers[resname].append(line.strip().split())
+            if len(line.strip().split()) > 7 and resname is None and reading_bondedtypes:
+                bondedtypes = line.strip().split()[3]
+        return typedict, chargedict, impropers, bondedtypes
+
     def list_bonds(self, by_types=False, by_params=False):
         self._list_bonded('bonds', by_types, by_params)
 
@@ -715,6 +825,47 @@ class SectionMol(Section):
                     print((formatstring[term] + extra).format(*entry.atom_names, *params))
                 else:
                     print((formatstring[term] + extra).format(*entry.types_state_a, *params))
+
+    def alch_h_to_ch3(self, resid, orig_name, basename, ctype=None, htype=None, ccharge=None, hcharge=0.09, dummy_type='DH'):
+        if ctype is None or htype is None:
+            print("Which atomtypes should be used for the methyl group:\n")
+            print("[ 1 ] CT/HC (Amber methyl)")
+            print("[ 2 ] CT3/HA3 (Charmm methyl)")
+            print("[ X/Y ] Use type X for carbon, type Y for hydrogen")
+            sel = input("\n Please provide your selection:\n")
+            if sel == '1':
+                ctype, htype = 'CT', 'HC'
+            elif sel == '2':
+                ctype, htype = 'CT3', 'HA3'
+            elif '/' in sel:
+                ctype, htype = sel.split('/')
+            else:
+                raise RuntimeError("{} is not a valid selection".format(sel))
+        self.add_dummy_def(dummy_type)
+        orig = self.atoms[self.select_atoms('resid {}'.format(resid))[0]]
+        ccharge = ccharge if ccharge is not None else round(orig.charge - 0.27, 4)
+        atoms_add, hooks = [basename.replace('C', 'H') + str(i) for i in range(3)], 3 * [orig_name]
+        for n, atom_add_hook in enumerate(zip(atoms_add, hooks), 1):
+            atom_add, hook = atom_add_hook
+            print("Adding atom {} to resid {}".format(atom_add, resid))
+            hooksel = 'resid {} and name {}'.format(resid, orig_name)
+            hnum = self.atoms[self.select_atom(hooksel)].num
+            atnum = hnum + n
+            self.add_atom(atnum, atom_add, atom_type=dummy_type, charge=0, resid=resid, resname=orig.resname, mass=1.008)
+            self.add_bond(hnum, atnum)
+            self.gen_state_b(atomname=atom_add, resid=resid, new_type=htype, new_charge=hcharge, new_mass=1.008)
+        self.gen_state_b(atomname=orig_name, resid=resid, new_type=ctype, new_charge=ccharge, new_mass=12.0)
+
+    def add_dummy_def(self, dummy_type):
+        params = self.top.parameters
+        atomtypes = params.get_subsection('atomtypes')
+        dummy_entries = [e for e in atomtypes if isinstance(e, gml.EntryParam) and e.types[0] == dummy_type]
+        if not dummy_entries:
+            atomtypes.add_entry('   {}     0        1.008  0.0000  A  0.000000000000  0.0000  \n'.format(dummy_type))
+
+    def make_stateB_dummy(self, resid, orig_name, dummy_type='DH'):
+        self.add_dummy_def(dummy_type)
+        self.gen_state_b(atomname=orig_name, resid=resid, new_type=dummy_type, new_charge=0, new_mass=1.008)
 
 
 class SectionParam(Section):

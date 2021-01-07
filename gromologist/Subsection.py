@@ -550,13 +550,13 @@ class SubsectionAtom(Subsection):
         """
         return len([e for e in self.entries if isinstance(e, gml.EntryAtom)])
 
-    def get_dicts(self):
+    def get_dicts(self, force_update=False):
         """
         dicts are not always needed and are costly to calculate,
         so only fill in the values when explicitly asked to
         :return: None
         """
-        if not self.name_to_num:
+        if not self.name_to_num or force_update:
             self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
 
     def _mol_type_nums(self):
@@ -570,7 +570,7 @@ class SubsectionAtom(Subsection):
         name_to_num, num_to_name, num_to_type, num_to_type_b = {}, {}, {}, {}
         for entry in self:
             if isinstance(entry, gml.EntryAtom):
-                name_to_num[entry.atomname] = entry.num
+                name_to_num[(entry.resid, entry.atomname)] = entry.num
                 num_to_name[entry.num] = entry.atomname
                 num_to_type[entry.num] = entry.type
                 num_to_type_b[entry.num] = entry.type_b if entry.type_b is not None else entry.type

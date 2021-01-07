@@ -18,9 +18,9 @@ class Top:
         """
         # TODO maybe allow for construction of a blank top with a possibility to read data later?
         if not gmx_dir:
-            self._gromacs_dir = self._find_gmx_dir()
+            self.gromacs_dir = self.find_gmx_dir()
         else:
-            self._gromacs_dir = gmx_dir
+            self.gromacs_dir = gmx_dir
         self.pdb = None
         self.pdb = None if pdb is None else gml.Pdb(pdb, top=self)
         self.fname = filename
@@ -51,7 +51,7 @@ class Top:
         return instance
     
     @staticmethod
-    def _find_gmx_dir():
+    def find_gmx_dir():
         """
         Attempts to find Gromacs internal files to fall back to
         when default .itp files are included using the
@@ -186,8 +186,8 @@ class Top:
         suff = filename.split('/')[-1]
         if os.path.isfile(self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
             return self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
-        elif os.path.isfile(self._gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
-            return self._gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
+        elif os.path.isfile(self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
+            return self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
         else:
             raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'
                                     'If the file is included in an #ifdef/#ifndef block, please try setting'

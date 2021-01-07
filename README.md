@@ -70,6 +70,12 @@ using topology ordering as a template:
 >>> t.pdb.match_order_by_top_names()
 ```
 
+Missing atoms in (standard) protein residues can also be identified rapidly:
+
+```
+>>> t.pdb.find_missing()
+```
+
 With `Pdb.select_atoms()`, selections can be made in a VMD-like manner:
 
 ```

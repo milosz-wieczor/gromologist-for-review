@@ -237,14 +237,17 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             self.atoms[n].resnum = count
             count = temp
 
-    def reposition_atom_from_hook(self, atomsel, hooksel, bondlength, p1_sel, p2_sel):
-        assert 1 == len(self.select_atoms(atomsel)) == len(self.select_atoms(hooksel))
-        assert 1 == len(self.select_atoms(p1_sel)) == len(self.select_atoms(p2_sel))
-        movable = self.atoms[self.select_atoms(atomsel)[0]]
-        hook_xyz = self.get_coords()[self.select_atoms(hooksel)[0]]
-        p1_xyz = self.get_coords()[self.select_atoms(p1_sel)[0]]
-        p2_xyz = self.get_coords()[self.select_atoms(p2_sel)[0]]
-        vec = [x2 - x1 for x1, x2 in zip(p1_xyz, p2_xyz)]
+    def reposition_atom_from_hook(self, atomsel, hooksel, bondlength, p1_sel=None, p2_sel=None, vector=None):
+        if p1_sel is not None and p2_sel is not None:
+            p1_xyz = self.get_coords()[self.select_atom(p1_sel)]
+            p2_xyz = self.get_coords()[self.select_atom(p2_sel)]
+            vec = [x2 - x1 for x1, x2 in zip(p1_xyz, p2_xyz)]
+        elif vector is not None:
+            vec = vector
+        else:
+            raise RuntimeError("In repositioning, please use either p1/p2 selections or specify the vector")
+        movable = self.atoms[self.select_atom(atomsel)]
+        hook_xyz = self.get_coords()[self.select_atom(hooksel)]
         vec_len = sum([x**2 for x in vec])**0.5
         scale = bondlength/vec_len
         movable.set_coords([h + scale*v for h, v in zip(hook_xyz, vec)])
@@ -286,7 +289,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                     index += 1
         self.atoms = new_atoms
     
-    def insert_atom(self, index, base_atom, **kwargs):
+    def insert_atom(self, index, base_atom, atomsel=None, hooksel=None, bondlength=None, p1_sel=None, p2_sel=None,
+                    vector=None, **kwargs):
         """
         Inserts an atom into the atomlist. The atom is defined by
         providing a base Atom instance and a number of keyworded modifiers,
@@ -302,6 +306,9 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 raise ValueError("{} is not a valid Atom attribute")
             new_atom.__setattr__(kw, kwargs[kw])
         self.atoms.insert(index, new_atom)
+        if (atomsel is not None and hooksel is not None and bondlength is not None and ((p1_sel is not None and
+                p2_sel is not None) or vector is not None)):
+            self.reposition_atom_from_hook(atomsel, hooksel, bondlength, p1_sel, p2_sel, vector)
     
     def delete_atom(self, serial, renumber=False):
         num = [n for n, a in enumerate(self.atoms) if a.serial == serial]
@@ -317,6 +324,15 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
     def select_atoms(self, selection_string):
         sel = gml.SelectionParser(self)
         return sel(selection_string)
+
+    def select_atom(self, selection_string):
+        sel = gml.SelectionParser(self)
+        result = sel(selection_string)
+        if len(result) > 1:
+            raise RuntimeError("Selection {} returned more than one atom: {}".format(selection_string, result))
+        elif len(result) < 1:
+            raise RuntimeError("Selection {} returned no atoms".format(selection_string, result))
+        return result[0]
     
     def same_residue_as(self, query_iter):
         new_list = []
@@ -336,6 +352,10 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
     @staticmethod
     def _atoms_dist(at1, at2):
         return ((at2.x - at1.x)**2 + (at2.y - at1.y)**2 + (at2.z - at1.z)**2)**0.5
+
+    @staticmethod
+    def _atoms_vec(at1, at2):
+        return at2.x - at1.x, at2.y - at1.y, at2.z - at1.z
         
     @staticmethod
     def _parse_contents(contents):
@@ -352,6 +372,57 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             if line.startswith('END') or line.startswith('ENDMDL'):
                 break
         return atoms, tuple(box), remarks
+
+    def mutate_protein_residue(self, resid, target, chain=''):
+        self.renumber_atoms()
+        chstr = 'chain {} and '.format(chain) if chain else ''
+        orig = self.atoms[self.select_atom('{}resid {} and name CA'.format(chstr, resid))]
+        mutant = gml.ProteinMutant(orig.resname, target)
+        atoms_add, hooks, geo_refs, bond_lengths, _ = mutant.atoms_to_add()
+        atoms_remove = mutant.atoms_to_remove()
+        atoms_orig, atoms_target = mutant.atoms_to_mutate()
+        # TODO check stereochemistry for THR and ILE
+        for at in atoms_remove:
+            print("Removing atom {} from resid {}".format(at, resid))
+            atnum = self.select_atom('{}resid {} and name {}'.format(chstr, resid, at))
+            _ = self.atoms.pop(atnum)
+        for atom_add, hook, geo_ref, bond_length in zip(atoms_add, hooks, geo_refs, bond_lengths):
+            print("Adding atom {} to resid {}".format(atom_add, resid))
+            for n in range(len(geo_ref)):
+                if isinstance(geo_ref[n], tuple):
+                    for i in geo_ref[n]:
+                        try:
+                            self.select_atom('{}resid {} and name {}'.format(chstr, resid, i))
+                        except RuntimeError:
+                            continue
+                        else:
+                            geo_ref[n] = i
+                            break
+            hooksel = '{}resid {} and name {}'.format(chstr, resid, hook)
+            atomsel = '{}resid {} and name {}'.format(chstr, resid, atom_add)
+            hindex = self.atoms[self.select_atom(hooksel)].serial
+            if len(geo_ref) == 2:
+                p1sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[0])
+                p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])
+                self.insert_atom(hindex+1, self.atoms[hindex], atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
+                                 p1_sel=p1sel, p2_sel=p2sel, atomname=atom_add)
+            else:
+                vec = self._vector(geo_ref, resid, chain)
+                self.insert_atom(hindex+1, self.atoms[hindex], atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
+                                 vector=vec, atomname=atom_add)
+        for orig, targ in zip(atoms_orig, atoms_target):
+            atomsel = '{}resid {} and name {}'.format(chstr, resid, orig)
+            self.atoms[self.select_atom(atomsel)].atomname = targ
+        # TODO change resname
+        self.renumber_atoms()
+
+    def _vector(self, atnames, resid, chain):
+        chstr = 'chain {} and '.format(chain) if chain else ''
+        indices = [self.select_atom('{}resid {} and name {}'.format(chstr, resid, at)) for at in atnames]
+        vecs = [self._atoms_vec(self.atoms[indices[0]], self.atoms[q]) for q in indices[1:]]
+        nv = len(vecs)
+        f = -1 if nv == 3 else 1
+        return f*sum(v[0] for v in vecs)/nv, f*sum(v[1] for v in vecs)/nv, f*sum(v[2] for v in vecs)/nv
 
     @staticmethod
     def _parse_contents_gro(contents):

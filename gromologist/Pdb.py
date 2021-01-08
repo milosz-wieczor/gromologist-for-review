@@ -380,8 +380,6 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         mutant = gml.ProteinMutant(orig.resname, target)
         atoms_add, hooks, geo_refs, bond_lengths, _ = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
-        atoms_orig, atoms_target = mutant.atoms_to_mutate()
-        # TODO check stereochemistry for THR and ILE
         for at in atoms_remove:
             print("Removing atom {} from resid {}".format(at, resid))
             atnum = self.select_atom('{}resid {} and name {}'.format(chstr, resid, at))
@@ -410,10 +408,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 vec = self._vector(geo_ref, resid, chain)
                 self.insert_atom(hindex+1, self.atoms[hindex], atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
                                  vector=vec, atomname=atom_add)
-        for orig, targ in zip(atoms_orig, atoms_target):
-            atomsel = '{}resid {} and name {}'.format(chstr, resid, orig)
-            self.atoms[self.select_atom(atomsel)].atomname = targ
-        # TODO change resname
+        for atom in self.select_atoms('{}resid {}'.format(chstr, resid)):
+            self.atoms[atom].resname = mutant.target_3l
         self.renumber_atoms()
 
     def _vector(self, atnames, resid, chain):

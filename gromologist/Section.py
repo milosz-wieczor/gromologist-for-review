@@ -718,7 +718,6 @@ class SectionMol(Section):
         targ = mutant.target_3l
         atoms_add, hooks, _, _, extra_bonds = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
-        atoms_orig, atoms_target = mutant.atoms_to_mutate()
         types, charges, impropers, improper_type = self.parse_rtp(rtp)
         if targ == 'HIS':
             targ = 'HSD' if ('HSD', 'CA') in types.keys() else 'HID'
@@ -740,11 +739,6 @@ class SectionMol(Section):
             for i in impropers[targ]:
                 if atom_add in i and i not in impropers_to_add:
                     impropers_to_add.append(i)
-        for at_or, at_tg in zip(atoms_orig, atoms_target):
-            to_change = self.atoms[self.select_atom('resid {} and name {}'.format(resid, at_or))]
-            to_change.atomname = at_tg
-            to_change.type = types[(targ, at_tg)]
-            to_change.charge = charges[(targ, at_tg)]
         atoms_sub.get_dicts(force_update=True)
         for imp in impropers_to_add:
             if set(imp).intersection(set(atoms_add)):

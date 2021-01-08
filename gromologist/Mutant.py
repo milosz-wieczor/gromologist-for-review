@@ -24,17 +24,11 @@ class ProteinMutant:
         target_gps = self.aminoacids(self.name[-1])
         self.remove_from_orig = []
         self.add_to_target = []
-        self.mutate_from = []
-        self.mutate_to = []
         length = max(len(orig_gps), len(target_gps))
         for i in range(length):
             orig = orig_gps[i] if i < len(orig_gps) else False
             targ = target_gps[i] if i < len(target_gps) else False
-            if orig != targ:
-                if orig and targ and self.compatible(orig, targ):
-                    f, t = self.compatible_equivalents(orig, targ)
-                    self.mutate_from.extend(f)
-                    self.mutate_to.extend(t)
+            if orig != targ or target_1l in 'IT':
                 if orig:
                     self.remove_from_orig.append(orig)
                 if targ:
@@ -52,12 +46,10 @@ class ProteinMutant:
             ganchors = self.anchors(i)
             topo_bonds.extend(self.ring_closing_bonds(i))
             for n, j in enumerate(gatoms):
-                if j not in self.mutate_to:
-                    atoms.append(j)
-                    geo_refs.append(ganchors[n])
-                if gbonds[n][1] not in self.mutate_to:
-                    hooks.append(gbonds[n][0])
-                    bond_lengths.append(self.bond_lengths(gbonds[n]))
+                atoms.append(j)
+                geo_refs.append(ganchors[n])
+                hooks.append(gbonds[n][0])
+                bond_lengths.append(self.bond_lengths(gbonds[n]))
         return atoms, hooks, geo_refs, bond_lengths, topo_bonds
 
     def atoms_to_remove(self):
@@ -65,30 +57,27 @@ class ProteinMutant:
         for i in self.remove_from_orig:
             gatoms = self.groups(i)
             for j in gatoms:
-                if j not in self.mutate_from:
-                    atoms.append(j)
+                atoms.append(j)
         return atoms
-
-    def atoms_to_mutate(self):
-        return self.mutate_from, self.mutate_to
 
     @staticmethod
     def groups(key):
         gdict = {'CB': ['CB', 'HB1', 'HB2'], 'CG': ['CG', 'HG1', 'HG2'], 'CD': ['CD', 'HD1', 'HD2'],
-                 'HA': ['HA2'], 'HB': ['HB3'], 'HD': ['HD3'], 'BM': ['CB', 'HB', 'CG2', 'HG21', 'HG22', 'HG23'],
+                 'HA': ['HA2'], 'HB': ['HB3'], 'HD': ['HD3'], 'BM': ['CB', 'HB1', 'CG2', 'HG21', 'HG22', 'HG23'],
                  'SH': ['SG', 'HG'], 'OH': ['OG', 'HG'], 'CO': ['CG', 'OD1', 'OD2'], 'DO': ['CD', 'OE1', 'OE2'],
                  'AM': ['CG', 'OD1', 'ND2', 'HD21', 'HD22'], 'AN': ['CD', 'OE1', 'NE2', 'HE21', 'HE22'],
                  'AR': ['CG', 'CD1', 'HD1', 'CD2', 'HD2', 'CE1', 'HE1', 'CE2', 'HE2', 'CZ'], 'HG': ['HG3'],
                  'HZ': ['HZ'], 'LH': ['CG', 'HG', 'CD2', 'HD21', 'HD22', 'HD23'], 'OY': ['OH', 'HH'],
                  'SM': ['SD', 'CE', 'HE1', 'HE2', 'HE3'], 'KH': ['CE', 'HE1', 'HE2', 'NZ', 'HZ1', 'HZ2', 'HZ3'],
-                 'HR': ['CG', 'ND1', 'CD2', 'HD2', 'CE1', 'NE2', 'HE1', 'HD1']
+                 'HR': ['CG', 'ND1', 'CD2', 'HD2', 'CE1', 'NE2', 'HE1', 'HD1'],
+                 'RH': ['NE', 'HE', 'CZ', 'NH1', 'HH11', 'HH12', 'NH2', 'HH21', 'HH22']
                  }
         return gdict[key]
 
     @staticmethod
     def bonds(key):
         bonds = {'CB': [('CA', 'CB'), ('CB', 'HB1'), ('CB', 'HB2')], 'CG': [('CB', 'CG'), ('CG', 'HG1'), ('CG', 'HG2')],
-                 'CD': [('CG', 'CD'), ('CD', 'HD1'), ('CD', 'HD2')], 'BM': [('CA', 'CB'), ('CB', 'HB'), ('CB', 'CG2'),
+                 'CD': [('CG', 'CD'), ('CD', 'HD1'), ('CD', 'HD2')], 'BM': [('CA', 'CB'), ('CB', 'HB1'), ('CB', 'CG2'),
                  ('CG2', 'HG21'), ('CG2', 'HG22'), ('CG2', 'HG23')], 'SH': [('CB', 'SG'), ('SG', 'HG')],
                  'OH': [('CB', 'OG'), ('OG', 'HG')], 'CO': [('CB', 'CG'), ('CG', 'OD1'), ('CG', 'OD2')],
                  'DO': [('CG', 'CD'), ('CD', 'OE1'), ('CD', 'OE2')], 'AM': [('CB', 'CG'), ('CG', 'OD1'), ('CG', 'ND2'),
@@ -100,7 +89,9 @@ class ProteinMutant:
                  'KH': [('CD', 'CE'), ('CE', 'HE1'), ('CE', 'HE2'), ('CE', 'NZ'), ('NZ', 'HZ1'), ('NZ', 'HZ2'), ('NZ', 'HZ3')],
                  'HZ': [('CZ', 'HZ')], 'HA': [('CA', 'HA2')], 'HD': [('CD', 'HD3')], 'HG': [('CG', 'HG3')],
                  'HR': [('CB', 'CG'), ('CG', 'ND1'), ('CG', 'CD2'), ('CD2', 'HD2'), ('ND1', 'CE1'),
-                        ('CD2', 'NE2'), ('CE1', 'HE1'), ('ND1', 'HD1')]}
+                        ('CD2', 'NE2'), ('CE1', 'HE1'), ('ND1', 'HD1')],
+                 'RH': [('CD', 'NE'), ('NE', 'HE'), ('NE', 'CZ'), ('CZ', 'NH1'), ('NH1', 'HH11'), ('NH1', 'HH12'),
+                        ('CZ', 'NH2'), ('NH2', 'HH21'), ('NH2', 'HH22')]}
         return bonds[key]
 
     @staticmethod
@@ -109,7 +100,7 @@ class ProteinMutant:
         anchors = {'CB': [['CA', 'HA', 'C', 'N'], ['N', 'CA'], ['HA', 'CA']], 'CG': [['CB', 'CA', 'HB1', ('HB2', 'CG2')], [('HB2', 'CG2'), 'CB'],
                    ['HB1', 'CB']], 'CD': [['CG', 'CB', ('HG1', 'HG'), ('HG2', 'CD2')], [('HG2', 'CD2'), 'CG'], [('HG1', 'HG'), 'CG']],
                    'HA': [['CA', 'N', 'C', ('HA1', 'HA')]], 'HB': [['CB', 'CA', 'HB1', 'HB2']], 'HD': [['CD', 'CG', 'HD1', 'HD2']],
-                   'BM': [['CA', 'HA', 'C', 'N'], ['N', 'CA'], ['HA', 'CA'], ['CA', 'CB'], ['CA', 'C'], ['CA', 'N']],
+                   'BM': [['CA', 'HA', 'C', 'N'], ['C', 'CA'], ['HA', 'CA'], ['CA', 'CB'], ['CA', 'C'], ['CA', 'N']],
                    'SH': [['CB', 'CA', 'HB1', 'HB2'], ['CA', 'CB']], 'OH': [['CB', 'CA', 'HB1', ('HB2', 'CG2')], ['CA', 'CB']],
                    'CO': [['CB', 'CA', 'HB1', 'HB2'], ['CA', 'CB'], ['CG', 'CG', 'CB', 'OD1']],
                    'DO': [['CG', 'CB', 'HG1', 'HG2'], ['CB', 'CG'], ['CD', 'CD', 'CG', 'OE1']],
@@ -125,13 +116,16 @@ class ProteinMutant:
                    'KH': [['CB', 'CG'], ['CG', 'HG1'], ['CG', 'HG2'], ['CG', 'CD'], ['CD', 'CE'], ['CD', 'HD1'], ['CD', 'HD2']],
                    'HR': [['CB', 'CA', 'HB1', 'HB2'], ['CB', 'HB1', 'HB1', 'CA', 'CG', 'CG', 'HB1', 'HB1', 'CA', 'CG'],
                           ['CB', 'HB2', 'HB2', 'CA', 'CG', 'CG', 'HB2', 'HB2', 'CA', 'CG'], ['CG', 'CD2', 'CB'],
-                          ['CB', 'CG', 'CD2'], ['CB', 'CG', 'ND1'], ['CE1', 'CE1', 'ND1', 'NE2'], ['ND1', 'ND1', 'CG', 'CE1']]}
+                          ['CB', 'CG', 'CD2'], ['CB', 'CG', 'ND1'], ['CE1', 'CE1', 'ND1', 'NE2'], ['ND1', 'ND1', 'CG', 'CE1']],
+                   'RH': [['CD', 'HD1', 'HD2', 'CG'], ['CD', 'NE', 'CG'], ['CG', 'CD'], ['CD', 'NE'], ['NE', 'CZ'], ['NE', 'HE'],
+                          ['HE', 'NE'], ['NE', 'CZ'], ['NE', 'CD']]
+                   }
         return anchors[key]
 
     @staticmethod
     def ring_closing_bonds(key):
         bonds = {'AR': [('CE2', 'CZ')], 'HR': [('CE1', 'NE2')]}
-        return bonds[key]
+        return bonds[key] if key in bonds.keys() else []
 
     @staticmethod
     def aminoacids(key):
@@ -139,30 +133,8 @@ class ProteinMutant:
               'G': ['HA'], 'H': ['CB', 'HR'], 'I': ['BM', 'CG', 'CD', 'HD'], 'K': ['CB', 'CG', 'CD', 'KH'],
               'L': ['CB', 'LH', 'CD', 'HD'], 'M': ['CB', 'CG', 'SM'], 'N': ['CB', 'AM'], 'Q': ['CB', 'CG', 'AN'],
               'R': ['CB', 'CG', 'CD', 'RH'], 'S': ['CB', 'OH'], 'T': ['BM', 'OH'], 'V': ['BM', 'CG', 'HG'],
-              'Y': ['CB', 'AR', 'OY']}
+              'W': ['CB', 'WR'], 'Y': ['CB', 'AR', 'OY']}
         return aa[key]
-
-    @staticmethod
-    def compatible(k1, k2):
-        comps = {('CB', 'BM'), ('CG', 'SH'), ('CG', 'OH'), ('CG', 'LH'), ('CO', 'AM'), ('AM', 'SH'), ('AM', 'OH'),
-                 ('CO', 'SH'), ('CO', 'OH'), ('AN', 'DO'), }
-        if (k1, k2) in comps or (k2, k1) in comps:
-            return True
-        return False
-
-    @staticmethod
-    def compatible_equivalents(k1, k2):
-        ar = {('CB', 'BM'): [('CB', 'CB'), ('HB1', 'HB')], ('CG', 'SH'): [('CG', 'SG'), ('HG1', 'HG')],
-              ('CG', 'OH'): [('CG', 'OG'), ('HG1', 'HG')], ('CG', 'LH'): [('CG', 'CG'), ('HG1', 'HG')],
-              ('CO', 'AM'): [('CG', 'CG'), ('OD1', 'OD1'), ('OD2', 'ND2')],
-              ('DO', 'AN'): [('CD', 'CD'), ('OE1', 'OE1'), ('OE2', 'NE2')], ('AM', 'SH'): [('CG', 'SG')],
-              ('AM', 'OH'): [('CG', 'OG')], ('CO', 'SH'): [('CG', 'SG')], ('CO', 'OH'): [('CG', 'OG')], }
-        try:
-            x = ar[(k1, k2)]
-            return [a[0] for a in x], [a[1] for a in x]
-        except KeyError:
-            x = ar[(k2, k1)]
-            return [a[1] for a in x], [a[0] for a in x]
 
     @staticmethod
     def bond_lengths(bonded_pair):

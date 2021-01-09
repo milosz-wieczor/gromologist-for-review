@@ -26,6 +26,11 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
     def __repr__(self):
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
 
+    def add_top(self, top, **kwargs):
+        self.top = gml.Top(top, **kwargs)
+        if self.top and not self.top.pdb:
+            self.top.pdb = self
+
     @classmethod
     def from_selection(cls, pdb, selection):
         selected_indices = pdb.select_atoms(selection)
@@ -378,14 +383,14 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         chstr = 'chain {} and '.format(chain) if chain else ''
         orig = self.atoms[self.select_atom('{}resid {} and name CA'.format(chstr, resid))]
         mutant = gml.ProteinMutant(orig.resname, target)
-        atoms_add, hooks, geo_refs, bond_lengths, _ = mutant.atoms_to_add()
+        atoms_add, hooks, geo_refs, bond_lengths, _, afters = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
         for at in atoms_remove:
-            print("Removing atom {} from resid {}".format(at, resid))
+            print("Removing atom {} from resid {} in structure".format(at, resid))
             atnum = self.select_atom('{}resid {} and name {}'.format(chstr, resid, at))
             _ = self.atoms.pop(atnum)
-        for atom_add, hook, geo_ref, bond_length in zip(atoms_add, hooks, geo_refs, bond_lengths):
-            print("Adding atom {} to resid {}".format(atom_add, resid))
+        for atom_add, hook, geo_ref, bond_length, aft in zip(atoms_add, hooks, geo_refs, bond_lengths, afters):
+            print("Adding atom {} to resid {} in structure".format(atom_add, resid))
             for n in range(len(geo_ref)):
                 if isinstance(geo_ref[n], tuple):
                     for i in geo_ref[n]:
@@ -396,18 +401,39 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                         else:
                             geo_ref[n] = i
                             break
+            if isinstance(hook, tuple):
+                for hk in hook:
+                    try:
+                        _ = self.select_atom('{}resid {} and name {}'.format(chstr, resid, hk))
+                    except RuntimeError:
+                        continue
+                    else:
+                        hook = hk
+                        break
             hooksel = '{}resid {} and name {}'.format(chstr, resid, hook)
             atomsel = '{}resid {} and name {}'.format(chstr, resid, atom_add)
-            hindex = self.atoms[self.select_atom(hooksel)].serial
+            if isinstance(aft, tuple):
+                for n, af in enumerate(aft):
+                    try:
+                        _ = self.select_atom('{}resid {} and name {}'.format(chstr, resid, af))
+                    except RuntimeError:
+                        continue
+                    else:
+                        aftnr = self.select_atom('{}resid {} and name {}'.format(chstr, resid, af))
+                        break
+            else:
+                aftnr = self.select_atom('{}resid {} and name {}'.format(chstr, resid, aft))
+            hindex = self.select_atom(hooksel)
             if len(geo_ref) == 2:
                 p1sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[0])
                 p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])
-                self.insert_atom(hindex+1, self.atoms[hindex], atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
+                self.insert_atom(aftnr+1, self.atoms[hindex], atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
                                  p1_sel=p1sel, p2_sel=p2sel, atomname=atom_add)
             else:
                 vec = self._vector(geo_ref, resid, chain)
-                self.insert_atom(hindex+1, self.atoms[hindex], atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
+                self.insert_atom(aftnr+1, self.atoms[hindex], atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
                                  vector=vec, atomname=atom_add)
+
         for atom in self.select_atoms('{}resid {}'.format(chstr, resid)):
             self.atoms[atom].resname = mutant.target_3l
         self.renumber_atoms()
@@ -431,7 +457,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         for line in contents[2:2+natoms]:
             atoms.append(Atom.from_gro(line))
         if len(contents[-1].split()) == 3:
-            box = [float(10*x) for x in contents[-1]] + [90., 90., 90.]
+            box = [10*float(x) for x in contents[-1].split()] + [90., 90., 90.]
         elif len(contents[-1].split()) == 9:
             boxline = [float(x) for x in contents[-1].split()]
             assert boxline[3] == boxline[4] == boxline[6] == 0

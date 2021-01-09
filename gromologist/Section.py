@@ -328,7 +328,7 @@ class SectionMol(Section):
                 self.del_atom(to_remove.num)
                 dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
     
-    def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None):
+    def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None, prnt=True):
         """
         For convenience, we try to infer as much as possible
         from existing data, so that it is sufficient to pass
@@ -373,7 +373,8 @@ class SectionMol(Section):
                 print("Could not assign mass for type {}, proceeding with 1.008 AU".format(atom_type))
                 mass = 1.008
         fstring = subs_atoms.fstring
-        print(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number, charge, mass))
+        if prnt:
+            print(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number, charge, mass).strip())
         new_entry = gml.EntryAtom(fstring.format(atom_number, atom_type, resid, resname, atom_name, atom_number,
                                                  charge, mass), subs_atoms)
         try:
@@ -701,7 +702,10 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
-    def mutate_protein_residue(self, resid, target, rtp=None):
+    def mutate_protein_residue(self, resid, target, rtp=None, mutate_in_pdb=True):
+        alt_names = {('THR', 'OG'): 'OG1', ('THR', 'HG'): 'HG1', ('LEU', 'CD'): 'CD1', ('LEU', 'HD1'): 'HD11',
+                     ('LEU', 'HD2'): 'HD12', ('LEU', 'HD3'): 'HD13', ('VAL', 'CG'): 'CG1', ('VAL', 'HG1'): 'HG11',
+                     ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13',}
         if rtp is None:
             print("Found the following .rtp files:\n")
             for n, i in enumerate(glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')):
@@ -716,43 +720,109 @@ class SectionMol(Section):
         orig = self.atoms[self.select_atom('resid {} and name CA'.format(resid))]
         mutant = gml.ProteinMutant(orig.resname, target)
         targ = mutant.target_3l
-        atoms_add, hooks, _, _, extra_bonds = mutant.atoms_to_add()
+        atoms_add, hooks, _, _, extra_bonds, afters = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
         types, charges, impropers, improper_type = self.parse_rtp(rtp)
+        # some residue-specific modifications here
         if targ == 'HIS':
             targ = 'HSD' if ('HSD', 'CA') in types.keys() else 'HID'
+        elif targ == 'GLY':
+            self.atoms[self.select_atom('resid {} and name HA'.format(resid))].atomname = 'HA1'
+        if orig == 'GLY':
+            self.atoms[self.select_atom('resid {} and name HA1'.format(resid))].atomname = 'HA'
         impropers_to_add = []
         impr_sub = self.get_subsection('impropers')
         atoms_sub = self.get_subsection('atoms')
+        # first remove all unwanted atoms
         for at in atoms_remove:
-            print("Removing atom {} from resid {}".format(at, resid))
+            print("Removing atom {} from resid {} in topology".format(at, resid))
             atnum = self.select_atom('resid {} and name {}'.format(resid, at))
-            self.del_atom(self.atoms[atnum].num)
-        for atom_add, hook in zip(atoms_add, hooks):
-            print("Adding atom {} to resid {}".format(atom_add, resid))
+            self.del_atom(self.atoms[atnum].num, del_in_pdb=False)
+        for atom_add, hook, aft in zip(atoms_add, hooks, afters):
+            print("Adding atom {} to resid {} in topology".format(atom_add, resid))
+            # if there are ambiguities in naming (two or more options):
+            if (targ, atom_add) in alt_names.keys():
+                atom_add = alt_names[(targ, atom_add)]
+            if isinstance(hook, tuple):
+                for hk in hook:
+                    try:
+                        _ = self.select_atom('resid {} and name {}'.format(resid, hk))
+                    except RuntimeError:
+                        continue
+                    else:
+                        hook = hk
+                        break
+                else:
+                    raise RuntimeError("Couldn't find any of the following atoms: {}".format(hook))
             hooksel = 'resid {} and name {}'.format(resid, hook)
+            if isinstance(aft, tuple):
+                for n, af in enumerate(aft):
+                    try:
+                        _ = self.select_atom('resid {} and name {}'.format(resid, af))
+                    except RuntimeError:
+                        continue
+                    else:
+                        aftnr = self.select_atom('resid {} and name {}'.format(resid, af))
+                        break
+                else:
+                    raise RuntimeError("Couldn't find any of the following atoms: {}".format(aft))
+            else:
+                aftnr = self.select_atom('resid {} and name {}'.format(resid, aft))
             hnum = self.atoms[self.select_atom(hooksel)].num
-            atnum = hnum + 1
+            atnum = aftnr + 2
+            # actual addition of atoms
             self.add_atom(atnum, atom_add, atom_type=types[(targ, atom_add)], charge=charges[(targ, atom_add)],
-                          resid=orig.resid, resname=targ, mass=None)
+                          resid=orig.resid, resname=targ, mass=None, prnt=False)
             self.add_bond(hnum, atnum)
             for i in impropers[targ]:
                 if atom_add in i and i not in impropers_to_add:
                     impropers_to_add.append(i)
         atoms_sub.get_dicts(force_update=True)
+        # looking for new impropers
         for imp in impropers_to_add:
             if set(imp).intersection(set(atoms_add)):
                 numbers = [atoms_sub.name_to_num[(resid, at)] for at in imp]
                 impr_sub.add_entry('{:5d} {:5d} {:5d} {:5d} {:>5s}\n'.format(*numbers, improper_type),
                                    position=1+[n for n, e in enumerate(impr_sub) if isinstance(e, gml.EntryBonded)][-1])
+        # changing resnames, charges and types according to .rtp
         for atom in self.select_atoms('resid {}'.format(resid)):
             self.atoms[atom].resname = targ
+            try:
+                self.atoms[atom].charge = charges[(targ, self.atoms[atom].atomname)]
+            except KeyError:
+                print("Couldn't find atom {} in RTP entry for residue {} - check charges and types "
+                      "manually".format(self.atoms[atom].atomname, targ))
+            self.atoms[atom].type = types[(targ, self.atoms[atom].atomname)]
+        # bonds that close rings
         for bond in extra_bonds:
             xsel = 'resid {} and name {}'.format(resid, bond[0])
             ysel = 'resid {} and name {}'.format(resid, bond[1])
             xnum = self.atoms[self.select_atom(xsel)].num
             ynum = self.atoms[self.select_atom(ysel)].num
             self.add_bond(xnum, ynum)
+        # repeating the mutation in the structure
+        if mutate_in_pdb and self.top.pdb:
+            pdb_atoms = self._match_pdb_to_top(self.atoms[self.select_atom('resid {} and name CA'.format(resid))].num)
+            pdb_chains = [self.top.pdb.atoms[at].chain for at in pdb_atoms]
+            if len(pdb_atoms) == 1:
+                chain = '' if pdb_chains[0] == ' ' else pdb_chains[0]
+                self.top.pdb.mutate_protein_residue(resid, target, chain)
+            elif len(pdb_atoms) > 1:
+                if any([pdb_chains[0] == pdb_chains[i] for i in range(1, len(pdb_chains))]):
+                    print()
+                    response = input("The topology entry {} corresponds to multiple entries in the PDB; should we add "
+                                     "chains to PDB and retry? (y/n)\n".format(self.mol_name))
+                    if response.lower() == 'y':
+                        self.top.pdb.add_chains(maxwarn=-1)
+                        pdb_chains = [self.top.pdb.atoms[at].chain for at in pdb_atoms]
+                    else:
+                        print("Mutated in .top, but not in .pdb; try running separately with "
+                              "Pdb.mutate_protein_residue(), where chains can be specified separately")
+                        return
+                for ch in pdb_chains:
+                    self.top.pdb.mutate_protein_residue(resid, target, ch)
+        elif mutate_in_pdb and not self.top.pdb:
+            print("No .pdb file bound to the topology, use Top.add_pdb() to add one")
 
     @staticmethod
     def parse_rtp(rtp):
@@ -788,6 +858,14 @@ class SectionMol(Section):
                 impropers[resname].append(line.strip().split())
             if len(line.strip().split()) > 7 and resname is None and reading_bondedtypes:
                 bondedtypes = line.strip().split()[3]
+        # substitute CHARMM's HN for AMBER's H
+        for k in list(typedict.keys()):
+            if 'HN' in k:
+                typedict[(k[0], 'H')] = typedict[k]
+                chargedict[(k[0], 'H')] = chargedict[k]
+            if 'HG1' in k:
+                typedict[(k[0], 'HG')] = typedict[k]
+                chargedict[(k[0], 'HG')] = chargedict[k]
         return typedict, chargedict, impropers, bondedtypes
 
     def list_bonds(self, by_types=False, by_params=False):
@@ -841,7 +919,7 @@ class SectionMol(Section):
         atoms_add, hooks = [basename.replace('C', 'H') + str(i) for i in range(3)], 3 * [orig_name]
         for n, atom_add_hook in enumerate(zip(atoms_add, hooks), 1):
             atom_add, hook = atom_add_hook
-            print("Adding atom {} to resid {}".format(atom_add, resid))
+            print("Adding atom {} to resid {} in the topology".format(atom_add, resid))
             hooksel = 'resid {} and name {}'.format(resid, orig_name)
             hnum = self.atoms[self.select_atom(hooksel)].num
             atnum = hnum + n

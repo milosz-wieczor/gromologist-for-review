@@ -22,6 +22,7 @@ class Top:
         else:
             self.gromacs_dir = gmx_dir
         self.pdb = None
+        self.rtp = {}
         self.pdb = None if pdb is None else gml.Pdb(pdb, top=self)
         self.fname = filename
         self.top = self.fname.split('/')[-1]
@@ -111,9 +112,9 @@ class Top:
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
 
-    def find_missing_ff_params(self, section='all'):
+    def find_missing_ff_params(self, section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False):
         for mol in self.molecules:
-            mol.find_missing_ff_params(add_section=section)
+            mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B)
     
     def add_params_file(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))

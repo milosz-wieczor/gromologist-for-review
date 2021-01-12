@@ -386,8 +386,13 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         atoms_add, hooks, geo_refs, bond_lengths, _, afters = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
         for at in atoms_remove:
+            equivalents = {'OG': 'OG1', 'HG': 'HG1', 'HG1': 'HG11', 'HG2': 'HG12', 'HG3': 'HG13', 'CG': 'CG1',
+                           'CD': 'CD1', 'HD': 'HD1', 'HD1': 'HD11', 'HD2': 'HD12', 'HD3': 'HD13'}
             print("Removing atom {} from resid {} in structure".format(at, resid))
-            atnum = self.select_atom('{}resid {} and name {}'.format(chstr, resid, at))
+            try:
+                atnum = self.select_atom('{}resid {} and name {}'.format(chstr, resid, at))
+            except RuntimeError:
+                atnum = self.select_atom('{}resid {} and name {}'.format(chstr, resid, equivalents[at]))
             _ = self.atoms.pop(atnum)
         for atom_add, hook, geo_ref, bond_length, aft in zip(atoms_add, hooks, geo_refs, bond_lengths, afters):
             print("Adding atom {} to resid {} in structure".format(atom_add, resid))

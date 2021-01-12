@@ -25,14 +25,16 @@ class ProteinMutant:
         self.remove_from_orig = []
         self.add_to_target = []
         length = max(len(orig_gps), len(target_gps))
+        diverged = False # if one mismatch is found, side chain will be rebuilt all the way from there
         for i in range(length):
             orig = orig_gps[i] if i < len(orig_gps) else False
             targ = target_gps[i] if i < len(target_gps) else False
-            if orig != targ or target_1l in 'IT':
+            if orig != targ or target_1l in 'IT' or diverged:
                 if orig:
                     self.remove_from_orig.append(orig)
                 if targ:
                     self.add_to_target.append(targ)
+                diverged = True
 
     def atoms_to_add(self):
         atoms = []
@@ -82,7 +84,7 @@ class ProteinMutant:
         aftdict = {'CB': [('HA', 'HA2'), 'CB', 'HB1'], 'CG': [('HB2', 'HB'), ('CG', 'CG1'), ('HG1', 'HG11')], 'CD': [('HG2', 'HG12', 'CD2'),
                    ('CD', 'CD1'), ('HD1', 'HD11')], 'HA': [('HA', 'HA1')], 'HB': ['HB2'], 'HD': [('HD2', 'HD12')],
                    'BM': ['HA', 'CB', 'HB', 'CG2', 'HG21', 'HG22'], 'SH': ['HB2', 'SG'], 'OH': [('HB2', 'CG2'), ('OG', 'OG1')],
-                   'CO': ['HB2', 'CG', 'OD1'], 'DO': ['HG2', 'CD', 'OE1'], 'AM': ['HB2', 'CG', 'OD1', 'ND2', 'HD21'],
+                   'CO': ['HB2', 'CG', 'OD1'], 'DO': [('HG2'), 'CD', 'OE1'], 'AM': ['HB2', 'CG', 'OD1', 'ND2', 'HD21'],
                    'AN': ['HG2', 'CD', 'OE1', 'NE2', 'HE21'], 'GG': [('HB2', 'HG23'), 'CG1', 'HG11'],
                    'AR': ['HB2', 'CG', 'CD1', 'HD1', 'CD2', 'HD2', 'CE1', 'HE1', 'CE2', 'HE2'], 'HG': [('HG2', 'HG12')],
                    'HZ': ['CZ'], 'LH': ['HB2', 'CG', 'HG', 'CD2', 'HD21', 'HD22'], 'OY': ['CZ', 'OH'],
@@ -114,6 +116,7 @@ class ProteinMutant:
                         ['NZ', 'HZ3']],
                  'HZ': [['CZ', 'HZ']],
                  'HA': [['CA', 'HA2']],
+                 'HB': [['CB', 'HB3']],
                  'HD': [[('CD', 'CD1'), 'HD3']],
                  'HG': [[('CG', 'CG1'), 'HG3']],
                  'HR': [['CB', 'CG'], ['CG', 'ND1'], ['CG', 'CD2'], ['CD2', 'HD2'], ['ND1', 'CE1'], ['CD2', 'NE2'],

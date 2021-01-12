@@ -265,12 +265,12 @@ class SubsectionBonded(Subsection):
                     if candid:
                         entry.params_state_b = candid
         if entry.types_state_b:
-            if fix_B_from_A and not found_b:
+            if fix_B_from_A and not found_b and not entry.params_state_b:
                 candid = self._fix_by_analogy({}, entry.types_state_b, subsect_params, int_type,
                                               other_typelist=entry.types_state_a)
                 if candid:
                     entry.params_state_b = candid
-            if fix_A_from_B and not found_a:
+            if fix_A_from_B and not found_a and not entry.params_state_a:
                 candid = self._fix_by_analogy({}, entry.types_state_a, subsect_params, int_type,
                                               other_typelist=entry.types_state_b)
                 if candid:

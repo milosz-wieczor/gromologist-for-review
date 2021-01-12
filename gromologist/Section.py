@@ -200,6 +200,7 @@ class SectionMol(Section):
                 entries.type_b = new_type if new_type is not None else entries.type
                 entries.mass_b = new_mass if new_mass is not None else entries.mass
                 entries.charge_b = new_charge if new_charge is not None else entries.charge
+        self.update_dicts()
 
     def drop_state_a(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
         """
@@ -250,6 +251,7 @@ class SectionMol(Section):
                     if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
                         entry.types_state_a = entry.types_state_b
                         entry.types_state_b = None
+        self.update_dicts()
 
     def swap_states(self, atomname=None, resname=None, resid=None, atomtype=None):
         """
@@ -283,6 +285,7 @@ class SectionMol(Section):
                         entry.params_state_a, entry.params_state_b = entry.params_state_b, entry.params_state_a
                     if isinstance(entry, gml.EntryBonded) and entry.types_state_b is not None:
                         entry.types_state_a, entry.types_state_b = entry.types_state_b, entry.types_state_a
+        self.update_dicts()
 
     def drop_state_b(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
         """
@@ -327,6 +330,7 @@ class SectionMol(Section):
                 to_remove = dummies[0]
                 self.del_atom(to_remove.num)
                 dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
+        self.update_dicts()
     
     def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None, prnt=True):
         """
@@ -389,6 +393,7 @@ class SectionMol(Section):
             self.offset_numbering(1, atom_number)
             atoms.insert(position, new_entry)
         self.top.recalc_sys_params()
+        self.update_dicts()
     
     def del_atom(self, atom_number, del_in_pdb=True):
         """
@@ -402,6 +407,7 @@ class SectionMol(Section):
         self._del_params(atom_number)
         self.offset_numbering(-1, atom_number)
         self.top.recalc_sys_params()
+        self.update_dicts()
         if del_in_pdb:
             if self.top.pdb:
                 for to_remove in self._match_pdb_to_top(atom_number):
@@ -445,6 +451,7 @@ class SectionMol(Section):
         entry_final_ind = [n for n, e in enumerate(atom_entry_list) if isinstance(e, gml.EntryAtom)][new_position - 1]
         entry = subsect_atoms.entries.pop(entry_ind)
         subsect_atoms.entries.insert(entry_final_ind, entry)
+        self.update_dicts()
 
     def _hide_atom(self, old_pos, new_pos):
         subsect_atoms = self.get_subsection('atoms')
@@ -884,7 +891,7 @@ class SectionMol(Section):
         return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['impropers'], \
             self.top.rtp['bondedtypes']
 
-    def update_dicts(self): # TODO add whenever adding/removing molecules
+    def update_dicts(self):
         self.get_subsection('atoms').get_dicts(force_update=True)
 
     def list_bonds(self, by_types=False, by_params=False, returning=False):

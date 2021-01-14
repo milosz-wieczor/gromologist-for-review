@@ -968,8 +968,9 @@ class SectionMol(Section):
                 raise RuntimeError("Adding groups in PDB only supported for systems containing one molecule")
             bonds = self.list_bonds(returning=True)
             hook = [j for i in bonds for j in i if orig_name in i and orig_name != j][0]
+            print(hook)
             aligns = [j for i in bonds for j in i if hook in i and hook != j and orig_name != j]
-            aftnr = self.select_atom('resid {} and name {}'.format(resid, hook))
+            aftnr = self.select_atom('resid {} and name {}'.format(resid, orig_name))
             for n, aliat in enumerate(zip(aligns, atoms_add), 1):
                 ali, at = aliat
                 self.top.pdb.insert_atom(aftnr+n, self.top.pdb.atoms[aftnr],

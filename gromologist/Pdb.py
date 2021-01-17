@@ -124,7 +124,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 atomlist = []
             atomlist.append(at.atomname)
 
-    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100):
+    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=0.75):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual
@@ -139,17 +139,26 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         :param maxwarn: int, max number of warnings before an error shows up
         :return: None
         """
+        base_char = 65 + offset  # 65 is ASCII for "A"
+        curr_resid = None
+        prev_atom = None
         if not self.top:
-            ch = chain if chain is not None else 'X'
             for atom in self.atoms:
-                if atom.chain == ' ':
-                    atom.chain = ch
+                if not prev_atom:
+                    prev_atom = atom
+                    curr_resid = atom.resnum
+                if atom.resnum != curr_resid:
+                    dist = self._atoms_dist(atom, prev_atom)
+                    if dist > cutoff:
+                        base_char += 1
+                if base_char > 90:
+                    break
+                atom.chain = chr(base_char)
         else:
             self.check_top(maxwarn=maxwarn)
             if (serials is None and chain is not None) or (serials is not None and chain is None):
                 raise ValueError("Both serials and chain have to be specified simultaneously")
             excluded = {'SOL', 'HOH', 'TIP3', 'K', 'NA', 'CL', 'POT'}
-            base_char = 65 + offset  # 65 is ASCII for "A"
             index = 0
             for mol_name in self.top.system.keys():
                 if mol_name.upper() not in excluded:

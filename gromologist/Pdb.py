@@ -605,7 +605,7 @@ class Atom:
         atomname = line[10:15].strip()
         atomnum = int(line[15:20].strip())
         x, y, z = [float(line[20+8*i:20+8*(i+1)].strip())*10 for i in range(3)]
-        return cls(data.format(atomnum, atomname, resname, resnum, x, y, z))
+        return cls(data.format(atomnum, atomname[:4], resname[:4], resnum, x, y, z))
 
     @classmethod
     def from_top_entry(cls, entry):

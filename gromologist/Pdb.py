@@ -124,7 +124,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 atomlist = []
             atomlist.append(at.atomname)
 
-    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=0.75):
+    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=7.5):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual

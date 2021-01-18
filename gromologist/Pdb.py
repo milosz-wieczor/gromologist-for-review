@@ -149,6 +149,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                     curr_resid = atom.resnum
                 if atom.resnum != curr_resid:
                     dist = self._atoms_dist(atom, prev_atom)
+                    prev_atom = atom
+                    curr_resid = atom.resnum
                     if dist > cutoff:
                         base_char += 1
                 if base_char > 90:

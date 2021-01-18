@@ -148,7 +148,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                     prev_atom = atom
                     curr_resid = atom.resnum
                 if atom.resnum != curr_resid:
-                    dist = self._atoms_dist(atom, prev_atom)
+                    dist = self._atoms_dist_pbc(atom, prev_atom)
                     prev_atom = atom
                     curr_resid = atom.resnum
                     if dist > cutoff:
@@ -368,6 +368,13 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
     @staticmethod
     def _atoms_dist(at1, at2):
         return ((at2.x - at1.x)**2 + (at2.y - at1.y)**2 + (at2.z - at1.z)**2)**0.5
+
+    def _atoms_dist_pbc(self, at1, at2):
+        if not self.box[3] == self.box[4] == self.box[5] == 90.0:
+            raise RuntimeError("Only rectangular boxes supported for PBC-based distanes")
+        return (min([abs(at2.x - at1.x), self.box[0] - abs(at2.x - at1.x)]) ** 2 +
+                min([abs(at2.y - at1.y), self.box[1] - abs(at2.y - at1.y)]) ** 2 +
+                min([abs(at2.z - at1.z), self.box[2] - abs(at2.z - at1.z)]) ** 2) ** 0.5
 
     @staticmethod
     def _atoms_vec(at1, at2):

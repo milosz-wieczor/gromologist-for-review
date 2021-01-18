@@ -3,6 +3,10 @@ from collections import defaultdict
 
 
 class Pdb:  # TODO optionally save as gro? & think of trajectories
+    prot_map = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
+                'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
+                'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
+                'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
     def __init__(self, filename=None, top=None, altloc='A', **kwargs):
         self.fname = filename
         if self.fname:
@@ -58,10 +62,6 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         return new_pdb
 
     def print_protein_sequence(self):
-        mapping = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
-                   'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
-                   'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
-                   'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
         chains = list({a.chain for a in self.atoms if a.atomname == 'CA'})
         if chains == [' ']:
             print("No chains in the molecule, run Pdb.add_chains() first")
@@ -69,7 +69,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         for ch in sorted(chains):
             cas = set(self.select_atoms(f'name CA and chain {ch}'))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
-            print(''.join([mapping[i.resname] for i in atoms]))
+            print(''.join([Pdb.prot_map[i.resname] for i in atoms]))
 
     def print_nucleic_sequence(self):
         mapping = defaultdict(lambda: 'X')
@@ -85,10 +85,6 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             print(''.join([mapping[i.resname] for i in atoms]))
 
     def find_missing(self):
-        map_pro = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
-                   'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
-                   'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
-                   'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
         map_nuc = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
                    'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
                    'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
@@ -109,22 +105,21 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         for at in self.atoms:
             if (at.resname, at.resnum) != curr_res:
                 if 'CA' in atomlist:
-                    full = set(pro_bb + pro_sc[map_pro[curr_res[0]]])
+                    full = set(pro_bb + pro_sc[Pdb.prot_map[curr_res[0]]])
                     if not full.issubset(set(atomlist)):
-                        if map_pro[curr_res[0]] in alt.keys():
-                            modfull = set([alt[map_pro[curr_res[0]]][1] if x == alt[map_pro[curr_res[0]]][0] else x
-                                           for x in full])
+                        if Pdb.prot_map[curr_res[0]] in alt.keys():
+                            modfull = set([alt[Pdb.prot_map[curr_res[0]]][1] if x == alt[Pdb.prot_map[curr_res[0]]][0]
+                                           else x for x in full])
                             if not modfull.issubset(set(atomlist)):
                                 print(f"atoms {modfull.difference(set(atomlist))} missing from residue {curr_res}")
                         else:
                             print(f"atoms {full.difference(set(atomlist))} missing from residue {curr_res}")
-
                 # TODO implement for nucleic
                 curr_res = (at.resname, at.resnum)
                 atomlist = []
             atomlist.append(at.atomname)
 
-    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=7.5):
+    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=7.5, protein_only=False):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual
@@ -137,6 +132,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         :param chain: chain to set for serials (default is use consecutive letters)
         :param offset: int, start chain ordering from letter other than A
         :param maxwarn: int, max number of warnings before an error shows up
+        :param cutoff: float, distance threshold (in A) for chain separation if using geometric criteria
+        :param protein_only: bool, whether to only add chains to protein residues
         :return: None
         """
         base_char = 65 + offset  # 65 is ASCII for "A"
@@ -152,10 +149,12 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                     prev_atom = atom
                     curr_resid = atom.resnum
                     if dist > cutoff:
-                        base_char += 1
+                        if (protein_only and atom.resname in Pdb.prot_map.keys()) or not protein_only:
+                            base_char += 1
                 if base_char > 90:
                     break
-                atom.chain = chr(base_char)
+                if (protein_only and atom.resname in Pdb.prot_map.keys()) or not protein_only:
+                    atom.chain = chr(base_char)
         else:
             self.check_top(maxwarn=maxwarn)
             if (serials is None and chain is not None) or (serials is not None and chain is None):

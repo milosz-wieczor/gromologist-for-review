@@ -7,6 +7,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
                 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
                 'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
+
     def __init__(self, filename=None, top=None, altloc='A', **kwargs):
         self.fname = filename
         if self.fname:

@@ -234,7 +234,7 @@ class SectionMol(Section):
                        entry.type_b[0] == "D" and entry.num in selected]
             print(dummies)
             while dummies:
-                to_remove = dummies[0]
+                to_remove = dummies[-1]
                 self.del_atom(to_remove.num)
                 dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b and
                            entry.type_b[0] == "D" and entry.num in selected]
@@ -325,11 +325,13 @@ class SectionMol(Section):
                         entry.types_state_b = None
         if remove_dummies:
             sub = self.get_subsection('atoms')
-            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
+            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type[0] == "D"
+                       and entry.num in selected]
             while dummies:
-                to_remove = dummies[0]
+                to_remove = dummies[-1]
                 self.del_atom(to_remove.num)
-                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.atomname[0] == "D"]
+                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type[0] == "D"
+                           and entry.num in selected]
         self.update_dicts()
     
     def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None, prnt=True):
@@ -604,6 +606,37 @@ class SectionMol(Section):
             subsection = self.get_subsection(sub)
             subsection.add_entries([gml.EntryBonded(subsection.fstring.format(*entry, subsection.prmtype), subsection)
                                     for entry in entries])
+
+    def _remove_bond(self, at1, at2):
+        self._get_bonds()
+        bond_to_remove = [(at1, at2)]
+        if not (bond_to_remove[0] in self.bonds or tuple(x for x in bond_to_remove[0][::-1]) in self.bonds):
+            raise RuntimeError("Bond between atoms {} and {} not found in the topology".format(at1, at2))
+        angles_to_remove = self._generate_angles(self, at1, at2)
+        pairs_to_remove, dihedrals_to_remove = self._generate_14(self, at1, at2)
+        impropers = self.get_subsection('impropers')
+        impropers_to_remove = []
+        for n, entry in enumerate(impropers.entries):
+            if isinstance(entry, gml.EntryBonded) and at1 in entry.atom_numbers and at2 in entry.atom_numbers:
+                impropers_to_remove.append(n)
+        for n in impropers_to_remove[::-1]:
+            _ = impropers.entries.pop(n)
+
+        def match(seq1, seqlist):
+            for seq2 in seqlist:
+                if all(i == j for i, j in zip(seq1, seq2)) or all(i == j for i, j in zip(seq1, seq2[::-1])):
+                    return True
+            return False
+
+        for sub, removable in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
+                                  [bond_to_remove, pairs_to_remove, angles_to_remove, dihedrals_to_remove]):
+            subsection = self.get_subsection(sub)
+            to_remove = []
+            for n, e in enumerate(subsection.entries):
+                if isinstance(e, gml.EntryBonded) and match(e.atom_numbers, removable):
+                    to_remove.append(n)
+            for n in to_remove[::-1]:
+                _ = subsection.entries.pop(n)
 
     def _generate_angles(self, other, atom_own, atom_other):
         """
@@ -1072,6 +1105,17 @@ class SectionParam(Section):
                     if not isinstance(entry, gml.EntryParam) or entry.identifier in used_params:
                         new_entries.append(entry)
                 ssect.entries = new_entries
+        atomtypes_used = {e.type for mol in self.top.molecules for e in mol.get_subsection('atoms')
+                          if isinstance(e, gml.EntryAtom)}
+        atomtypes_b_used = {e.type_b for mol in self.top.molecules for e in mol.get_subsection('atoms')
+                            if isinstance(e, gml.EntryAtom) and e.type_b}
+        atomtypes_used.union(atomtypes_b_used)
+        ssect = self.get_subsection('atomtypes')
+        new_entries = []
+        for entry in ssect.entries:
+            if not isinstance(entry, gml.EntryParam) or entry.types[0] in atomtypes_used:
+                new_entries.append(entry)
+        ssect.entries = new_entries
 
     def _remove_symm_dupl(self, prefix):
         for sub in self.subsections:

@@ -1,5 +1,4 @@
 
-
 class Entry:
     """
     A generic class representing a single line in the topology.
@@ -74,7 +73,9 @@ class EntryBonded(Entry):
     between specific atoms in the topology
     """
     fstr_suff = {('bonds', '1'): (float, float),
+                 ('bonds', '2'): (float, float),
                  ('angles', '1'): (float, float),
+                 ('angles', '2'): (float, float),
                  ('angles', '5'): (float, float, float, float),
                  ('dihedrals', '9'): (float, float, int),
                  ('dihedrals', '4'): (float, float, int),

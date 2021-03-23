@@ -87,8 +87,6 @@ class SectionMol(Section):
     """
     
     def __init__(self, content_list, top):
-        self.natoms = None
-        self.charge = None
         super().__init__(content_list, top)
         self.bonds = None
         self.mol_name = self.get_subsection('moleculetype').molname
@@ -101,6 +99,14 @@ class SectionMol(Section):
     def atoms(self):
         sub = self.get_subsection('atoms')
         return [entry for entry in sub if isinstance(entry, gml.EntryAtom)]
+
+    @property
+    def natoms(self):
+        return len(self.atoms)
+
+    @property
+    def charge(self):
+        return sum([a.charge for a in self.atoms])
     
     def select_atoms(self, selection_string):
         """
@@ -125,6 +131,12 @@ class SectionMol(Section):
             raise RuntimeError("Selection {} returned no atoms".format(selection_string, result))
         return result[0]
 
+    def get_atoms(self, selection_string):
+        return [self.atoms[i] for i in self.select_atoms(selection_string)]
+
+    def get_atom(self, selection_string):
+        return self.atoms[self.select_atom(selection_string)]
+
     def print_molecule(self):
         sub = self.get_subsection('atoms')
         for entry in sub:
@@ -137,7 +149,74 @@ class SectionMol(Section):
             if isinstance(ent, gml.EntryAtom) and ent.type_b is not None:
                 return True
         return False
-    
+
+    def _patch_alch(self):
+        self.update_dicts()
+        resnames = {a.resname for a in self.atoms}
+        if 'DTS' in resnames:
+            selected = [x+1 for x in self.select_atoms('resname DTS')]
+            sect = self.get_subsection('bonds')
+            for entry in sect:
+                if isinstance(entry, gml.EntryBonded) and all([x in selected for x in entry.atom_numbers]):
+                    entry.read_types()
+                    if entry.atom_names == ("C5'", "O5'") or entry.atom_names == ("O5'", "C5'"):
+                        if 'OS' in entry.types_state_a:
+                            entry.params_state_b = [0.40000, 0.0]
+                            entry.comment = entry.comment.rstrip() + ' fixed\n' if entry.comment else '; fixed\n'
+                        else:
+                            raise RuntimeError("Expected type OS in state A for bond C5'-O5' but found types {}, "
+                                               "aborting".format(' '.join(entry.types_state_a)))
+            sect = self.get_subsection('pairs')
+            to_remove = []
+            for n, entry in enumerate(sect):
+                if isinstance(entry, gml.EntryBonded) and all([x in selected for x in entry.atom_numbers]):
+                    entry.read_types()
+                    if entry.atom_names == ("P", "Ox5'") or entry.atom_names == ("P", "DO5'") or \
+                            entry.atom_names == ("O5'", "Hx5'") or entry.atom_names == ("O5'", "DH5'"):
+                        to_remove.append(n)
+            for en in to_remove[::-1]:
+                _ = sect.entries.pop(en)
+            atoms = sorted([x+1 for x in self.select_atoms("resname DTS and name O5' C5'")])
+            assert len(atoms)%2 == 0
+            for pair in range(len(atoms)//2):
+                self.nullify_bonded(*atoms[2*pair:2*pair+2], 'angles')
+                self.nullify_bonded(*atoms[2 * pair:2 * pair + 2], 'dihedrals')
+        if 'DTD' in resnames or 'DTE' in resnames:
+            selected = [x+1 for x in self.select_atoms('resname DTD DTE')]
+            sect = self.get_subsection('bonds')
+            for entry in sect:
+                if isinstance(entry, gml.EntryBonded) and all([x in selected for x in entry.atom_numbers]):
+                    entry.read_types()
+                    if entry.types_state_a == ("DUM_CT", "DUM_C2") \
+                            and entry.atom_numbers[1] - entry.atom_numbers[0] > 30:
+                        entry.params_state_a[1] = 0.0
+                        entry.comment = entry.comment.rstrip() + ' fixed\n' if entry.comment else '; fixed\n'
+        if 'DTX' in resnames or 'DTY' in resnames:
+            selected = [x+1 for x in self.select_atoms('resname DTX DTY')]
+            sect = self.get_subsection('bonds')
+            for entry in sect:
+                if isinstance(entry, gml.EntryBonded) and all([x in selected for x in entry.atom_numbers]):
+                    entry.read_types()
+                    if entry.types_state_a == ("DUM_CT", "DUM_CT") \
+                            and entry.atom_numbers[1] - entry.atom_numbers[0] > 30:
+                        entry.params_state_a[1] = 0.0
+                        entry.comment = entry.comment.rstrip() + ' fixed\n' if entry.comment else '; fixed\n'
+
+    def nullify_bonded(self, atom1, atom2, subsection, stateB=True):
+        subs = self.get_subsection(subsection)
+        for entry in subs:
+            if isinstance(entry, gml.EntryBonded) and atom1 in entry.atom_numbers and atom2 in entry.atom_numbers:
+                entry.read_types()
+                if subsection == 'angles' and any(x.startswith('D') for x in entry.types_state_a):
+                    continue
+                if not entry.params_state_b:
+                    entry.params_state_b = entry.params_state_a[:]
+                if stateB:
+                    entry.params_state_b[1] = 0.0
+                else:
+                    entry.params_state_a[1] = 0.0
+                entry.comment = entry.comment.rstrip() + ' fixed\n' if entry.comment else '; fixed\n'
+
     def offset_numbering(self, offset, startfrom=0):
         """
         Offsets atom numbering starting from a specified position;
@@ -621,6 +700,17 @@ class SectionMol(Section):
                 impropers_to_remove.append(n)
         for n in impropers_to_remove[::-1]:
             _ = impropers.entries.pop(n)
+        try:
+            cmaps = self.get_subsection('cmap')
+        except KeyError:
+            pass
+        else:
+            cmap_to_remove = []
+            for n, entry in enumerate(cmaps.entries):
+                if isinstance(entry, gml.EntryBonded) and at1 in entry.atom_numbers and at2 in entry.atom_numbers:
+                    cmap_to_remove.append(n)
+            for n in cmap_to_remove[::-1]:
+                _ = cmaps.entries.pop(n)
 
         def match(seq1, seqlist):
             for seq2 in seqlist:
@@ -761,6 +851,7 @@ class SectionMol(Section):
             rtp = ''
         orig = self.atoms[self.select_atom('resid {} and name CA'.format(resid))]
         mutant = gml.ProteinMutant(orig.resname, target)
+        # TODO double-check [ pairs ]
         targ = mutant.target_3l
         print("\n  Mutating residue {} (resid {}) into {}\n".format(orig.resname, resid, targ))
         atoms_add, hooks, _, _, extra_bonds, afters = mutant.atoms_to_add()
@@ -1069,7 +1160,7 @@ class SectionParam(Section):
         """
         for sub in self.subsections:
             if 'dihedral' in sub.header:
-                sub.sort()
+                sub.sort()  # TODO if two have same periodicity & atoms, remove one with 0-s (PMX)
 
     def clone_type(self, atomtype, prefix):
         """

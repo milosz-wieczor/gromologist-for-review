@@ -38,11 +38,11 @@ class Top:
         if self.top.endswith('top'):
             self._read_system_properties()
         else:
-            self.system, self.charge, self.natoms = None, 0, 0
-        
+            self.system
+
     def __repr__(self):
         return "Topology with {} atoms and total charge {:.3f}".format(self.natoms, self.charge)
-    
+
     @classmethod
     def _from_text(cls, text, gmx_dir=None, pdb=None, ignore_ifdef=False):
         with open('tmp_topfile.gromo', 'w') as tmp:
@@ -50,7 +50,7 @@ class Top:
         instance = cls('tmp_topfile.gromo', gmx_dir, pdb, ignore_ifdef)
         os.remove('tmp_topfile.gromo')
         return instance
-    
+
     @staticmethod
     def find_gmx_dir():
         """
@@ -73,7 +73,7 @@ class Top:
         else:
             print('No working Gromacs compilation found, assuming all file dependencies are referred to locally')
             return ""
-    
+
     @property
     def molecules(self):
         return [s for s in self.sections if isinstance(s, gml.SectionMol)]
@@ -81,11 +81,21 @@ class Top:
     @property
     def alchemical_molecules(self):
         return [s for s in self.sections if isinstance(s, gml.SectionMol) and s.is_alchemical]
-    
+
     @property
     def parameters(self):
         return [s for s in self.sections if isinstance(s, gml.SectionParam)][0]
-    
+
+    @property
+    def atoms(self):
+        atomlist = []
+        for mol in self.system.keys():
+            mol_sect = [s for s in self.molecules if s.mol_name == mol][0]
+            for q in range(self.system[mol]):
+                for a in mol_sect.atoms:
+                    atomlist.append(a)
+        return atomlist
+
     def list_molecules(self):
         """
         Prints out a list of molecules contained in the System
@@ -99,7 +109,7 @@ class Top:
         for mol in self.molecules:
             used_params.extend(mol.find_used_ff_params(section=section))
         self.parameters.clean_unused(used_params, section=section)
-    
+
     def add_pdb(self, pdbfile):
         """
         Allows to pair a PDB file with the topology after the instance was initialized
@@ -109,20 +119,44 @@ class Top:
         self.pdb = gml.Pdb(pdbfile, top=self)
 
     def add_ff_params(self, section='all'):
+        """
+        Explicitly puts FF parameters in sections 'bonds', 'angles',
+        'dihedrals' so that the resulting topology is independent of
+        FF sections
+        :param section: str, 'all' or name of the section, e.g. 'bonds'
+        :return: None
+        """
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
 
     def find_missing_ff_params(self, section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False):
+        """
+        Identifies FF parameters that are not defined in sections
+        'bondtypes', angletypes', ...; if required, will attempt to
+        match parameters by analogy
+        :param section: str, 'all' or name of the section, e.g. 'bonds'
+        :param fix_by_analogy: dict, if set, will attempt to use params by analogy, matching key types to value types
+        :param fix_B_from_A: bool, will assign params for state B from state A
+        :param fix_A_from_B: bool, will assign params for state A from state B
+        :return: None
+        """
         for mol in self.molecules:
             mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B)
-    
+
     def add_params_file(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))
+        own_defentry = [e for e in self.sections[0].subsections[0].entries if isinstance(e, gml.EntryParam)][0]
+        other_defentry = [e for e in prmtop.sections[0].subsections[0].entries if isinstance(e, gml.EntryParam)][0]
+        if all([x == y for x, y in zip(own_defentry, other_defentry)]):
+            _ = prmtop.sections[0].subsections.pop(0)
+        else:
+            raise RuntimeError('The two topologies have different [ defaults ] entries: \n\n{} \n\n'
+                               'and \n\n{}\n\n'.format(' '.join(own_defentry), ' '.join(other_defentry)))
         paramsect_own = self.parameters
         paramsect_other = prmtop.parameters
         paramsect_own.subsections.extend(paramsect_other.subsections)
         paramsect_own._merge()
-    
+
     def _include_all(self, ign_ifdef):
         """
         includes all .itp files in the .top file to facilitate processing
@@ -140,7 +174,7 @@ class Top:
             ignore_lines = self._find_ifdef_lines() if ign_ifdef else set()
             lines = [i for i in range(len(self._contents)) if self._contents[i].startswith("#include")
                      and i not in ignore_lines]
-    
+
     def _find_ifdef_lines(self):
         """
         Finds #ifdef/#endif blocks in the topology if user
@@ -157,7 +191,7 @@ class Top:
             if counter > 0:
                 ignore_set.add(n)
         return ignore_set
-    
+
     def clear_sections(self):
         """
         Removes all SectionMol instances that are not part
@@ -172,7 +206,7 @@ class Top:
             if isinstance(section, gml.SectionMol) and section.mol_name not in self.system.keys():
                 sections_to_delete.append(section_num)
         self.sections = [s for n, s in enumerate(self.sections) if n not in sections_to_delete]
-    
+
     def _find_in_path(self, filename):
         """
         looks for a file to be included in either the current directory
@@ -193,7 +227,7 @@ class Top:
             raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'
                                     'If the file is included in an #ifdef/#ifndef block, please try setting'
                                     ' ignore_ifdef=True'.format(filename))
-    
+
     @staticmethod
     def _add_prefix_to_include(content, prefix):
         """
@@ -213,7 +247,7 @@ class Top:
                     newline = line[:index+1] + prefix + '/' + line[index+1:]
                     content[nline] = newline
         return content
-    
+
     def _parse_sections(self):
         """
         Cuts the content in sections as defined by the position
@@ -245,7 +279,7 @@ class Top:
             return gml.SectionMol(content, self)
         else:
             return gml.Section(content, self)
-        
+
     def _read_system_properties(self):
         """
         Reads in system composition based on the [ molecules ] section
@@ -257,22 +291,27 @@ class Top:
         system_subsection = [s.get_subsection('molecules') for s in self.sections
                              if 'molecules' in [ss.header for ss in s.subsections]]
         molecules = OrderedDict()  # we want to preserve the order of molecules in the system for e.g. PDB checking
-        natoms, charge = 0, 0
         if len(system_subsection) > 1:
             raise RuntimeError("Multiple 'molecules' subsection found in the topology, this is not allowed")
         elif len(system_subsection) == 0:
             print("Section 'molecules' not present in the topology, assuming this is an isolated .itp")
-            self.system, self.charge, self.natoms = None, 0, 0
+            self.system = None
             return
         for e in system_subsection[0]:
             if e.content:
                 molecules[e.content[0]] = int(e.content[1])
         for mol in molecules.keys():
             sect_mol = self.get_molecule(mol)
-            natoms += molecules[mol] * sect_mol.natoms
-            charge += molecules[mol] * sect_mol.charge
-        self.system, self.charge, self.natoms = molecules, charge, natoms
-    
+        self.system = molecules
+
+    @property
+    def charge(self):
+        return sum([self.system[mol] * self.get_molecule(mol).charge for mol in self.system.keys()])
+
+    @property
+    def natoms(self):
+        return sum([self.system[mol] * self.get_molecule(mol).natoms for mol in self.system.keys()])
+
     def recalc_sys_params(self):
         """
         Wrapper around read_system_properties that also
@@ -295,7 +334,7 @@ class Top:
             for s in m.subsections:
                 if isinstance(s, gml.SubsectionBonded):
                     s.explicit_defines()
-        
+
     def get_molecule(self, mol_name):
         """
         Finds a molecule (SectionMol instance) whose mol_name
@@ -309,7 +348,7 @@ class Top:
         elif len(mol) > 1:
             raise RuntimeError("Molecule {} is duplicated in topology".format(mol_name))
         return mol[0]
-    
+
     def check_pdb(self):
         """
         Compares the topology with a PDB object to check
@@ -321,7 +360,7 @@ class Top:
             self.pdb.check_top()
         else:
             raise AttributeError("No PDB file has been bound to this topology")
-    
+
     def save_top(self, outname='merged.top', split=False):
         """
         Saves the combined topology to the specified file
@@ -348,6 +387,22 @@ class Top:
                     self._write_section(outfile, section)
         outfile.close()
 
+    def patch_alchemical(self):
+        for mol in self.molecules:
+            if mol.is_alchemical:
+                mol._patch_alch()
+
+    def swap_states(self):
+        for mol in self.molecules:
+            mol.swap_states()
+
+    def rename_dummies(self):
+        for mol in self.molecules:
+            for a in mol.atoms:
+                if a.atomname.startswith('D'):
+                    a.atomname = a.atomname.replace('DH', 'Hx').replace('DO', 'Ox').replace('DN', 'Nx').\
+                        replace('DC', 'Cx').replace('DS', 'Sx')
+
     @staticmethod
     def _write_section(outfile, section):
         for subsection in section.subsections:
@@ -355,7 +410,7 @@ class Top:
             for entry in subsection:
                 str_entry = str(entry).rstrip() + '\n'
                 outfile.write(str_entry)
-                
+
     def _write_header(self, outfile):
         outname = outfile.name.split('/')[-1]
         outfile.write(";\n;  File {} was generated with the gromologist library\n"

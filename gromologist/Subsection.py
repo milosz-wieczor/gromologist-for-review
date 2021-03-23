@@ -277,7 +277,7 @@ class SubsectionBonded(Subsection):
                     entry.params_state_a = candid
 
     @staticmethod
-    def _fix_by_analogy(subst, typelist, subsect_params, int_type, other_typelist = None):
+    def _fix_by_analogy(subst, typelist, subsect_params, int_type, other_typelist=None):
         new_params = []
         from_wildtype = None
         if other_typelist is None:
@@ -567,35 +567,7 @@ class SubsectionAtom(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.fstring = "{:>6}{:>11}{:>7}{:>7}{:>7}{:>7}{:>11}{:>11}   ; " + '\n'
-        self.nat, self.charge = None, None
-        self.calc_properties()
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
-    
-    def calc_properties(self):
-        """
-        Recalculates molecule properties: number of atoms and total charge
-        :return: None
-        """
-        self.nat = self.section.natoms = self._calc_nat()
-        self.charge = self.section.charge = self._calc_charge()
-        
-    def _calc_charge(self):
-        """
-        Calculates total charge of the molecule
-        :return: float, total charge
-        """
-        total_charge = 0
-        for entry in self.entries:
-            if isinstance(entry, gml.EntryAtom):
-                total_charge += entry.charge
-        return total_charge
-    
-    def _calc_nat(self):
-        """
-        Counts atoms in molecules
-        :return:
-        """
-        return len([e for e in self.entries if isinstance(e, gml.EntryAtom)])
 
     def get_dicts(self, force_update=False):
         """

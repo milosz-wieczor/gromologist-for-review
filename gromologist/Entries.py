@@ -183,7 +183,7 @@ class EntryBonded(Entry):
                 if isinstance(parm, int):
                     fmt_suff = fmt_suff + "{:>6d} "
                 elif isinstance(parm, float):
-                    fmt_suff = fmt_suff + self.float_fmt(parm)
+                    fmt_suff = ' ' + fmt_suff + self.float_fmt(parm) + ' '
                 elif isinstance(parm, str):
                     if len(parm) > 14:
                         fmt_suff = fmt_suff + "{{:>{}s}} ".format(len(parm)+2)
@@ -234,19 +234,19 @@ class EntryParam(Entry):
         self.identifier = self.subsection.header + '-' + '-'.join(self.types) + '-' + self.interaction_type
             
     def format(self):
-        fmt = {('bondtypes', '1'): "{:>8s} {:>8s}{:>6s}{:>13.8f}{:>13.2f} ",
-               ('angletypes', '5'): "{:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>13.8f}{:>13.2f} ",
-               ('angletypes', '1'): "{:>8s} {:>8s} {:>8s}{:>6s}{:>13.8f}{:>13.2f} ",
-               ('dihedraltypes', '9'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d} ",
-               ('dihedraltypes', '4'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d} ",
-               ('dihedraltypes', '3'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>13.6f}{:>13.6f}"
-                                       "{:>13.6f}{:>13.6f} ",
-               ('dihedraltypes', '2'): "{:>8s} {:>8s} {:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f} ",
-               ('dihedraltypes', '1'): "{:>8s} {:>8s}{:>6s}{:>13.6f}{:>13.6f}{:>6d} ",
-               ('atomtypes', ''): "{:>6s}{}{:>6s}{:>13s}{:>9s}{:>3s}{:>16.12f}{:>9.5f} ",
-               ('pairtypes', '1'): "{:>8s} {:>8s}{:>3s}{:>16.12f}{:>16.12f} ",
-               ('nonbond_params', '1'): "{:>8s} {:>8s}{:>3s}{:>20.16f}{:>20.16f} ",
-               ('implicit_genborn_params', ''): " {:8s}{:8.4f}{:8.4f}{:8.4f}{:8.4f}{:8.4f} "}
+        fmt = {('bondtypes', '1'): "{:>8s} {:>8s} {:>6s} {:>13.8f} {:>13.2f} ",
+               ('angletypes', '5'): "{:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>13.8f} {:>13.2f} ",
+               ('angletypes', '1'): "{:>8s} {:>8s} {:>8s} {:>6s} {:>13.8f} {:>13.2f} ",
+               ('dihedraltypes', '9'): "{:>8s} {:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>6d} ",
+               ('dihedraltypes', '4'): "{:>8s} {:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>6d} ",
+               ('dihedraltypes', '3'): "{:>8s} {:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>13.6f} {:>13.6f} "
+                                       "{:>13.6f} {:>13.6f} ",
+               ('dihedraltypes', '2'): "{:>8s} {:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} ",
+               ('dihedraltypes', '1'): "{:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>6d} ",
+               ('atomtypes', ''): "{:>6s} {} {:>6s} {:>13s} {:>9s} {:>3s} {:>16.12f} {:>9.5f} ",
+               ('pairtypes', '1'): "{:>8s} {:>8s} {:>3s} {:>16.12f} {:>16.12f} ",
+               ('nonbond_params', '1'): "{:>8s} {:>8s} {:>3s} {:>20.16f} {:>20.16f} ",
+               ('implicit_genborn_params', ''): " {:8s} {:8.4f} {:8.4f} {:8.4f} {:8.4f} {:8.4f} "}
         if (self.subsection.header, self.interaction_type) in fmt.keys():
             return fmt[(self.subsection.header, self.interaction_type)]
         else:

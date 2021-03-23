@@ -32,12 +32,26 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
 
     def add_top(self, top, **kwargs):
+        """
+        Adds a Top object to the current Pdb object, enabling some
+        operations that couple the two
+        :param top: str, path to the .top file
+        :param kwargs: dict, extra parameters to pass to Top constructor
+        :return: None
+        """
         self.top = gml.Top(top, **kwargs)
         if self.top and not self.top.pdb:
             self.top.pdb = self
 
     @classmethod
     def from_selection(cls, pdb, selection):
+        """
+        Creates
+        :param pdb:
+        :param selection:
+        :return:
+        """
+        # TODO what to do in case of a bound Top object? implement Top.slice()?
         selected_indices = pdb.select_atoms(selection)
         new_pdb = Pdb()
         new_pdb.atoms = [atom for n, atom in enumerate(pdb.atoms) if n in selected_indices]
@@ -70,7 +84,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         for ch in sorted(chains):
             cas = set(self.select_atoms(f'name CA and chain {ch}'))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
-            print(''.join([Pdb.prot_map[i.resname] for i in atoms]))
+            print(''.join([Pdb.prot_map[i.resname] if i.resname in Pdb.prot_map.keys() else 'X' for i in atoms]))
 
     def print_nucleic_sequence(self):
         mapping = defaultdict(lambda: 'X')
@@ -83,7 +97,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         for ch in sorted(chains):
             cas = set(self.select_atoms(f"name O4' and chain {ch}"))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
-            print(''.join([mapping[i.resname] for i in atoms]))
+            print(''.join([mapping[i.resname] if i.resname in mapping.keys() else 'X' for i in atoms]))
 
     def find_missing(self):
         map_nuc = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
@@ -262,7 +276,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             vec = vector
         else:
             raise RuntimeError("In repositioning, please use either p1/p2 selections or specify the vector")
-        movable = self.atoms[self.select_atom(atomsel)]
+        movable = self.get_atom(atomsel)
         hook_xyz = self.get_coords()[self.select_atom(hooksel)]
         vec_len = sum([x**2 for x in vec])**0.5
         scale = bondlength/vec_len
@@ -349,6 +363,12 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         elif len(result) < 1:
             raise RuntimeError("Selection {} returned no atoms".format(selection_string, result))
         return result[0]
+
+    def get_atom(self, selection_string):
+        return self.atoms[self.select_atom(selection_string)]
+
+    def get_atoms(self, selection_string):
+        return [self.atoms[i] for i in self.select_atoms(selection_string)]
     
     def same_residue_as(self, query_iter):
         new_list = []
@@ -399,7 +419,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
     def mutate_protein_residue(self, resid, target, chain=''):
         self.renumber_atoms()
         chstr = 'chain {} and '.format(chain) if chain else ''
-        orig = self.atoms[self.select_atom('{}resid {} and name CA'.format(chstr, resid))]
+        orig = self.get_atom('{}resid {} and name CA'.format(chstr, resid))
         mutant = gml.ProteinMutant(orig.resname, target)
         atoms_add, hooks, geo_refs, bond_lengths, _, afters = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
@@ -446,25 +466,24 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                         break
             else:
                 aftnr = self.select_atom('{}resid {} and name {}'.format(chstr, resid, aft))
-            hindex = self.select_atom(hooksel)
             if len(geo_ref) == 2:
                 p1sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[0])
                 p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])
-                self.insert_atom(aftnr+1, self.atoms[hindex], atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
+                self.insert_atom(aftnr+1, self.get_atom(hooksel), atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
                                  p1_sel=p1sel, p2_sel=p2sel, atomname=atom_add)
             else:
                 vec = self._vector(geo_ref, resid, chain)
-                self.insert_atom(aftnr+1, self.atoms[hindex], atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
+                self.insert_atom(aftnr+1, self.get_atom(hooksel), atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
                                  vector=vec, atomname=atom_add)
 
-        for atom in self.select_atoms('{}resid {}'.format(chstr, resid)):
-            self.atoms[atom].resname = mutant.target_3l
+        for atom in self.get_atoms('{}resid {}'.format(chstr, resid)):
+            atom.resname = mutant.target_3l
         self.renumber_atoms()
 
     def _vector(self, atnames, resid, chain):
         chstr = 'chain {} and '.format(chain) if chain else ''
-        indices = [self.select_atom('{}resid {} and name {}'.format(chstr, resid, at)) for at in atnames]
-        vecs = [self._atoms_vec(self.atoms[indices[0]], self.atoms[q]) for q in indices[1:]]
+        atoms = [self.get_atom('{}resid {} and name {}'.format(chstr, resid, at)) for at in atnames]
+        vecs = [self._atoms_vec(atoms[0], at2) for at2 in atoms[1:]]
         nv = len(vecs)
         f = -1 if nv == 3 else 1
         return f*sum(v[0] for v in vecs)/nv, f*sum(v[1] for v in vecs)/nv, f*sum(v[2] for v in vecs)/nv

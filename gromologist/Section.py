@@ -487,7 +487,6 @@ class SectionMol(Section):
         self._del_atom(atom_number)
         self._del_params(atom_number)
         self.offset_numbering(-1, atom_number)
-        self.top.recalc_sys_params()
         self.update_dicts()
         if del_in_pdb:
             if self.top.pdb:

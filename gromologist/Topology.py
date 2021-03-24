@@ -283,10 +283,7 @@ class Top:
     def _read_system_properties(self):
         """
         Reads in system composition based on the [ molecules ] section
-        and calculates the number of atoms and charge of the system
-        :return: OrderedDict, contains molecule_name:number_of_molecules pairs and preserves the order read from file
-                 float, total charge of the system
-                 int, number of atoms in the system
+        :return: None
         """
         system_subsection = [s.get_subsection('molecules') for s in self.sections
                              if 'molecules' in [ss.header for ss in s.subsections]]
@@ -300,8 +297,6 @@ class Top:
         for e in system_subsection[0]:
             if e.content:
                 molecules[e.content[0]] = int(e.content[1])
-        for mol in molecules.keys():
-            sect_mol = self.get_molecule(mol)
         self.system = molecules
 
     @property
@@ -319,8 +314,6 @@ class Top:
         :return: None
         """
         sub_mol = [sub for sect in self.sections for sub in sect.subsections if isinstance(sub, gml.SubsectionAtom)]
-        for sub in sub_mol:
-            sub.calc_properties()
         self._read_system_properties()
 
     def explicit_defines(self):

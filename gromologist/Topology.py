@@ -6,7 +6,7 @@ from collections import OrderedDict
 
 
 class Top:
-    def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False, define=None):
+    def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None, keep_all=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
@@ -32,13 +32,18 @@ class Top:
         if define is not None:
             self.defines.update(define)
         self._include_all(ignore_ifdef)
+        if not keep_all:
+            self.resolve_ifdefs([] if ifdef is None else ifdef)
+        else:
+            print("Trying to keep all conditional (#ifdef/#endif) sections, this might lead to issues if a section is "
+                  "defined more than once with different conditions - check your topology afterwards!")
         self.sections = []
         self.header = []
         self._parse_sections()
         if self.top.endswith('top'):
             self._read_system_properties()
         else:
-            self.system
+            self.system = {}
 
     def __repr__(self):
         return "Topology with {} atoms and total charge {:.3f}".format(self.natoms, self.charge)
@@ -129,7 +134,8 @@ class Top:
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
 
-    def find_missing_ff_params(self, section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False):
+    def find_missing_ff_params(self, section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False,
+                               once=False):
         """
         Identifies FF parameters that are not defined in sections
         'bondtypes', angletypes', ...; if required, will attempt to
@@ -138,6 +144,7 @@ class Top:
         :param fix_by_analogy: dict, if set, will attempt to use params by analogy, matching key types to value types
         :param fix_B_from_A: bool, will assign params for state B from state A
         :param fix_A_from_B: bool, will assign params for state A from state B
+        :param once: bool, will only print a given missing term once
         :return: None
         """
         for mol in self.molecules:
@@ -162,7 +169,6 @@ class Top:
         includes all .itp files in the .top file to facilitate processing
         :return: None
         """
-        # TODO optionally insert .mdp defines in constructor & pass here?
         ignore_lines = self._find_ifdef_lines() if ign_ifdef else set()
         lines = [i for i in range(len(self._contents)) if self._contents[i].strip().startswith("#include")
                  and i not in ignore_lines]
@@ -191,6 +197,62 @@ class Top:
             if counter > 0:
                 ignore_set.add(n)
         return ignore_set
+
+    def resolve_ifdefs(self, ifdefs):
+        continuing = True
+        while continuing:
+            remove_lines = []
+            counter = 0
+            keeping = True
+            keyword = None
+            header_in_ifdef = False
+            for n, line in enumerate(self._contents):
+                if line.startswith('#define') and len(line.strip().split()) == 2:
+                    ifdefs.append(line.strip().split()[1])
+                if line.strip().startswith("#ifdef") or line.strip().startswith("#ifndef"):
+                    keyword = line.strip().split()[1] if keyword is None else keyword
+                    counter += 1
+                    if keyword in ifdefs:
+                        keeping = True if line.strip().startswith("#ifdef") else False
+                    else:
+                        keeping = False if line.strip().startswith("#ifdef") else True
+                    if counter == 1:
+                        remove_lines.append(n)
+                elif line.strip().startswith("#else"):
+                    if counter == 0:
+                        raise RuntimeError("Found an #else statement not linked to an #ifdef or #ifndef")
+                    if counter == 1:
+                        keeping = not keeping
+                        remove_lines.append(n)
+                if counter > 0:
+                    if not keeping:
+                        remove_lines.append(n)
+                    if line.strip().startswith("["):
+                        header_in_ifdef = True
+                if line.strip().startswith("#endif"):
+                    if counter == 1:
+                        remove_lines.append(n)
+                        counter -= 1
+                        if header_in_ifdef:
+                            if remove_lines and keyword not in ifdefs:
+                                print("Part of the #ifdef {} section ({} lines) will be dropped as specified because "
+                                      "the keyword was not defined. To prevent it, add 'ifdef=['{}']' as an argument "
+                                      "when loading the topology to define a keyword, or set 'keep_all=True' (might "
+                                      "occasionally produce issues).".format(keyword, len(remove_lines), keyword))
+                            elif remove_lines and keyword in ifdefs:
+                                print("Part of the #ifdef {} section ({} lines) will be dropped "
+                                      "as specified.".format(keyword, len(remove_lines), keyword))
+                            remove_lines = sorted(list(set(remove_lines)))
+                            for i in remove_lines[::-1]:
+                                _ = self._contents.pop(i)
+                            break
+                        else:
+                            remove_lines = []
+                            keyword = None
+                            keeping = True
+                    else:
+                        counter -= 1
+            continuing = False
 
     def clear_sections(self):
         """

@@ -328,6 +328,7 @@ class EntryAtom(Entry):
         else:
             self.type_b, self.charge_b, self.mass_b = None, None, None
         self.fstring = "{:>6d} {:>11s} {:>7d}{:>7s}{:>7s}{:>7d}"
+        self.molname = subsection.section.mol_name
     
     def __str__(self):
         fstring = self.fstring + self.float_fmt(self.charge) + self.float_fmt(self.mass) + '   '

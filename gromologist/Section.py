@@ -177,7 +177,7 @@ class SectionMol(Section):
             for en in to_remove[::-1]:
                 _ = sect.entries.pop(en)
             atoms = sorted([x+1 for x in self.select_atoms("resname DTS and name O5' C5'")])
-            assert len(atoms)%2 == 0
+            assert len(atoms) % 2 == 0
             for pair in range(len(atoms)//2):
                 self.nullify_bonded(*atoms[2*pair:2*pair+2], 'angles')
                 self.nullify_bonded(*atoms[2 * pair:2 * pair + 2], 'dihedrals')
@@ -426,6 +426,7 @@ class SectionMol(Section):
         :param resid: int, residue number
         :param resname: str, residue name
         :param mass: float, mass of the atom
+        :param prnt: bool, whether to print the atom being added
         :return: None
         """
         subs_atoms = self.get_subsection('atoms')
@@ -803,11 +804,13 @@ class SectionMol(Section):
                     used_params.extend(ssub.find_used_ff_params())
         return used_params
 
-    def find_missing_ff_params(self, add_section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False):
+    def find_missing_ff_params(self, add_section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False,
+                               once=False):
         if add_section == 'all':  # TODO optionally add type/atomname labels in comment
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
             subsections_to_add = [add_section]
+        self.printed = []
         for sub in subsections_to_add:
             try:
                 subsections = [s for s in self.subsections if s.header == sub]
@@ -816,7 +819,8 @@ class SectionMol(Section):
             else:
                 for ssub in subsections:
                     print(f"Searching in molecule {self.mol_name}, section {ssub}...")
-                    ssub.find_missing_ff_params(fix_by_analogy, fix_B_from_A, fix_A_from_B)
+                    ssub.find_missing_ff_params(fix_by_analogy, fix_B_from_A, fix_A_from_B, once)
+        del self.printed
 
     def label_types(self, add_section='all'):
         if add_section == 'all':
@@ -848,7 +852,7 @@ class SectionMol(Section):
                 rtp = glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')[rtpnum-1]
         elif self.top.rtp:
             rtp = ''
-        orig = self.atoms[self.select_atom('resid {} and name CA'.format(resid))]
+        orig = self.get_atom('resid {} and name CA'.format(resid))
         mutant = gml.ProteinMutant(orig.resname, target)
         # TODO double-check [ pairs ]
         targ = mutant.target_3l
@@ -860,9 +864,9 @@ class SectionMol(Section):
         if targ == 'HIS':
             targ = 'HSD' if ('HSD', 'CA') in types.keys() else 'HID'
         elif targ == 'GLY':
-            self.atoms[self.select_atom('resid {} and name HA'.format(resid))].atomname = 'HA1'
+            self.get_atom('resid {} and name HA'.format(resid)).atomname = 'HA1'
         if orig.resname == 'GLY':
-            self.atoms[self.select_atom('resid {} and name HA1'.format(resid))].atomname = 'HA'
+            self.get_atom('resid {} and name HA1'.format(resid)).atomname = 'HA'
         impropers_to_add = []
         impr_sub = self.get_subsection('impropers')
         atoms_sub = self.get_subsection('atoms')
@@ -872,10 +876,10 @@ class SectionMol(Section):
                            'CD': 'CD1', 'HD': 'HD1', 'HD1': 'HD11', 'HD2': 'HD12', 'HD3': 'HD13'}
             print("Removing atom {} from resid {} in topology".format(at, resid))
             try:
-                atnum = self.select_atom('resid {} and name {}'.format(resid, at))
+                atnum = self.get_atom('resid {} and name {}'.format(resid, at)).num
             except RuntimeError:
-                atnum = self.select_atom('resid {} and name {}'.format(resid, equivalents[at]))
-            self.del_atom(self.atoms[atnum].num, del_in_pdb=False)
+                atnum = self.get_atom('resid {} and name {}'.format(resid, equivalents[at])).num
+            self.del_atom(atnum, del_in_pdb=False)
         for atom_add, hook, aft in zip(atoms_add, hooks, afters):
             print("Adding atom {} to resid {} in topology".format(atom_add, resid))
             # if there are ambiguities in naming (two or more options):
@@ -928,8 +932,8 @@ class SectionMol(Section):
         for bond in extra_bonds:
             xsel = 'resid {} and name {}'.format(resid, bond[0])
             ysel = 'resid {} and name {}'.format(resid, bond[1])
-            xnum = self.atoms[self.select_atom(xsel)].num
-            ynum = self.atoms[self.select_atom(ysel)].num
+            xnum = self.get_atom(xsel).num
+            ynum = self.get_atom(ysel).num
             self.add_bond(xnum, ynum)
         atoms_sub.get_dicts(force_update=True)
         # looking for new impropers
@@ -938,10 +942,10 @@ class SectionMol(Section):
                 numbers = [atoms_sub.name_to_num[(resid, at)] for at in imp]
                 new_str = '{:5d} {:5d} {:5d} {:5d} {:>5s}\n'.format(*numbers, improper_type)
                 impr_sub.add_entry(gml.EntryBonded(new_str, impr_sub),
-                                   position=1 + [n for n, e in enumerate(impr_sub) if isinstance(e, gml.EntryBonded)][-1])
+                                   position=1+[n for n, e in enumerate(impr_sub) if isinstance(e, gml.EntryBonded)][-1])
         # repeating the mutation in the structure
         if mutate_in_pdb and self.top.pdb:
-            pdb_atoms = self._match_pdb_to_top(self.atoms[self.select_atom('resid {} and name CA'.format(resid))].num)
+            pdb_atoms = self._match_pdb_to_top(self.get_atom('resid {} and name CA'.format(resid)).num)
             pdb_chains = [self.top.pdb.atoms[at].chain for at in pdb_atoms]
             if len(pdb_atoms) == 1:
                 chain = '' if pdb_chains[0] == ' ' else pdb_chains[0]
@@ -976,7 +980,8 @@ class SectionMol(Section):
         reading_impropers = False
         reading_bondedtypes = False
         for line in rtp_cont:
-            if line.strip().startswith('[') and line.strip().split()[1] not in ['bondedtypes', 'atoms', 'bonds', 'impropers']:
+            if line.strip().startswith('[') and line.strip().split()[1] not in ['bondedtypes', 'atoms', 'bonds',
+                                                                                'impropers']:
                 resname = line.strip().split()[1]
             if line.strip().startswith('[') and line.strip().split()[1] == 'atoms':
                 reading_atoms = True
@@ -1073,14 +1078,14 @@ class SectionMol(Section):
             else:
                 raise RuntimeError("{} is not a valid selection".format(sel))
         self.add_dummy_def(dummy_type)
-        orig = self.atoms[self.select_atoms('resid {}'.format(resid))[0]]
+        orig = self.get_atom('resid {}'.format(resid))
         ccharge = ccharge if ccharge is not None else round(orig.charge - 0.27, 4)
         atoms_add, hooks = [basename.replace('C', 'H') + str(i) for i in range(3)], 3 * [orig_name]
         for n, atom_add_hook in enumerate(zip(atoms_add, hooks), 1):
             atom_add, hook = atom_add_hook
             print("Adding atom {} to resid {} in the topology".format(atom_add, resid))
             hooksel = 'resid {} and name {}'.format(resid, orig_name)
-            hnum = self.atoms[self.select_atom(hooksel)].num
+            hnum = self.get_atom(hooksel).num
             atnum = hnum + n
             self.add_atom(atnum, atom_add, atom_type=dummy_type, charge=0, resid=resid, resname=orig.resname, mass=1.008)
             self.add_bond(hnum, atnum)

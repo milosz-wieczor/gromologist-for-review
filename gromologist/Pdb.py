@@ -26,6 +26,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         self.altloc = altloc
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                             "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
+        self._atom_format_gro = "{:>5d}{:5s}{:>5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
 
     def __repr__(self):
@@ -200,28 +201,23 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             raise ValueError("a Top object has not been assigned; molecule info missing")
         index, err = 0, 0
         self._remove_altloc()
-        for mol_name in self.top.system.keys():
-            mol = self.top.get_molecule(mol_name)
-            n_mols = self.top.system[mol_name]
-            atom_subsection = mol.get_subsection('atoms')
-            atom_entries = [e for e in atom_subsection if isinstance(e, gml.EntryAtom)]
-            for m in range(n_mols):
-                for n, a in enumerate(atom_entries):
-                    try:
-                        rtrn = self._check_mismatch(atom_entries[n], self.atoms[index], mol_name)
-                    except IndexError:
-                        raise RuntimeError("Mismatch encountered: PDB has {} atoms while topology "
-                                           "has {}".format(n + 1, index + 1, len(self.atoms), self.top.natoms))
-                    if rtrn:
-                        if fix_pdb:
-                            self.atoms[index].atomname = atom_entries[n].atomname
-                        elif fix_top:
-                            atom_entries[n].atomname = self.atoms[index].atomname
-                    err += rtrn
-                    index += 1
-                    if err > maxwarn > -1:
-                        raise RuntimeError("Error: too many warnings; use maxwarn=N to allow for up to N exceptions,"
-                                           "or -1 to allow for any number of them")
+        for atom_top, atom_pdb in zip(self.top.atoms, self.atoms):
+            index += 1
+            try:
+                rtrn = self._check_mismatch(atom_top, atom_pdb, atom_top.molname)
+            except IndexError:
+                raise RuntimeError("Mismatch encountered: PDB has {} atoms while topology "
+                                   "has {}".format(len(self.atoms), len(self.top.atoms)))
+            if rtrn:
+                if fix_pdb:
+                    self.atoms[index].atomname = atom_top.atomname
+                elif fix_top:
+                    atom_top.atomname = self.atoms[index].atomname
+            err += rtrn
+            index += 1
+            if err > maxwarn > -1:
+                raise RuntimeError("Error: too many warnings; use maxwarn=N to allow for up to N exceptions,"
+                                   "or -1 to allow for any number of them")
         print("Check passed, all names match")
     
     @staticmethod
@@ -241,15 +237,20 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         """
         self.atoms = [a for a in self.atoms if a.altloc in [' ', self.altloc]]
     
-    def _write_atom(self, atom):
+    def _write_atom(self, atom, pdb=True):
         atom.serial %= 100000
         atom.resnum %= 10000
         if atom.occ > 1000:
             atom.occ %= 1000
         if atom.beta > 1000:
             atom.beta %= 1000
-        return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain, atom.resnum,
-                                        atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta, atom.element)
+        if pdb:
+            return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain,
+                                            atom.resnum, atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta,
+                                            atom.element)
+        else:
+            return self._atom_format_gro.format(atom.resnum, atom.resname, atom.atomname, atom.serial, atom.x, atom.y,
+                                                atom.z)
     
     def renumber_atoms(self):
         for n, atom in enumerate(self.atoms, 1):
@@ -589,6 +590,16 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             for atom in self.atoms:
                 outfile.write(self._write_atom(atom))
             outfile.write('ENDMDL\n')
+
+    def save_gro(self, outname='out.gro'):
+        if self.box[3] == self.box[4] == self.box[5] == 90.0:
+            with open(outname, 'w') as outfile:
+                outfile.write("written by gromologist\n{}\n".format(len(self.atoms)))
+                for atom in self.atoms:
+                    outfile.write(self._write_atom(atom, pdb=False))
+                outfile.write("{:10.5f}{:10.5f}{:10.5f}\n".format(*[x/10 for x in self.box[:3]]))
+        else:
+            raise RuntimeError("Only rectangular boxes are currently supported")
     
     def get_coords(self, subset=None):
         if subset:

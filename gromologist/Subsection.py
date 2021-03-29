@@ -226,16 +226,16 @@ class SubsectionBonded(Subsection):
                                 pass
         return entries
 
-    def find_missing_ff_params(self, fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False):
+    def find_missing_ff_params(self, fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False, once=False):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections if
                           sub.header == matchings[self.header]]
         for entry in self.entries:
             if isinstance(entry, gml.EntryBonded):
-                self._find_missing_ff_params(entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B)
+                self._find_missing_ff_params(entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B, once)
 
-    def _find_missing_ff_params(self, entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B):
+    def _find_missing_ff_params(self, entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B, once):
         if (entry.params_state_a and entry.params_state_b) or (entry.params_state_a and not entry.types_state_b):
             return
         int_type = entry.interaction_type
@@ -246,8 +246,11 @@ class SubsectionBonded(Subsection):
                 if parm_entry.match(entry.types_state_a, int_type):
                     found_a = True
         if not found_a and not entry.params_state_a:
-            print(f'Couldn\'t find params for interaction type {entry.subsection.header} {int_type}, '
-                  f'atom types {entry.types_state_a}, atom numbers {entry.atom_numbers}')
+            if not once or entry.types_state_a not in self.section.printed:
+                print(f'Couldn\'t find params for interaction type {entry.subsection.header} {int_type}, '
+                      f'atom types {entry.types_state_a}, atom numbers {entry.atom_numbers}')
+            if once and entry.types_state_a not in self.section.printed:
+                self.section.printed.append(entry.types_state_a)
             if fix_by_analogy:
                 candid = self._fix_by_analogy(fix_by_analogy, entry.types_state_a, subsect_params, int_type)
                 if candid:
@@ -258,8 +261,11 @@ class SubsectionBonded(Subsection):
                     if parm_entry.match(entry.types_state_b, int_type):
                         found_b = True
             if not found_b and not entry.params_state_b:
-                print(f'Couldn\'t find params for interaction type {entry.subsection.header} {int_type}, '
-                      f'atom types {entry.types_state_b}, atom numbers {entry.atom_numbers}')
+                if not once or entry.types_state_b not in self.section.printed:
+                    print(f'Couldn\'t find params for interaction type {entry.subsection.header} {int_type}, '
+                          f'atom types {entry.types_state_b}, atom numbers {entry.atom_numbers}')
+                if once and entry.types_state_b not in self.section.printed:
+                    self.section.printed.append(entry.types_state_b)
                 if fix_by_analogy:
                     candid = self._fix_by_analogy(fix_by_analogy, entry.types_state_b, subsect_params, int_type)
                     if candid:

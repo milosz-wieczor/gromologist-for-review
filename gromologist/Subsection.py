@@ -502,9 +502,12 @@ class SubsectionParam(Subsection):
                     return entry.content[npar]
         return '0'
 
-    def get_opt_dih(self):
+    def get_opt_dih(self, types=False):
         dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]
-        return [e.params[x] for e in dopts for x in [0, 1]]
+        if not types:
+            return [e.params[x] for e in dopts for x in [0, 1]]
+        else:
+            return [(*e.types, e.params[2]) for e in dopts]
 
     def get_opt_dih_indices(self):
         dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]

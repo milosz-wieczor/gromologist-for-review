@@ -135,7 +135,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 atomlist = []
             atomlist.append(at.atomname)
 
-    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=7.5, protein_only=False):
+    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=10, protein_only=False):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual
@@ -351,6 +351,11 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         print('Entry {} deleted from PDB'.format(str(atom)))
         if renumber:
             self.renumber_atoms()
+
+    def match_elements(self):
+        for a in self.atoms:
+            if not a.element:
+                a.element = [x for x in a.atomname if not x.isdigit()][0]
 
     def select_atoms(self, selection_string):
         sel = gml.SelectionParser(self)

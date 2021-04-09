@@ -1217,9 +1217,9 @@ class SectionParam(Section):
             if 'dihedral' in sub.header:
                 sub._remove_symm(prefix)
 
-    def get_opt_dih(self):
+    def get_opt_dih(self, types=False):
         ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
-        return ss.get_opt_dih()
+        return ss.get_opt_dih(types)
 
     def get_opt_dih_indices(self):
         ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]

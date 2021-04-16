@@ -295,8 +295,10 @@ class DihOpt:
             plt.plot(self.orig_vals, label='original MM')
             for n, array in enumerate(self.energy_profiles_opt, 1):
                 plt.plot(array, label='optimized MM (round {})'.format(n))
-            plt.plot(self.qm_ref, label='QM reference', c='k')
+            plt.plot(np.concatenate(self.qm_ref), label='QM reference', c='k')
             plt.legend()
+            plt.xlabel('trajectory frame')
+            plt.ylabel('energy [kJ/mol]')
             plt.show()
 
     def progress(self, _, f, context):

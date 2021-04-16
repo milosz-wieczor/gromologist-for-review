@@ -135,7 +135,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 atomlist = []
             atomlist.append(at.atomname)
 
-    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=10, protein_only=False):
+    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=10, protein_only=False, nopbc=False):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual
@@ -150,6 +150,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         :param maxwarn: int, max number of warnings before an error shows up
         :param cutoff: float, distance threshold (in A) for chain separation if using geometric criteria
         :param protein_only: bool, whether to only add chains to protein residues
+        :param nopbc: bool, whether to ignore PBC distances (assumes molecule is whole)
         :return: None
         """
         base_char = 65 + offset  # 65 is ASCII for "A"
@@ -161,7 +162,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                     prev_atom = atom
                     curr_resid = atom.resnum
                 if atom.resnum != curr_resid:
-                    dist = self._atoms_dist_pbc(atom, prev_atom)
+                    dist = self._atoms_dist_pbc(atom, prev_atom, nopbc)
                     prev_atom = atom
                     curr_resid = atom.resnum
                     if dist > cutoff:
@@ -395,8 +396,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
     def _atoms_dist(at1, at2):
         return ((at2.x - at1.x)**2 + (at2.y - at1.y)**2 + (at2.z - at1.z)**2)**0.5
 
-    def _atoms_dist_pbc(self, at1, at2):
-        if not self.box[3] == self.box[4] == self.box[5] == 90.0:
+    def _atoms_dist_pbc(self, at1, at2, nopbc=False):
+        if not self.box[3] == self.box[4] == self.box[5] == 90.0 and not nopbc:
             raise RuntimeError("Only rectangular boxes supported for PBC-based distanes")
         return (min([abs(at2.x - at1.x), self.box[0] - abs(at2.x - at1.x)]) ** 2 +
                 min([abs(at2.y - at1.y), self.box[1] - abs(at2.y - at1.y)]) ** 2 +

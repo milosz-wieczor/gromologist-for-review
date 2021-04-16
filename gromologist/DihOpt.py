@@ -240,7 +240,7 @@ class DihOpt:
         else:
             tmpi = ''
         call('{gmx} mdrun -s opt{sys}/mod{n}.tpr -o opt{sys}/mod{n}.trr -x opt{sys}/mod{n}.xtc -e opt{sys}/mod{n}.edr '
-             '-g opt{sys}/mod{n}.log -c opt{sys}/mod{n}.gro -v -ntomp 1 {tmpi} -rerun {traj} >> mdr{n}.log '
+             '-g opt{sys}/mod{n}.log -c opt{sys}/mod{n}.gro -v -ntomp 1 {tmpi} -rerun {traj} -nb cpu >> mdr{n}.log '
              '2>&1'.format(gmx=self.gmx, sys=sys, tmpi=tmpi, traj=self.traj[n], n=n), shell=True)
 
     def gmx_energy(self, sys=0, n=0):

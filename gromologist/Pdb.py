@@ -77,28 +77,40 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         new_pdb.altloc = orig_pdb.altloc
         return new_pdb
 
-    def print_protein_sequence(self):
-        chains = list({a.chain for a in self.atoms if a.atomname == 'CA'})
-        if chains == [' ']:
+    def print_protein_sequence(self, returning=False):
+        chains = list({a.chain.strip() for a in self.atoms if a.atomname == 'CA'})
+        sequences = []
+        if not chains:
             print("No chains in the molecule, run Pdb.add_chains() first")
             return
         for ch in sorted(chains):
             cas = set(self.select_atoms(f'name CA and chain {ch}'))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
-            print(''.join([Pdb.prot_map[i.resname] if i.resname in Pdb.prot_map.keys() else 'X' for i in atoms]))
+            sequences.append(''.join([Pdb.prot_map[i.resname] if i.resname in Pdb.prot_map.keys() else 'X'
+                                      for i in atoms]))
+            print(sequences[-1])
+        if returning:
+            return sequences
 
-    def print_nucleic_sequence(self):
+    def print_nucleic_sequence(self, returning=False):
         mapping = defaultdict(lambda: 'X')
+        sequences = []
         mapping.update({'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
                         'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
                         'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
                         'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
                         'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"})
-        chains = list({a.chain for a in self.atoms if a.atomname == "O4'"})
+        chains = list({a.chain.strip() for a in self.atoms if a.atomname == "O4'"})
+        if not chains:
+            print("No chains in the molecule, run Pdb.add_chains() first")
+            return
         for ch in sorted(chains):
             cas = set(self.select_atoms(f"name O4' and chain {ch}"))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
-            print(''.join([mapping[i.resname] if i.resname in mapping.keys() else 'X' for i in atoms]))
+            sequences.append(''.join([mapping[i.resname] if i.resname in mapping.keys() else 'X' for i in atoms]))
+            print(sequences[-1])
+        if returning:
+            return sequences
 
     def find_missing(self):
         map_nuc = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",

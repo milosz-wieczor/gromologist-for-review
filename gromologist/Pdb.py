@@ -77,7 +77,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         new_pdb.altloc = orig_pdb.altloc
         return new_pdb
 
-    def print_protein_sequence(self, returning=False):
+    def print_protein_sequence(self):
         chains = list({a.chain.strip() for a in self.atoms if a.atomname == 'CA'})
         sequences = []
         if not chains:
@@ -88,11 +88,9 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
             sequences.append(''.join([Pdb.prot_map[i.resname] if i.resname in Pdb.prot_map.keys() else 'X'
                                       for i in atoms]))
-            print(sequences[-1])
-        if returning:
-            return sequences
+        return sequences
 
-    def print_nucleic_sequence(self, returning=False):
+    def print_nucleic_sequence(self):
         mapping = defaultdict(lambda: 'X')
         sequences = []
         mapping.update({'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
@@ -108,9 +106,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             cas = set(self.select_atoms(f"name O4' and chain {ch}"))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
             sequences.append(''.join([mapping[i.resname] if i.resname in mapping.keys() else 'X' for i in atoms]))
-            print(sequences[-1])
-        if returning:
-            return sequences
+        return sequences
 
     def find_missing(self):
         map_nuc = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",

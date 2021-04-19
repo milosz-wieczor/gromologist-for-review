@@ -447,9 +447,17 @@ class Top:
             if mol.is_alchemical:
                 mol._patch_alch()
 
-    def swap_states(self):
-        for mol in self.molecules:
-            mol.swap_states()
+    def swap_states(self, **kwargs):
+        for mol in self.alchemical_molecules:
+            mol.swap_states(**kwargs)
+
+    def drop_state_a(self, **kwargs):
+        for mol in self.alchemical_molecules:
+            mol.drop_state_a(**kwargs)
+
+    def drop_state_b(self, **kwargs):
+        for mol in self.alchemical_molecules:
+            mol.drop_state_b(**kwargs)
 
     def rename_dummies(self):
         for mol in self.molecules:

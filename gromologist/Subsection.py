@@ -472,6 +472,19 @@ class SubsectionParam(Subsection):
                          for n, entry in enumerate(self.entries)}
         self.entries.sort(key=self._sorting_fn)
 
+    def find_used_ff_params(self):
+        used_parm_entries = []
+        used_atomtypes_a = {a.type for mol in self.section.top.molecules for a in mol.atoms
+                            if isinstance(a, gml.EntryAtom)}
+        used_atomtypes_b = {a.type_b for mol in self.section.top.molecules for a in mol.atoms
+                            if isinstance(a, gml.EntryAtom) and a.type_b is not None}
+        used_atomtypes = used_atomtypes_a.union(used_atomtypes_b)
+        for entry in self.entries:
+            if isinstance(entry, gml.EntryParam):
+                if all(tp in used_atomtypes for tp in entry.types):
+                    used_parm_entries.append(entry.identifier)
+        return used_parm_entries
+
     def _sorting_fn(self, entry):
         """
         Comments should go first, then we sort based on first, second,

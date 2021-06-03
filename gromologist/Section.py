@@ -74,7 +74,7 @@ class Section:
         """
         ssect = [s for s in self.subsections if s.header == section_name]
         if len(ssect) == 0:
-            raise KeyError
+            raise KeyError("Subsection {} not found, check your molecule topology!".format(section_name))
         elif len(ssect) > 1:
             raise RuntimeError("Error: subsection {} duplicated in {}".format(section_name, str(self)))
         return ssect[0]
@@ -1166,6 +1166,22 @@ class SectionParam(Section):
             if 'dihedral' in sub.header:
                 sub.sort()  # TODO if two have same periodicity & atoms, remove one with 0-s (PMX)
 
+    def find_used_ff_params(self, section='all'):
+        used_params = []
+        if section == 'all':  # TODO optionally add type/atomname labels in comment
+            subsections_to_add = ['atomtypes', 'pairtypes', 'nonbonded_params', 'constrainttypes']
+        else:
+            subsections_to_add = [section]
+        for sub in subsections_to_add:
+            try:
+                subsections = [s for s in self.subsections if s.header == sub]
+            except IndexError:
+                pass
+            else:
+                for ssub in subsections:
+                    used_params.extend(ssub.find_used_ff_params())
+        return used_params
+
     def clone_type(self, atomtype, prefix):
         """
         Generates an exact type of a selected atomtype,
@@ -1187,7 +1203,8 @@ class SectionParam(Section):
 
     def clean_unused(self, used_params, section='all'):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
-                     'impropers': 'dihedraltypes'}
+                     'impropers': 'dihedraltypes', 'atomtypes': 'atomtypes', 'pairtypes': 'pairtypes',
+                     'nonbonded_params': 'nonbonded_params', 'constrainttypes': 'constrainttypes'}
         if section == 'all':
             subs = list(matchings.values())
         else:
@@ -1200,9 +1217,9 @@ class SectionParam(Section):
                     if not isinstance(entry, gml.EntryParam) or entry.identifier in used_params:
                         new_entries.append(entry)
                 ssect.entries = new_entries
-        atomtypes_used = {e.type for mol in self.top.molecules for e in mol.get_subsection('atoms')
+        atomtypes_used = {e.type for mol in self.top.molecules for e in mol.atoms
                           if isinstance(e, gml.EntryAtom)}
-        atomtypes_b_used = {e.type_b for mol in self.top.molecules for e in mol.get_subsection('atoms')
+        atomtypes_b_used = {e.type_b for mol in self.top.molecules for e in mol.atoms
                             if isinstance(e, gml.EntryAtom) and e.type_b}
         atomtypes_used.union(atomtypes_b_used)
         ssect = self.get_subsection('atomtypes')

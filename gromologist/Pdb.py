@@ -24,6 +24,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         if not self.atoms and self.top:
             self.atoms = [Atom.from_top_entry(entry) for mol in self.top.molecules for entry in mol.atoms]
         self.altloc = altloc
+        self.conect = {}  # TODO will require further adjustments
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                             "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
         self._atom_format_gro = "{:>5d}{:5s}{:>5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}\n"
@@ -260,6 +261,10 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         else:
             return self._atom_format_gro.format(atom.resnum, atom.resname, atom.atomname, atom.serial, atom.x, atom.y,
                                                 atom.z)
+
+    @staticmethod
+    def _write_conect(atom, bonded):
+        return 'CONECT' + ('{:>5}' * (len(bonded)+1)).format(atom, *bonded) + '\n'
     
     def renumber_atoms(self):
         for n, atom in enumerate(self.atoms, 1):
@@ -417,7 +422,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         
     @staticmethod
     def _parse_contents(contents):
-        atoms, remarks = [], []
+        atoms, remarks, conect = [], [], {}
         box = [7.5, 7.5, 7.5, 90, 90, 90]  # generic default, will be overwritten if present
         for line in contents:
             if line.startswith('ATOM') or line.startswith('HETATM'):
@@ -427,6 +432,11 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                       [float(line[33+7*a:33+7*(a+1)]) for a in range(3)]
             elif not line.startswith('TER') and not line.startswith('END'):
                 remarks.append(line)
+            elif line.startswith('CONECT'):
+                conect[int(line[6:11].strip())] = []
+                for i in [11, 16, 21, 26]:
+                    if line[i:i+5].strip():
+                        conect[int(line[6:11].strip())].append(int(line[i:i+5].strip()))
             if line.startswith('END') or line.startswith('ENDMDL'):
                 break
         return atoms, tuple(box), remarks
@@ -530,6 +540,14 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         else:
             raise RuntimeError('Can\'t read box properties')
         return atoms, tuple(box), remarks
+
+    def add_conect(self, cutoff=1.55):
+        import numpy as np
+        coords = np.array(self.get_coords())
+        for n, atom in enumerate(self.atoms):
+            dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
+            selected = list(np.where(np.logical_and(dists<cutoff, dists>0.1))[0]+1)
+            self.conect[n+1] = selected
         
     def fill_beta(self, values, serials=None, smooth=False, ignore_mem=False):
         """
@@ -603,6 +621,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 outfile.write(line.strip() + '\n')
             for atom in self.atoms:
                 outfile.write(self._write_atom(atom))
+            for conect in self.conect.keys():
+                outfile.write(self._write_conect(conect, self.conect[conect]))
             outfile.write('ENDMDL\n')
 
     def save_gro(self, outname='out.gro'):

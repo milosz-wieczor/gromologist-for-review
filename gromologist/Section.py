@@ -693,7 +693,10 @@ class SectionMol(Section):
             raise RuntimeError("Bond between atoms {} and {} not found in the topology".format(at1, at2))
         angles_to_remove = self._generate_angles(self, at1, at2)
         pairs_to_remove, dihedrals_to_remove = self._generate_14(self, at1, at2)
-        impropers = self.get_subsection('impropers')
+        try:
+            impropers = self.get_subsection('impropers')
+        except KeyError:
+            impropers = self.get_subsection('dihedrals')
         impropers_to_remove = []
         for n, entry in enumerate(impropers.entries):
             if isinstance(entry, gml.EntryBonded) and at1 in entry.atom_numbers and at2 in entry.atom_numbers:

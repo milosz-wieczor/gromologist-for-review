@@ -78,7 +78,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         new_pdb.altloc = orig_pdb.altloc
         return new_pdb
 
-    def print_protein_sequence(self):
+    def print_protein_sequence(self, gaps=False):
         chains = list({a.chain.strip() for a in self.atoms if a.atomname == 'CA'})
         sequences = []
         if not chains:
@@ -86,9 +86,22 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             return
         for ch in sorted(chains):
             cas = set(self.select_atoms(f'name CA and chain {ch}'))
-            atoms = [a for n, a in enumerate(self.atoms) if n in cas]
-            sequences.append(''.join([Pdb.prot_map[i.resname] if i.resname in Pdb.prot_map.keys() else 'X'
-                                      for i in atoms]))
+            atoms = [a for n, a in enumerate(self.atoms) if n in cas and a.altloc in [' ', self.altloc]]
+            if not gaps:
+                sequences.append(''.join([Pdb.prot_map[i.resname] if i.resname in Pdb.prot_map.keys() else 'X'
+                                          for i in atoms]))
+            else:
+                res = [a.resnum for n, a in enumerate(self.atoms) if n in cas and a.altloc in [' ', self.altloc]]
+                seq = []
+                counter = 0
+                for r in range(res[0], res[-1]+1):
+                    if r in res:
+                        rname = atoms[counter].resname
+                        counter += 1
+                        seq.append(Pdb.prot_map[rname] if rname in Pdb.prot_map.keys() else 'X')
+                    else:
+                        seq.append('-')
+                sequences.append(''.join(seq))
         return sequences
 
     def print_nucleic_sequence(self):

@@ -103,6 +103,23 @@ Other                        1
 By analogy, the `.list_bonds()` method can be used to `list_angles`, `list_dihedrals`
 and `list_impropers`.
 
+For structure files, several functions facilitate e.g. the identification of missing
+atoms (useful when parsing files freshly downloaded from PDB):
+
+```
+>>> p = Pdb('1BCD.pdb')
+>>> p.find_missing()
+```
+
+To print the sequence of the macromolecules in the file, use:
+
+```
+>>> p.print_nucleic_sequence()
+>>> p.print_protein_sequence()
+```
+
+With `Pdb.print_protein_sequence()`, you can add `gaps=True` to fill in missing residues
+with dashes (-), e.g. for alignment in Modeller.
 
 ##### Producing lightweight files
 

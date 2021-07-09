@@ -332,7 +332,21 @@ class EntryAtom(Entry):
     @property
     def molname(self):
         return self.subsection.section.mol_name
-    
+
+    @property
+    def sigma(self):
+        entry = self._get_atomtype_entry()
+        return float(entry.params[0])
+
+    @property
+    def epsilon(self):
+        entry = self._get_atomtype_entry()
+        return float(entry.params[1])
+
+    def _get_atomtype_entry(self):
+        atomtypes = self.subsection.section.top.parameters.get_subsection('atomtypes')
+        return [e for e in atomtypes if isinstance(e, EntryParam) and e.types[0] == self.type][-1]
+
     def __str__(self):
         fstring = self.fstring + self.float_fmt(self.charge) + self.float_fmt(self.mass) + '   '
         if self.type_b:

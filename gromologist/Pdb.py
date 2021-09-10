@@ -278,6 +278,38 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
     @staticmethod
     def _write_conect(atom, bonded):
         return 'CONECT' + ('{:>5}' * (len(bonded)+1)).format(atom, *bonded) + '\n'
+
+    def tip3_to_opc(self):
+        names = {"TIP3", "WAT", "SOL", "HOH", "TIP"}
+        o_names = {"O", "OW"}
+        h_names = {"H", "HW"}
+        new_atoms = []
+        water_mol = {}
+        for n, a in enumerate(self.atoms):
+            if a.resname in names:
+                if a.atomname in o_names:
+                    water_mol["O"] = a
+                if a.atomname[:-1] in h_names:
+                    try:
+                        _ = water_mol["H1"]
+                    except KeyError:
+                        water_mol["H1"] = a
+                    else:
+                        water_mol["H2"] = a
+                if len(water_mol) == 3:
+                    new_atoms.append(a)
+                    new_atom = Atom(self._write_atom(water_mol["O"]))
+                    new_atom.atomname = "MW"
+                    offs = 0.147722363
+                    new_atom.set_coords([a + offs*(b + c - 2*a) for a, b, c
+                                         in zip(new_atom.coords, water_mol["H1"].coords, water_mol["H2"].coords)])
+                    new_atoms.append(new_atom)
+                    water_mol = {}
+                else:
+                    new_atoms.append(a)
+            else:
+                new_atoms.append(a)
+        self.atoms = new_atoms
     
     def renumber_atoms(self):
         for n, atom in enumerate(self.atoms, 1):

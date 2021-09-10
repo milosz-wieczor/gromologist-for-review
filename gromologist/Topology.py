@@ -27,7 +27,8 @@ class Top:
         self.fname = filename
         self.top = self.fname.split('/')[-1]
         self.dir = os.getcwd() + '/' + '/'.join(self.fname.split('/')[:-1])
-        self._contents = open(self.fname).readlines()
+        with open(self.fname) as top_file:
+            self._contents = top_file.readlines()
         self.defines = {}
         if define is not None:
             self.defines.update(define)
@@ -176,7 +177,8 @@ class Top:
         while len(lines) > 0:
             lnum = lines[0]
             to_include, extra_prefix = self._find_in_path(self._contents.pop(lnum).split()[1].strip('"\''))
-            contents = self._add_prefix_to_include(open(to_include).readlines(), extra_prefix)
+            with open(to_include) as includable:
+                contents = self._add_prefix_to_include(includable.readlines(), extra_prefix)
             self._contents[lnum:lnum] = contents
             ignore_lines = self._find_ifdef_lines() if ign_ifdef else set()
             lines = [i for i in range(len(self._contents)) if self._contents[i].startswith("#include")

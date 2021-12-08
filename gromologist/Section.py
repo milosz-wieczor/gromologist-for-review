@@ -449,7 +449,7 @@ class SectionMol(Section):
         elif resid and not resname:
             ref_entry = [e for e in atoms if (isinstance(e, gml.EntryAtom) and e.resid == resid)][0]
             resname = ref_entry.resname
-        if not mass:
+        if mass is None:
             param_sect = [s for s in self.top.sections if isinstance(s, SectionParam)][0]
             try:
                 param_entry = [e for e in param_sect.get_subsection('atomtypes').entries
@@ -680,6 +680,8 @@ class SectionMol(Section):
         new_bond = [tuple(sorted([int(atom_own), int(atom_other)]))]
         new_angles = self._generate_angles(other, atom_own, atom_other)
         new_pairs, new_dihedrals = self._generate_14(other, atom_own, atom_other)
+        print(new_bond, new_angles, new_pairs, new_dihedrals)
+        # TODO remove overlapping pairs between new_bond/new_angles and new_pairs for 4- and 5-membered rings
         for sub, entries in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
                                 [new_bond, new_pairs, new_angles, new_dihedrals]):
             subsection = self.get_subsection(sub)
@@ -942,7 +944,18 @@ class SectionMol(Section):
         # looking for new impropers
         for imp in impropers_to_add:
             if set(imp).intersection(set(atoms_add)):
-                numbers = [atoms_sub.name_to_num[(resid, at)] for at in imp]
+                numbers = []
+                for at in imp:
+                    if at.startswith('-'):
+                        rid = resid - 1
+                        atx = at[1:]
+                    elif at.startswith('+'):
+                        rid = resid + 1
+                        atx = at[1:]
+                    else:
+                        rid = resid
+                        atx = at
+                    numbers.append(atoms_sub.name_to_num[(rid, atx)])
                 new_str = '{:5d} {:5d} {:5d} {:5d} {:>5s}\n'.format(*numbers, improper_type)
                 impr_sub.add_entry(gml.EntryBonded(new_str, impr_sub),
                                    position=1+[n for n, e in enumerate(impr_sub) if isinstance(e, gml.EntryBonded)][-1])

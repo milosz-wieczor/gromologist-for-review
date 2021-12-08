@@ -6,7 +6,8 @@ from collections import OrderedDict
 
 
 class Top:
-    def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None, keep_all=False):
+    def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None, keep_all=False,
+                 suppress=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
@@ -17,6 +18,7 @@ class Top:
         :param define: dict, key:value pairs with variables that will be defined in .mdp
         """
         # TODO maybe allow for construction of a blank top with a possibility to read data later?
+        self.suppress = suppress
         if not gmx_dir:
             self.gromacs_dir = self.find_gmx_dir()
         else:
@@ -35,9 +37,10 @@ class Top:
         self._include_all(ignore_ifdef)
         if not keep_all:
             self.resolve_ifdefs([] if ifdef is None else ifdef)
+            self.print("Trying to keep all conditional (#ifdef/#endif) sections, this might lead to issues if a section"
+                       " is defined more than once with different conditions - check your topology afterwards!")
         else:
-            print("Trying to keep all conditional (#ifdef/#endif) sections, this might lead to issues if a section is "
-                  "defined more than once with different conditions - check your topology afterwards!")
+            pass
         self.sections = []
         self.header = []
         self._parse_sections()
@@ -49,6 +52,10 @@ class Top:
     def __repr__(self):
         return "Topology with {} atoms and total charge {:.3f}".format(self.natoms, self.charge)
 
+    def print(self, *args):
+        if not self.suppress:
+            print(*args)
+
     @classmethod
     def _from_text(cls, text, gmx_dir=None, pdb=None, ignore_ifdef=False):
         with open('tmp_topfile.gromo', 'w') as tmp:
@@ -57,8 +64,7 @@ class Top:
         os.remove('tmp_topfile.gromo')
         return instance
 
-    @staticmethod
-    def find_gmx_dir():
+    def find_gmx_dir(self):
         """
         Attempts to find Gromacs internal files to fall back to
         when default .itp files are included using the
@@ -74,10 +80,10 @@ class Top:
             gmx = os.popen('which grompp 2> /dev/null').read().strip()
         if gmx:
             gmx = '/'.join(gmx.split('/')[:-2]) + '/share/gromacs/top'
-            print('Gromacs files found in directory {}'.format(gmx))
+            self.print('Gromacs files found in directory {}'.format(gmx))
             return gmx
         else:
-            print('No working Gromacs compilation found, assuming all file dependencies are referred to locally')
+            self.print('No working Gromacs compilation found, assuming all file dependencies are referred to locally')
             return ""
 
     @property
@@ -238,13 +244,13 @@ class Top:
                         counter -= 1
                         if header_in_ifdef:
                             if remove_lines and keyword not in ifdefs:
-                                print("Part of the #ifdef {} section ({} lines) will be dropped as specified because "
-                                      "the keyword was not defined. To prevent it, add 'ifdef=['{}']' as an argument "
-                                      "when loading the topology to define a keyword, or set 'keep_all=True' (might "
-                                      "occasionally produce issues).".format(keyword, len(remove_lines), keyword))
+                                self.print("Part of the #ifdef {} section ({} lines) will be dropped as specified because "
+                                          "the keyword was not defined. To prevent it, add 'ifdef=['{}']' as an argument "
+                                          "when loading the topology to define a keyword, or set 'keep_all=True' (might "
+                                          "occasionally produce issues).".format(keyword, len(remove_lines), keyword))
                             elif remove_lines and keyword in ifdefs:
-                                print("Part of the #ifdef {} section ({} lines) will be dropped "
-                                      "as specified.".format(keyword, len(remove_lines), keyword))
+                                self.print("Part of the #ifdef {} section ({} lines) will be dropped "
+                                           "as specified.".format(keyword, len(remove_lines), keyword))
                             remove_lines = sorted(list(set(remove_lines)))
                             for i in remove_lines[::-1]:
                                 _ = self._contents.pop(i)
@@ -356,7 +362,7 @@ class Top:
         if len(system_subsection) > 1:
             raise RuntimeError("Multiple 'molecules' subsection found in the topology, this is not allowed")
         elif len(system_subsection) == 0:
-            print("Section 'molecules' not present in the topology, assuming this is an isolated .itp")
+            self.print("Section 'molecules' not present in the topology, assuming this is an isolated .itp")
             self.system = None
             return
         for e in system_subsection[0]:

@@ -83,6 +83,7 @@ class EntryBonded(Entry):
                  ('dihedrals', '3'): (float, float, float, float, float, float),
                  ('dihedrals', '2'): (float, float),
                  ('impropers', '2'): (float, float),
+                 ('impropers', '1'): (float, float, int),  # temporary hack, fix this pls
                  ('cmap', '1'): (float,),
                  ('position_restraints', '1'): (float, float, float),
                  ('settles', '1'): (float, float)}
@@ -242,7 +243,7 @@ class EntryParam(Entry):
                ('dihedraltypes', '3'): "{:>8s} {:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>13.6f} {:>13.6f} "
                                        "{:>13.6f} {:>13.6f} ",
                ('dihedraltypes', '2'): "{:>8s} {:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} ",
-               ('dihedraltypes', '1'): "{:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>6d} ",
+               ('dihedraltypes', '1'): "{:>8s} {:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>6d} ",
                ('atomtypes', ''): "{:>6s} {} {:>6s} {:>13s} {:>9s} {:>3s} {:>16.12f} {:>9.5f} ",
                ('pairtypes', '1'): "{:>8s} {:>8s} {:>3s} {:>16.12f} {:>16.12f} ",
                ('nonbond_params', '1'): "{:>8s} {:>8s} {:>3s} {:>20.16f} {:>20.16f} ",

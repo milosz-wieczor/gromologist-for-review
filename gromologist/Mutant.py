@@ -2,6 +2,8 @@ import gromologist as gml
 
 
 class ProteinMutant:
+    # TODO
+    # W > Z -> not working
     map_pro = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
                'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
                'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
@@ -25,7 +27,7 @@ class ProteinMutant:
         self.remove_from_orig = []
         self.add_to_target = []
         length = max(len(orig_gps), len(target_gps))
-        diverged = False # if one mismatch is found, side chain will be rebuilt all the way from there
+        diverged = False  # if one mismatch is found, side chain will be rebuilt all the way from there
         for i in range(length):
             orig = orig_gps[i] if i < len(orig_gps) else False
             targ = target_gps[i] if i < len(target_gps) else False
@@ -35,6 +37,10 @@ class ProteinMutant:
                 if targ:
                     self.add_to_target.append(targ)
                 diverged = True
+        if self.name[-1] == 'P':
+            self.remove_from_orig.append('PH')
+        if self.name[0] == 'P':
+            self.add_to_target.append('PH')
 
     def atoms_to_add(self):
         atoms = []
@@ -67,39 +73,76 @@ class ProteinMutant:
 
     @staticmethod
     def groups(key):
-        gdict = {'CB': ['CB', 'HB1', 'HB2'], 'CG': ['CG', 'HG1', 'HG2'], 'CD': ['CD', 'HD1', 'HD2'],
-                 'HA': ['HA2'], 'HB': ['HB3'], 'HD': ['HD3'], 'BM': ['CB', 'HB', 'CG2', 'HG21', 'HG22', 'HG23'],
-                 'SH': ['SG', 'HG'], 'OH': ['OG', 'HG'], 'CO': ['CG', 'OD1', 'OD2'], 'DO': ['CD', 'OE1', 'OE2'],
-                 'AM': ['CG', 'OD1', 'ND2', 'HD21', 'HD22'], 'AN': ['CD', 'OE1', 'NE2', 'HE21', 'HE22'],
-                 'AR': ['CG', 'CD1', 'HD1', 'CD2', 'HD2', 'CE1', 'HE1', 'CE2', 'HE2', 'CZ'], 'HG': ['HG3'],
-                 'HZ': ['HZ'], 'LH': ['CG', 'HG', 'CD2', 'HD21', 'HD22', 'HD23'], 'OY': ['OH', 'HH'],
-                 'SM': ['SD', 'CE', 'HE1', 'HE2', 'HE3'], 'KH': ['CE', 'HE1', 'HE2', 'NZ', 'HZ1', 'HZ2', 'HZ3'],
-                 'HR': ['CG', 'ND1', 'CD2', 'HD2', 'CE1', 'NE2', 'HE1', 'HD1'], 'GG': ['CG1', 'HG11', 'HG12'],
-                 'RH': ['NE', 'HE', 'CZ', 'NH1', 'HH11', 'HH12', 'NH2', 'HH21', 'HH22']
+        gdict = {'CB': ['CB', 'HB1', 'HB2'],
+                 'CG': ['CG', 'HG1', 'HG2'],
+                 'CD': ['CD', 'HD1', 'HD2'],
+                 'HA': ['HA2'],
+                 'HB': ['HB3'],
+                 'HD': ['HD3'],
+                 'BM': ['CB', 'HB', 'CG2', 'HG21', 'HG22', 'HG23'],
+                 'SH': ['SG', 'HG'],
+                 'OH': ['OG', 'HG'],
+                 'CO': ['CG', 'OD1', 'OD2'],
+                 'DO': ['CD', 'OE1', 'OE2'],
+                 'AM': ['CG', 'OD1', 'ND2', 'HD21', 'HD22'],
+                 'AN': ['CD', 'OE1', 'NE2', 'HE21', 'HE22'],
+                 'AR': ['CG', 'CD1', 'HD1', 'CD2', 'HD2', 'CE1', 'HE1', 'CE2', 'HE2', 'CZ'],
+                 'HG': ['HG3'],
+                 'HZ': ['HZ'],
+                 'LH': ['CG', 'HG', 'CD2', 'HD21', 'HD22', 'HD23'],
+                 'OY': ['OH', 'HH'],
+                 'SM': ['SD', 'CE', 'HE1', 'HE2', 'HE3'],
+                 'KH': ['CE', 'HE1', 'HE2', 'NZ', 'HZ1', 'HZ2', 'HZ3'],
+                 'HR': ['CG', 'ND1', 'CD2', 'HD2', 'CE1', 'NE2', 'HE1', 'HD1'],
+                 'GG': ['CG1', 'HG11', 'HG12'],
+                 'RH': ['NE', 'HE', 'CZ', 'NH1', 'HH11', 'HH12', 'NH2', 'HH21', 'HH22'],
+                 'PD': ['CD', 'HD1', 'HD2'],
+                 'PG': ['CG', 'HG1', 'HG2'],
+                 'PB': ['CB', 'HB1', 'HB2'],
+                 'PH': ['HN']
                  }
         return gdict[key]
 
     @staticmethod
     def afters(key):
-        aftdict = {'CB': [('HA', 'HA2'), 'CB', 'HB1'], 'CG': [('HB2', 'HB'), ('CG', 'CG1'), ('HG1', 'HG11')], 'CD': [('HG2', 'HG12', 'CD2'),
-                   ('CD', 'CD1'), ('HD1', 'HD11')], 'HA': [('HA', 'HA1')], 'HB': ['HB2'], 'HD': [('HD2', 'HD12')],
-                   'BM': ['HA', 'CB', 'HB', 'CG2', 'HG21', 'HG22'], 'SH': ['HB2', 'SG'], 'OH': [('HB2', 'CG2'), ('OG', 'OG1')],
-                   'CO': ['HB2', 'CG', 'OD1'], 'DO': [('HG2'), 'CD', 'OE1'], 'AM': ['HB2', 'CG', 'OD1', 'ND2', 'HD21'],
-                   'AN': ['HG2', 'CD', 'OE1', 'NE2', 'HE21'], 'GG': [('HB2', 'HG23'), 'CG1', 'HG11'],
-                   'AR': ['HB2', 'CG', 'CD1', 'HD1', 'CD2', 'HD2', 'CE1', 'HE1', 'CE2', 'HE2'], 'HG': [('HG2', 'HG12')],
-                   'HZ': ['CZ'], 'LH': ['HB2', 'CG', 'HG', 'CD2', 'HD21', 'HD22'], 'OY': ['CZ', 'OH'],
-                   'SM': ['HG2', 'SD', 'CE', 'HE1', 'HE2'], 'KH': ['HD2', 'CE', 'HE1', 'HE2', 'NZ', 'HZ1', 'HZ2'],
+        aftdict = {'CB': [('HA', 'HA2', 'HA1'), 'CB', 'HB1'],
+                   'PB': [('HA', 'HA2', 'HA1'), 'CB', 'HB1'],
+                   'CG': [('HB2', 'HB'), ('CG', 'CG1'), ('HG1', 'HG11')],
+                   'PG': [('HB2', 'HB'), ('CG', 'CG1'), ('HG1', 'HG11')],
+                   'CD': [('HG2', 'HG12', 'CD2'), ('CD', 'CD1'), ('HD1', 'HD11')],
+                   'PD': [('HG2', 'HG12', 'CD2'), ('CD', 'CD1'), ('HD1', 'HD11')],
+                   'HA': [('HA', 'HA1')],
+                   'HB': ['HB2'],
+                   'HD': [('HD2', 'HD12')],
+                   'BM': ['HA', 'CB', 'HB', 'CG2', 'HG21', 'HG22'],
+                   'SH': ['HB2', 'SG'],
+                   'OH': [('HB2', 'CG2'), ('OG', 'OG1')],
+                   'CO': ['HB2', 'CG', 'OD1'],
+                   'DO': [('HG2'), 'CD', 'OE1'],
+                   'AM': ['HB2', 'CG', 'OD1', 'ND2', 'HD21'],
+                   'AN': ['HG2', 'CD', 'OE1', 'NE2', 'HE21'],
+                   'GG': [('HB2', 'HG23'), 'CG1', 'HG11'],
+                   'AR': ['HB2', 'CG', 'CD1', 'HD1', 'CD2', 'HD2', 'CE1', 'HE1', 'CE2', 'HE2'],
+                   'HG': [('HG2', 'HG12')],
+                   'HZ': ['CZ'], 'LH': ['HB2', 'CG', 'HG', 'CD2', 'HD21', 'HD22'],
+                   'OY': ['CZ', 'OH'],
+                   'SM': ['HG2', 'SD', 'CE', 'HE1', 'HE2'],
+                   'KH': ['HD2', 'CE', 'HE1', 'HE2', 'NZ', 'HZ1', 'HZ2'],
                    'HR': ['HB2', 'CG', 'ND1', 'CD2', 'HD2', 'CE1', 'NE2', 'HE1'],
-                   'RH': ['HD2', 'NE', 'HE', 'CZ', 'NH1', 'HH11', 'HH12', 'NH2', 'HH21']
-                 }
+                   'RH': ['HD2', 'NE', 'HE', 'CZ', 'NH1', 'HH11', 'HH12', 'NH2', 'HH21'],
+                   'PH': ['N']
+                   }
         return aftdict[key]
 
     @staticmethod
     def bonds(key):
         bonds = {'CB': [['CA', 'CB'], ['CB', 'HB1'], ['CB', 'HB2']],
+                 'PB': [['CA', 'CB'], ['CB', 'HB1'], ['CB', 'HB2']],
                  'CG': [['CB', 'CG'], [('CG', 'CG1'), 'HG1'], [('CG', 'CG1'), 'HG2']],
+                 'PG': [['CB', 'CG'], [('CG', 'CG1'), 'HG1'], [('CG', 'CG1'), 'HG2']],
                  'GG': [['CB', 'CG1'], ['CG1', 'HG11'], ['CG1', 'HG12']],
                  'CD': [[('CG', 'CG1'), 'CD'], [('CD', 'CD1'), 'HD1'], [('CD', 'CD1'), 'HD2']],
+                 'PD': [[('CG', 'CG1'), 'CD'], [('CD', 'CD1'), 'HD1'], [('CD', 'CD1'), 'HD2']],
                  'BM': [['CA', 'CB'], ['CB', 'HB'], ['CB', 'CG2'], ['CG2', 'HG21'], ['CG2', 'HG22'], ['CG2', 'HG23']],
                  'SH': [['CB', 'SG'], ['SG', 'HG']],
                  'OH': [['CB', 'OG'], [('OG', 'OG1'), 'HG']],
@@ -114,6 +157,7 @@ class ProteinMutant:
                  'SM': [['CG', 'SD'], ['SD', 'CE'], ['CE', 'HE1'], ['CE', 'HE2'], ['CE', 'HE3']],
                  'KH': [['CD', 'CE'], ['CE', 'HE1'], ['CE', 'HE2'], ['CE', 'NZ'], ['NZ', 'HZ1'], ['NZ', 'HZ2'],
                         ['NZ', 'HZ3']],
+                 'PH': [['N', 'H']],
                  'HZ': [['CZ', 'HZ']],
                  'HA': [['CA', 'HA2']],
                  'HB': [['CB', 'HB3']],
@@ -122,21 +166,28 @@ class ProteinMutant:
                  'HR': [['CB', 'CG'], ['CG', 'ND1'], ['CG', 'CD2'], ['CD2', 'HD2'], ['ND1', 'CE1'], ['CD2', 'NE2'],
                         ['CE1', 'HE1'], ['ND1', 'HD1']],
                  'RH': [['CD', 'NE'], ['NE', 'HE'], ['NE', 'CZ'], ['CZ', 'NH1'], ['NH1', 'HH11'], ['NH1', 'HH12'],
-                        ['CZ', 'NH2'], ['NH2', 'HH21'], ['NH2', 'HH22']]}
+                        ['CZ', 'NH2'], ['NH2', 'HH21'], ['NH2', 'HH22']]
+                 }
         return bonds[key]
 
     @staticmethod
     def anchors(key):
         # obligatorily same order as in groups
-        anchors = {'CB': [['CA', 'HA', 'C', 'N'], ['N', 'CA'], ['HA', 'CA']],
+        anchors = {'CB': [['CA', ('HA1', 'HA'), 'C', 'N'], ['N', 'CA'], [('HA1', 'HA'), 'CA']],
+                   'PB': [['CA', ('HA1', 'HA'), 'C', 'N'], ['N', ('HA1', 'HA')],
+                          [('HA1', 'HA'), 'CB', 'CB', 'CB', 'HB1', 'C', 'C', 'C']],
                    'CG': [['CB', 'CA', ('HB1', 'HB'), ('HB2', 'CG2')], [('HB2', 'CG2'), 'CB'], [('HB1', 'HB'), 'CB']],
+                   'PG': [['CA', 'CB', 'CB', 'N', 'N', 'N'], [('HA1', 'HA'), 'CB'], ['C', 'CA']],
                    'GG': [['CB', 'CA', 'HB', 'CG2'], ['CG2', 'CB'], ['HB', 'CB']],
-                   'CD': [[('CG', 'CG1'), 'CB', ('HG1', 'HG11', 'HG'), ('HG2', 'HG12', 'CD2')], [('HG2', 'HG12', 'CD2'), ('CG', 'CG1')],
+                   'CD': [[('CG', 'CG1'), 'CB', ('HG1', 'HG11', 'HG'), ('HG2', 'HG12', 'CD2')],
+                          [('HG2', 'HG12', 'CD2'), ('CG', 'CG1')],
                           [('HG1', 'HG11', 'HG'), ('CG', 'CG1')]],
+                   'PD': [['CB', 'N'], ['CA', 'N', 'C', 'CB', 'CA'], ['CD', 'N', 'CG', 'HD1']],
                    'HA': [['CA', 'N', 'C', ('HA1', 'HA')]],
                    'HB': [['CB', 'CA', 'HB1', 'HB2']],
                    'HD': [['CD', ('CG', 'CG1'), 'HD1', 'HD2']],
-                   'BM': [['CA', 'HA', 'C', 'N'], ['C', 'CA'], ['HA', 'CA'], ['CA', 'CB'], ['CA', 'C'], ['CA', 'N']],
+                   'BM': [['CA', ('HA1', 'HA'), 'C', 'N'], ['C', 'CA'], [('HA1', 'HA'), 'CA'], ['CA', 'CB'],
+                          ['CA', 'C'], ['CA', 'N']],
                    'SH': [['CB', 'CA', 'HB1', 'HB2'], ['CA', 'CB']],
                    'OH': [['CB', 'CA', ('HB1', 'HB'), ('HB2', 'CG2')], ['CA', 'CB']],
                    'CO': [['CB', 'CA', 'HB1', 'HB2'], ['CA', 'CB'], ['CG', 'CG', 'CB', 'OD1']],
@@ -151,6 +202,7 @@ class ProteinMutant:
                    'HG': [['CG', 'CB', ('HG1', 'HG11'), ('HG2', 'HG12')]],
                    'OY': [['CG', 'CZ'], ['CA', 'CB']],
                    'HZ': [['CG', 'CZ']],
+                   'PH': [['CA', 'N', 'N', ('CB', 'HA2'), ('CB', 'HA2')]],
                    'LH': [['CB', 'CA', 'HB1', 'HB2'], ['HB2', 'CB'], ['HB1', 'CB'], ['CB', 'CG'], ['CB', 'CA'],
                           ['CB', 'HB2']],
                    'SM': [['CA', 'CB'], ['CB', 'CG'], ['CG', 'SD'], ['CG', 'HG1'], ['CG', 'HG2']],
@@ -167,16 +219,31 @@ class ProteinMutant:
 
     @staticmethod
     def ring_closing_bonds(key):
-        bonds = {'AR': [('CE1', 'CZ')], 'HR': [('CE1', 'NE2')]}
+        bonds = {'AR': [('CE1', 'CZ')], 'HR': [('CE1', 'NE2')], 'PD': [('CD', 'N')]}
         return bonds[key] if key in bonds.keys() else []
 
     @staticmethod
     def aminoacids(key):
-        aa = {'A': ['CB', 'HB'], 'C': ['CB', 'SH'], 'D': ['CB', 'CO'], 'E': ['CB', 'CG', 'DO'], 'F': ['CB', 'AR', 'HZ'],
-              'G': ['HA'], 'H': ['CB', 'HR'], 'I': ['BM', 'GG', 'CD', 'HD'], 'K': ['CB', 'CG', 'CD', 'KH'],
-              'L': ['CB', 'LH', 'CD', 'HD'], 'M': ['CB', 'CG', 'SM'], 'N': ['CB', 'AM'], 'Q': ['CB', 'CG', 'AN'],
-              'R': ['CB', 'CG', 'CD', 'RH'], 'S': ['CB', 'OH'], 'T': ['BM', 'OH'], 'V': ['BM', 'CG', 'HG'],
-              'W': ['CB', 'WR'], 'Y': ['CB', 'AR', 'OY']}
+        aa = {'A': ['CB', 'HB'],
+              'C': ['CB', 'SH'],
+              'D': ['CB', 'CO'],
+              'E': ['CB', 'CG', 'DO'],
+              'F': ['CB', 'AR', 'HZ'],
+              'G': ['HA'],
+              'H': ['CB', 'HR'],
+              'I': ['BM', 'GG', 'CD', 'HD'],
+              'K': ['CB', 'CG', 'CD', 'KH'],
+              'L': ['CB', 'LH', 'CD', 'HD'],
+              'M': ['CB', 'CG', 'SM'],
+              'N': ['CB', 'AM'],
+              'Q': ['CB', 'CG', 'AN'],
+              'P': ['PB', 'PG', 'PD'],
+              'R': ['CB', 'CG', 'CD', 'RH'],
+              'S': ['CB', 'OH'],
+              'T': ['BM', 'OH'],
+              'V': ['BM', 'CG', 'HG'],
+              'W': ['CB', 'WR'],
+              'Y': ['CB', 'AR', 'OY']}
         return aa[key]
 
     @staticmethod

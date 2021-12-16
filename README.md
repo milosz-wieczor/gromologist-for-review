@@ -191,7 +191,17 @@ If Gromacs files are not found by Gromologist, the `Top.Section.mutate_protein_r
 function can accept an optional `rtp=/path/to/rtp/file` argument to specify residue parameters.
 
 If the `Top` object has a `Pdb` object bound to it, by default the mutation will be introduced
-to both the topology and structure. Structures alone can be mutated using the associated
+to both the topology and structure: 
+
+```
+>>> t = Top('md/topol.top', pdb='md/conf.pdb')
+>>> protein = t.get_molecule("Protein")
+>>> protein.mutate_protein_residue(2, "Y")
+>>> t.save_top("x2y_mutant.top")
+>>> t.pdb.save_pdb("x2y_mutant.pdb")
+```
+
+Structures alone can be mutated using the associated
 `Pdb.mutate_protein_residue(resid, target, chain='')` function.
 
 Note that mutations in the structure are not guaranteed to be free from clashes, so always

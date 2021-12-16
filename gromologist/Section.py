@@ -680,7 +680,6 @@ class SectionMol(Section):
         new_bond = [tuple(sorted([int(atom_own), int(atom_other)]))]
         new_angles = self._generate_angles(other, atom_own, atom_other)
         new_pairs, new_dihedrals = self._generate_14(other, atom_own, atom_other)
-        print(new_bond, new_angles, new_pairs, new_dihedrals)
         # TODO remove overlapping pairs between new_bond/new_angles and new_pairs for 4- and 5-membered rings
         for sub, entries in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
                                 [new_bond, new_pairs, new_angles, new_dihedrals]):
@@ -968,7 +967,6 @@ class SectionMol(Section):
                 self.top.pdb.mutate_protein_residue(resid, target, chain)
             elif len(pdb_atoms) > 1:
                 if any([pdb_chains[0] == pdb_chains[i] for i in range(1, len(pdb_chains))]):
-                    print()
                     response = input("The topology entry {} corresponds to multiple entries in the PDB; should we add "
                                      "chains to PDB and retry? (y/n)\n".format(self.mol_name))
                     if response.lower() == 'y':

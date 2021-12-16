@@ -174,6 +174,31 @@ Let's start with a generic topology file:
 >>> t = Top('md/topol.top')
 ```
 
+##### Adding mutations to proteins
+
+For certain complex systems, having to pass through pdb2gmx or CHARMM-GUI 
+for every mutant is a major drawback. To avoid this, Gromologist allows to insert
+amino acid mutations into existing topologies, preserving all their existing features.
+This is as easy as the following snippet shows:
+
+```
+>>> protein = t.get_molecule("Protein")
+>>> protein.mutate_protein_residue(2, "Y")
+>>> t.save_top("x2y_mutant.top")
+```
+
+If Gromacs files are not found by Gromologist, the `Top.Section.mutate_protein_residue` 
+function can accept an optional `rtp=/path/to/rtp/file` argument to specify residue parameters.
+
+If the `Top` object has a `Pdb` object bound to it, by default the mutation will be introduced
+to both the topology and structure. Structures alone can be mutated using the associated
+`Pdb.mutate_protein_residue(resid, target, chain='')` function.
+
+Note that mutations in the structure are not guaranteed to be free from clashes, so always
+make sure your final structure is acceptable and run an energy minimization prior to running
+dynamics (note the double precision version of Gromacs, `gmx_d`, works better for atoms 
+that almost overlap in space).
+
 ##### Adding bonds within or between molecules
 
 One useful application of Gromologist is adding bonds (and, automatically, other bonded terms)

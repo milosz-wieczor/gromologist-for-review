@@ -8,14 +8,14 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
                 'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
 
-    def __init__(self, filename=None, top=None, altloc='A', **kwargs):
+    def __init__(self, filename=None, top=None, altloc='A', qt=False, **kwargs):
         self.fname = filename
         if self.fname:
             if self.fname.endswith('gro'):
                 self.atoms, self.box, self.remarks = self._parse_contents_gro([line.rstrip()
                                                                                for line in open(self.fname)])
             else:
-                self.atoms, self.box, self.remarks = self._parse_contents([line.strip() for line in open(self.fname)])
+                self.atoms, self.box, self.remarks = self._parse_contents([line.strip() for line in open(self.fname)], qt)
         else:
             self.atoms, self.box, self.remarks = [], 3 * [100] + 3 * [90], []
         self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
@@ -311,12 +311,12 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 new_atoms.append(a)
         self.atoms = new_atoms
     
-    def renumber_atoms(self):
-        for n, atom in enumerate(self.atoms, 1):
+    def renumber_atoms(self, offset=1):
+        for n, atom in enumerate(self.atoms, offset):
             atom.serial = n
     
-    def renumber_residues(self):
-        count = 1
+    def renumber_residues(self, offset=1):
+        count = offset
         for n in range(len(self.atoms)):
             temp = count
             try:
@@ -466,12 +466,12 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         return at2.x - at1.x, at2.y - at1.y, at2.z - at1.z
         
     @staticmethod
-    def _parse_contents(contents):
+    def _parse_contents(contents, qt):
         atoms, remarks, conect = [], [], {}
         box = [7.5, 7.5, 7.5, 90, 90, 90]  # generic default, will be overwritten if present
         for line in contents:
             if line.startswith('ATOM') or line.startswith('HETATM'):
-                atoms.append(Atom(line))
+                atoms.append(Atom(line, qt))
             elif line.startswith("CRYST1"):
                 box = [float(line[6+9*a:6+9*(a+1)]) for a in range(3)] + \
                       [float(line[33+7*a:33+7*(a+1)]) for a in range(3)]
@@ -557,6 +557,24 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         nv = len(vecs)
         f = -1 if nv == 3 else 1
         return f*sum(v[0] for v in vecs)/nv, f*sum(v[1] for v in vecs)/nv, f*sum(v[2] for v in vecs)/nv
+
+    def add_vs2(self, resid, name1, name2, vsname='V1', fraction=0.5):
+        indx = self.get_atoms(f"resid {resid}")[-1].serial + 1
+        a1 = self.get_atom(f"resid {resid} and name {name1}")
+        a2 = self.get_atom(f"resid {resid} and name {name2}")
+        dist = self._atoms_dist_pbc(a1, a2)
+        self.insert_atom(indx, self.get_atom(f"resid {resid} and name {name1}"),
+                         atomsel=f"resid {resid} and name {vsname}",
+                         hooksel=f"resid {resid} and name {name1}",
+                         bondlength=dist * fraction, p1_sel=f"resid {resid} and name {name1}",
+                         p2_sel=f"resid {resid} and name {name2}", atomname=vsname)
+
+    def interatomic_dist(self, resid1=1, resid2=2):
+        dists = []
+        for atom1 in self.get_atoms(f"resid {resid1}"):
+            for atom2 in self.get_atoms(f"resid {resid2}"):
+                dists.append(self._atoms_dist(atom1, atom2))
+        return dists
 
     @staticmethod
     def _parse_contents_gro(contents):
@@ -694,7 +712,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             
 
 class Atom:
-    def __init__(self, line):
+    def __init__(self, line, qt=False):
         self.label = line[:6].strip()
         self.serial = int(line[6:11].strip())
         self.atomname = line[12:16].strip()
@@ -704,8 +722,16 @@ class Atom:
         self.resnum = int(line[22:26].strip())
         self.insert = line[26:27]
         self.x, self.y, self.z = [float(line[30+8*a:30+8*(a+1)]) for a in range(3)]
-        self.occ = float(line[54:60].strip())
-        self.beta = float(line[60:66].strip())
+        if not qt:
+            self.occ = float(line[54:60].strip())
+            self.beta = float(line[60:66].strip())
+            self.q = 0.0
+            self.type = 'X'
+        else:
+            self.occ = 1.0
+            self.beta = 0.0
+            self.q = float(line[54:62].strip())
+            self.type = str(line[62:].strip())
         try:
             self.element = line[76:78].strip()
         except IndexError:

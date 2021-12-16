@@ -86,6 +86,7 @@ class EntryBonded(Entry):
                  ('impropers', '1'): (float, float, int),  # temporary hack, fix this pls
                  ('cmap', '1'): (float,),
                  ('position_restraints', '1'): (float, float, float),
+                 ('dihedral_restraints', '1'): (float, float, float),
                  ('settles', '1'): (float, float)}
 
     def __init__(self, content, subsection):

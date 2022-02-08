@@ -107,6 +107,11 @@ class SectionMol(Section):
     @property
     def charge(self):
         return sum([a.charge for a in self.atoms])
+
+    def set_type(self, type, resname, atomname):
+        for a in self.atoms:
+            if a.resname == resname and a.atomname == atomname:
+                a.type = type
     
     def select_atoms(self, selection_string):
         """
@@ -1196,24 +1201,27 @@ class SectionParam(Section):
                     used_params.extend(ssub.find_used_ff_params())
         return used_params
 
-    def clone_type(self, atomtype, prefix):
+    def clone_type(self, atomtype, prefix='y', new_type=None):
         """
         Generates an exact type of a selected atomtype,
         preserving all interactions with other types
         :param atomtype: str, atomtype to be duplicated
         :param prefix: str, new name will be generated as prefix + original atomtype
+        :param new_type: str, directly specify the new name (optional)
         :return: None
         """
+        new_atomtype = prefix + atomtype if new_type is None else new_type
+        # TODO check first if new_atomtype overlaps with existing ones
         for sub in self.subsections:
             to_add = []
             for ent in sub:
-                if isinstance(ent, gml.EntryParam) and atomtype in ent.types and prefix + atomtype not in ent.types:
+                if isinstance(ent, gml.EntryParam) and atomtype in ent.types and new_atomtype not in ent.types:
                     to_add.append(ent)
             for entry in to_add:
-                newlines = self.gen_clones(entry, atomtype, prefix)
+                newlines = self.gen_clones(entry, atomtype, new_atomtype)
                 sub.add_entries([gml.EntryParam(line, sub) for line in newlines])
         self.sort_dihedrals()
-        self._remove_symm_dupl(prefix)
+        self._remove_symm_dupl(new_atomtype)
 
     def clean_unused(self, used_params, section='all'):
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
@@ -1243,10 +1251,10 @@ class SectionParam(Section):
                 new_entries.append(entry)
         ssect.entries = new_entries
 
-    def _remove_symm_dupl(self, prefix):
+    def _remove_symm_dupl(self, new_atomtype):
         for sub in self.subsections:
             if 'dihedral' in sub.header:
-                sub._remove_symm(prefix)
+                sub._remove_symm(new_atomtype)
 
     def get_opt_dih(self, types=False):
         ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
@@ -1299,14 +1307,14 @@ class SectionParam(Section):
         nbsub.add_entry(gml.Subsection.yield_entry(nbsub, entry_line))
 
     @staticmethod
-    def gen_clones(entry, atomtype, prefix):
+    def gen_clones(entry, atomtype, new_atomtype):
         lines = []
         nchanges = entry.types.count(atomtype)
         changes = []
         for i in range(nchanges):
             changes.extend(SectionParam.gen_combs(nchanges, i + 1))
         for mod in changes:
-            lines.append(SectionParam.mod_types(entry, mod, prefix, atomtype))
+            lines.append(SectionParam.mod_types(entry, mod, new_atomtype, atomtype))
         return lines
 
     @staticmethod
@@ -1314,11 +1322,12 @@ class SectionParam(Section):
         return list(combinations(range(count), tuples))
 
     @staticmethod
-    def mod_types(entry, mods, prefix, atomtype):
+    def mod_types(entry, mods, new_atomtype, atomtype):
         line = str(entry)
+        lentype = len(atomtype)
         for num in mods[::-1]:
             indices = [i for i in range(len(line) - len(atomtype) + 1)
                        if line[i:i + len(atomtype)] == atomtype and (i == 0 or line[i-1].isspace())
                        and (i+len(atomtype) == len(line) or line[i+len(atomtype)].isspace())]
-            line = line[:indices[num]] + prefix + line[indices[num]:]
+            line = line[:indices[num]] + new_atomtype + line[indices[num]+lentype:]
         return line

@@ -75,7 +75,9 @@ class EntryBonded(Entry):
     """
     fstr_suff = {('bonds', '1'): (float, float),
                  ('angles', '1'): (float, float),
+                 ('angles', '2'): (float, float),
                  ('angles', '5'): (float, float, float, float),
+                 ('angles', '10'): (float, float),
                  ('dihedrals', '9'): (float, float, int),
                  ('dihedrals', '4'): (float, float, int),
                  ('impropers', '4'): (float, float, int),

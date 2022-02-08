@@ -8,6 +8,12 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
                 'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
 
+    nucl_map = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
+                'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
+                'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
+                'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
+                'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"}
+
     def __init__(self, filename=None, top=None, altloc='A', qt=False, **kwargs):
         self.fname = filename
         if self.fname:
@@ -70,7 +76,9 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         except:
             ftype = orig_pdb.sfname[-3:]
         if ftype == 'pdb':
-            new_pdb.atoms = cls._parse_contents([line.strip() for line in text.split('\n')])
+            new_pdb.atoms = cls._parse_contents([line.strip() for line in text.split('\n')], False)
+        elif ftype == 'bqt':
+            new_pdb.atoms = cls._parse_contents([line.strip() for line in text.split('\n')], True)
         elif ftype == 'gro':
             new_pdb.atoms = cls._parse_contents_gro([line.strip() for line in text.split('\n')])
         new_pdb.box = orig_pdb.box
@@ -107,11 +115,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
     def print_nucleic_sequence(self):
         mapping = defaultdict(lambda: 'X')
         sequences = []
-        mapping.update({'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
-                        'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
-                        'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
-                        'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
-                        'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"})
+        mapping.update(Pdb.nucl_map)
         chains = list({a.chain.strip() for a in self.atoms if a.atomname == "O4'"})
         if not chains:
             print("No chains in the molecule, run Pdb.add_chains() first")
@@ -123,11 +127,6 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         return sequences
 
     def find_missing(self):
-        map_nuc = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
-                   'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
-                   'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
-                   'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
-                   'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"}
         pro_bb = ['N', 'O', 'C', 'CA']
         pro_sc = {'A': ['CB'], 'C': ['CB', 'SG'], 'D': ['CB', 'CG', 'OD1', 'OD2'], 'E': ['CB', 'CG', 'CD', 'OE1',
                   'OE2'], 'F': ['CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ'], 'G': [], 'H': ['CB', 'CG', 'ND1', 'CE1',
@@ -251,7 +250,45 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                                               atom_instance.serial, atom_instance.atomname))
             return 1
         return 0
-        
+
+    def print_mols(self):
+        chains = list({a.chain.strip() for a in self.atoms})
+        if not chains:
+            print("No chains in the molecule, run Pdb.add_chains() first")
+        def identify(atom):
+            first = atom.resname
+            if first in Pdb.prot_map.keys() or (first[1:] in Pdb.prot_map.keys() and first[0] in 'NC'):
+                return 'Protein'
+            elif first in Pdb.nucl_map.keys():
+                return 'Nucleic'
+            else:
+                return atom.resname
+        mol_list = []
+        mol = identify(self.atoms[0])
+        chain = self.atoms[0].chain
+        res = self.atoms[0].resnum
+        for a in self.atoms:
+            if mol in ['Protein', 'Nucleic']:
+                if a.chain != chain:
+                    mol_list.append([mol, 1])
+                    chain = a.chain
+                    mol = identify(a)
+            else:
+                if a.resnum != res:
+                    if len(mol) > 1 and mol == mol_list[-1][0]:
+                        mol_list[-1][1] += 1
+                    else:
+                        mol_list.append([mol, 1])
+                    mol = identify(a)
+                    chain = a.chain
+            res = a.resnum
+        if len(mol) > 1 and mol == mol_list[-1][0] and mol not in ['Protein', 'Nucleic']:
+            mol_list[-1][1] += 1
+        else:
+            mol_list.append([mol, 1])
+        for i in mol_list:
+            print(f'{i[0]} {i[1]}')
+
     def _remove_altloc(self):
         """
         We only keep one of the alternative locations in case
@@ -714,7 +751,10 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
 class Atom:
     def __init__(self, line, qt=False):
         self.label = line[:6].strip()
-        self.serial = int(line[6:11].strip())
+        try:
+            self.serial = int(line[6:11].strip())
+        except ValueError:
+            self.serial = int(line[6:11].strip(), 16)
         self.atomname = line[12:16].strip()
         self.altloc = line[16:17]
         self.resname = line[17:21].strip()

@@ -413,15 +413,16 @@ class Top:
             raise RuntimeError("Molecule {} is duplicated in topology".format(mol_name))
         return mol[0]
 
-    def check_pdb(self):
-        """
+    def check_pdb(self, maxwarn=None):
+        """c2r.gro
         Compares the topology with a PDB object to check
         for consistency, just as gmx grompp does;
         if inconsistencies are found, prints a report
         :return: None
         """
         if self.pdb:
-            self.pdb.check_top()
+            mw = 20 if maxwarn is None else int(maxwarn)
+            self.pdb.check_top(mw)
         else:
             raise AttributeError("No PDB file has been bound to this topology")
 

@@ -1,5 +1,6 @@
 import gromologist as gml
 from collections import defaultdict
+import math
 
 
 class Pdb:  # TODO optionally save as gro? & think of trajectories
@@ -615,7 +616,6 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
 
     @staticmethod
     def _parse_contents_gro(contents):
-        import math
         contents = [x for x in contents if x.strip()]
         atoms, remarks = [], []
         header = contents[0]
@@ -726,15 +726,26 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             outfile.write('ENDMDL\n')
 
     def save_gro(self, outname='out.gro'):
+        with open(outname, 'w') as outfile:
+            outfile.write("written by gromologist\n{}\n".format(len(self.atoms)))
+            for atom in self.atoms:
+                outfile.write(self._write_atom(atom, pdb=False))
+            outfile.write(self._calc_gro_box())
+
+    def _calc_gro_box(self):
         if self.box[3] == self.box[4] == self.box[5] == 90.0:
-            with open(outname, 'w') as outfile:
-                outfile.write("written by gromologist\n{}\n".format(len(self.atoms)))
-                for atom in self.atoms:
-                    outfile.write(self._write_atom(atom, pdb=False))
-                outfile.write("{:10.5f}{:10.5f}{:10.5f}\n".format(*[x/10 for x in self.box[:3]]))
+            return "{:10.5f}{:10.5f}{:10.5f}\n".format(*[x/10 for x in self.box[:3]])
         else:
-            raise RuntimeError("Only rectangular boxes are currently supported")
-    
+            gbox = 9 * [0.0]
+            conv = math.pi / 180
+            gbox[0] = self.box[0]/10
+            gbox[1] = self.box[1]/10 * math.sin(self.box[5]*conv)
+            gbox[7] = self.box[2]/10 * math.cos(self.box[4]*conv)
+            gbox[8] = self.box[2]/10 * (math.cos(self.box[3]*conv) - math.cos(self.box[4]*conv)*math.cos(self.box[5]*conv))/math.sin(self.box[5]*conv)
+            gbox[2] = math.sqrt(self.box[2]*self.box[2]/100 - gbox[7]*gbox[7] - gbox[8]*gbox[8])
+            gbox[5] = self.box[1]/10 * math.cos(self.box[5]*conv)
+            return (9*"{:10.5f}" + "\n").format(*gbox)
+
     def get_coords(self, subset=None):
         if subset:
             return [[a.x, a.y, a.z] for a in [self.atoms[q] for q in subset]]

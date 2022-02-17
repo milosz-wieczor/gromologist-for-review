@@ -43,6 +43,7 @@ class ProteinMutant:
             self.add_to_target.append('PH')
 
     def atoms_to_add(self):
+        # TODO make sure HA1/HA2 are properly assigned in GLY
         atoms = []
         hooks = []
         geo_refs = []

@@ -614,6 +614,53 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 dists.append(self._atoms_dist(atom1, atom2))
         return dists
 
+    def check_chiral(self):
+        prot_atoms = self.get_atoms('name CA')
+        self._check_chiral(prot_atoms, 'N', 'C', 'HA HA2')
+        ile_atoms = self.get_atoms('name CB and resname ILE')
+        self._check_chiral(ile_atoms, 'CA', 'CG2', 'CG1', 'side chain chirality')
+        thr_atoms = self.get_atoms('name CB and resname THR')
+        self._check_chiral(thr_atoms, 'CA', 'CG1 CG2', 'OG1 OG2', 'side chain chirality')
+
+    def _check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality'):
+        for at in cent_atoms_list:
+            resnum, resname, chain = at.resnum, at.resname, at.chain
+            chn = ' and chain ' + chain if chain.strip() else ''
+            n = self.get_atom(f'name {at1} and resnum {resnum} and resname {resname} {chn}')
+            c = self.get_atom(f'name {at2} and resnum {resnum} and resname {resname} {chn}')
+            h = self.get_atom(f'name {at3} and resnum {resnum} and resname {resname} {chn}')
+            chi = self._get_chirality(at, n, c, h)
+            if chi < -2.5 or 0 > chi > -1.5:
+                print(chi)
+                print(f"Check {label} for residue {resname} num {resnum}, looks a bit off")
+            elif chi > 0:
+                print(chi)
+                print(f"Check {label} for residue {resname} num {resnum}, looks like a D-form")
+
+    def _get_chirality(self, *atoms):
+        v1 = self._atoms_vec(atoms[1], atoms[0])
+        v2 = self._atoms_vec(atoms[0], atoms[2])
+        v3 = self._atoms_vec(atoms[2], atoms[3])
+        n1 = self._normalize(self._cross_product(v1, v2))
+        n2 = self._normalize(self._cross_product(v2, v3))
+        m1 = self._cross_product(n1, self._normalize(v2))
+        x = self._scalar_product(n1, n2)
+        y = self._scalar_product(m1, n2)
+        return math.atan2(y, x)
+
+    @staticmethod
+    def _cross_product(v1, v2):
+        return v1[1]*v2[2] - v1[2]*v2[1], v1[2]*v2[0] - v1[0]*v2[2], v1[0]*v2[1] - v1[1]*v2[0]
+
+    @staticmethod
+    def _scalar_product(v1, v2):
+        return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2]
+
+    @staticmethod
+    def _normalize(v):
+        norm = (v[0]**2 + v[1]**2 + v[2]**2)**0.5
+        return [a/norm for a in v]
+
     @staticmethod
     def _parse_contents_gro(contents):
         contents = [x for x in contents if x.strip()]

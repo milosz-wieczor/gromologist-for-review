@@ -108,6 +108,10 @@ class SectionMol(Section):
     def charge(self):
         return sum([a.charge for a in self.atoms])
 
+    @property
+    def mass(self):
+        return sum([a.mass for a in self.atoms])
+
     def set_type(self, type, resname, atomname):
         for a in self.atoms:
             if a.resname == resname and a.atomname == atomname:

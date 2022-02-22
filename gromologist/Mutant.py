@@ -72,6 +72,16 @@ class ProteinMutant:
                 atoms.append(j)
         return atoms
 
+    def check_chiral(self, struct, ca):
+        if 'HA' in self.remove_from_orig:
+            if not struct.check_chiral([ca], 'N', 'C', 'HA1', printing=False):
+                resnum, resname, chain = ca.resnum, ca.resname, ca.chain
+                chn = ' and chain ' + chain if chain.strip() else ''
+                ha1 = struct.get_atom(f'name HA1 and resnum {resnum} and resname {resname} {chn}')
+                ha2 = struct.get_atom(f'name HA2 and resnum {resnum} and resname {resname} {chn}')
+                ha2.atomname = 'HA1'
+                ha1.atomname = 'HA2'
+
     @staticmethod
     def groups(key):
         gdict = {'CB': ['CB', 'HB1', 'HB2'],

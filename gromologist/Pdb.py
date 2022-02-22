@@ -529,6 +529,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         chstr = 'chain {} and '.format(chain) if chain else ''
         orig = self.get_atom('{}resid {} and name CA'.format(chstr, resid))
         mutant = gml.ProteinMutant(orig.resname, target)
+        mutant.check_chiral(self, orig)
         atoms_add, hooks, geo_refs, bond_lengths, _, afters = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
         for at in atoms_remove:
@@ -614,15 +615,15 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                 dists.append(self._atoms_dist(atom1, atom2))
         return dists
 
-    def check_chiral(self):
+    def check_chiral_aa(self):
         prot_atoms = self.get_atoms('name CA')
-        self._check_chiral(prot_atoms, 'N', 'C', 'HA HA2')
+        self.check_chiral(prot_atoms, 'N', 'C', 'HA HA1')
         ile_atoms = self.get_atoms('name CB and resname ILE')
-        self._check_chiral(ile_atoms, 'CA', 'CG2', 'CG1', 'side chain chirality')
+        self.check_chiral(ile_atoms, 'CA', 'CG2', 'CG1', 'side chain chirality')
         thr_atoms = self.get_atoms('name CB and resname THR')
-        self._check_chiral(thr_atoms, 'CA', 'CG1 CG2', 'OG1 OG2', 'side chain chirality')
+        self.check_chiral(thr_atoms, 'CA', 'CG1 CG2', 'OG1 OG2', 'side chain chirality')
 
-    def _check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality'):
+    def check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality', printing=True):
         for at in cent_atoms_list:
             resnum, resname, chain = at.resnum, at.resname, at.chain
             chn = ' and chain ' + chain if chain.strip() else ''
@@ -631,11 +632,17 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             h = self.get_atom(f'name {at3} and resnum {resnum} and resname {resname} {chn}')
             chi = self._get_chirality(at, n, c, h)
             if chi < -2.5 or 0 > chi > -1.5:
-                print(chi)
-                print(f"Check {label} for residue {resname} num {resnum}, looks a bit off")
+                if printing:
+                    print(f"Check {label} for residue {resname} num {resnum}, looks a bit off")
+                else:
+                    return False
             elif chi > 0:
-                print(chi)
-                print(f"Check {label} for residue {resname} num {resnum}, looks like a D-form")
+                if printing:
+                    print(f"Check {label} for residue {resname} num {resnum}, looks like a D-form")
+                else:
+                    return False
+            if not printing:
+                return True
 
     def _get_chirality(self, *atoms):
         v1 = self._atoms_vec(atoms[1], atoms[0])
@@ -777,7 +784,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             outfile.write("written by gromologist\n{}\n".format(len(self.atoms)))
             for atom in self.atoms:
                 outfile.write(self._write_atom(atom, pdb=False))
-            outfile.write(self._calc_gro_box())
+            gbox = self._calc_gro_box()
+            outfile.write((9*"{:10.5f}" + "\n").format(*gbox))
 
     def _calc_gro_box(self):
         if self.box[3] == self.box[4] == self.box[5] == 90.0:
@@ -791,7 +799,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
             gbox[8] = self.box[2]/10 * (math.cos(self.box[3]*conv) - math.cos(self.box[4]*conv)*math.cos(self.box[5]*conv))/math.sin(self.box[5]*conv)
             gbox[2] = math.sqrt(self.box[2]*self.box[2]/100 - gbox[7]*gbox[7] - gbox[8]*gbox[8])
             gbox[5] = self.box[1]/10 * math.cos(self.box[5]*conv)
-            return (9*"{:10.5f}" + "\n").format(*gbox)
+            return gbox
 
     def get_coords(self, subset=None):
         if subset:

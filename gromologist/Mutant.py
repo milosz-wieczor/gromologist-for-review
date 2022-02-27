@@ -110,7 +110,9 @@ class ProteinMutant:
                  'PD': ['CD', 'HD1', 'HD2'],
                  'PG': ['CG', 'HG1', 'HG2'],
                  'PB': ['CB', 'HB1', 'HB2'],
-                 'PH': ['HN']
+                 'PH': ['HN'],
+                 'WR': ['CG', 'CD1', 'HD1', 'NE1', 'HE1', 'CE2', 'CD2', 'CE3', 'HE3', 'CZ3', 'HZ3', 'CH2', 'HH2', 'CZ2',
+                        'HZ2']
                  }
         return gdict[key]
 
@@ -141,7 +143,9 @@ class ProteinMutant:
                    'KH': ['HD2', 'CE', 'HE1', 'HE2', 'NZ', 'HZ1', 'HZ2'],
                    'HR': ['HB2', 'CG', 'ND1', 'CD2', 'HD2', 'CE1', 'NE2', 'HE1'],
                    'RH': ['HD2', 'NE', 'HE', 'CZ', 'NH1', 'HH11', 'HH12', 'NH2', 'HH21'],
-                   'PH': ['N']
+                   'PH': ['N'],
+                   'WR': ['HB2', 'CG', 'CD1', 'HD1', 'NE1', 'HE1', 'CE2', 'CD2', 'CE3', 'HE3', 'CZ3', 'HZ3', 'CH2',
+                          'HH2', 'CZ2']
                    }
         return aftdict[key]
 
@@ -177,7 +181,10 @@ class ProteinMutant:
                  'HR': [['CB', 'CG'], ['CG', 'ND1'], ['CG', 'CD2'], ['CD2', 'HD2'], ['ND1', 'CE1'], ['CD2', 'NE2'],
                         ['CE1', 'HE1'], ['ND1', 'HD1']],
                  'RH': [['CD', 'NE'], ['NE', 'HE'], ['NE', 'CZ'], ['CZ', 'NH1'], ['NH1', 'HH11'], ['NH1', 'HH12'],
-                        ['CZ', 'NH2'], ['NH2', 'HH21'], ['NH2', 'HH22']]
+                        ['CZ', 'NH2'], ['NH2', 'HH21'], ['NH2', 'HH22']],
+                 'WR': [['CB', 'CG'], ['CG', 'CD1'], ['CD1', 'HD1'], ['CD1', 'NE1'], ['NE1', 'HE1'], ['NE1', 'CE2'],
+                        ['CE2', 'CD2'], ['CD2', 'CE3'], ['CE3', 'HE3'], ['CE3', 'CZ3'], ['CZ3', 'HZ3'],
+                        ['CZ3', 'CH2'], ['CH2', 'HH2'], ['CH2', 'CZ2'], ['CZ2', 'HZ2']]
                  }
         return bonds[key]
 
@@ -224,13 +231,31 @@ class ProteinMutant:
                           ['CB', 'CG', 'CD2'], ['CB', 'CG', 'ND1'], ['CE1', 'CE1', 'ND1', 'NE2'],
                           ['ND1', 'ND1', 'CG', 'CE1']],
                    'RH': [['CD', 'HD1', 'HD2', 'CG'], ['CD', 'NE', 'CG'], ['CG', 'CD'], ['CD', 'NE'], ['NE', 'CZ'],
-                          ['NE', 'HE'], ['HE', 'NE'], ['NE', 'CZ'], ['NE', 'CD']]
+                          ['NE', 'HE'], ['HE', 'NE'], ['NE', 'CZ'], ['NE', 'CD']],
+                   # ['CG', 'CD1', 'HD1', 'NE1', 'HE1', 'CE2', 'CD2', 'CE3', 'HE3', 'CZ3', 'HZ3', 'CZ2', 'HZ2',
+                   # 'CH2', 'HH2']
+                   'WR': [['CB', 'CA', 'HB1', 'HB2'],  # CG
+                          ['CB', 'CG', 'CA'],  # CD1
+                          ['CG', 'CB', 'CD1'],  # HD1
+                          ['CD1', 'CG', 'HD1', 'HD1'],  # NE1
+                          ['CG', 'CD1'],  # HE1
+                          ['CG', 'CB', 'CD1', 'CD1'],  # CE2
+                          ['HE1', 'CD1'],  # CD2
+                          ['CD1', 'CD2'],  # CE3
+                          ['CE2', 'CD2'],  # HE3
+                          ['HD1', 'NE1'],  # CZ3
+                          ['CE2', 'CZ3'],  # HZ3
+                          ['CD2', 'CE2'],  # CH2
+                          ['CD2', 'CH2'],  # HH2
+                          ['CD2', 'CD1'],  # CZ2
+                          ['CE3', 'CZ2']]  # HZ2
                    }
         return anchors[key]
 
     @staticmethod
     def ring_closing_bonds(key):
-        bonds = {'AR': [('CE1', 'CZ')], 'HR': [('CE1', 'NE2')], 'PD': [('CD', 'N')]}
+        bonds = {'AR': [('CE1', 'CZ')], 'HR': [('CE1', 'NE2')], 'PD': [('CD', 'N')],
+                 'WR': [('CZ2', 'CE2'), ('CG', 'CD2')]}
         return bonds[key] if key in bonds.keys() else []
 
     @staticmethod

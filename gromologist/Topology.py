@@ -6,8 +6,8 @@ from collections import OrderedDict
 
 
 class Top:
-    def __init__(self, filename, gmx_dir=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None, keep_all=False,
-                 suppress=False):
+    def __init__(self, filename, gmx_dir=None, gmx_exe=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None,
+                 keep_all=False, suppress=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
@@ -19,10 +19,9 @@ class Top:
         """
         # TODO maybe allow for construction of a blank top with a possibility to read data later?
         self.suppress = suppress
-        if not gmx_dir:
-            self.gromacs_dir = self.find_gmx_dir()
-        else:
-            self.gromacs_dir = gmx_dir
+        self.gromacs_dir, self.gmx_exe = self.find_gmx_dir()
+        self.gromacs_dir = gmx_dir if not self.gromacs_dir else self.gromacs_dir
+        self.gmx_exe = gmx_exe if not self.gmx_exe else self.gmx_exe
         self.pdb = None
         self.rtp = {}
         self.pdb = None if pdb is None else gml.Pdb(pdb, top=self)
@@ -76,15 +75,14 @@ class Top:
             gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
         if not gmx:
             gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
-        if not gmx:
-            gmx = os.popen('which grompp 2> /dev/null').read().strip()
         if gmx:
-            gmx = '/'.join(gmx.split('/')[:-2]) + '/share/gromacs/top'
-            self.print('Gromacs files found in directory {}'.format(gmx))
-            return gmx
+            gmx_dir = '/'.join(gmx.split('/')[:-2]) + '/share/gromacs/top'
+            self.print('Gromacs files found in directory {}'.format(gmx_dir))
+            return gmx_dir, gmx
         else:
-            self.print('No working Gromacs compilation found, assuming all file dependencies are referred to locally')
-            return ""
+            self.print('No working Gromacs compilation found, assuming all file dependencies are referred to locally; '
+                       'to change this, make the gmx executable visible in $PATH or specify gmx_dir for the Topology')
+            return False, False
 
     @property
     def molecules(self):

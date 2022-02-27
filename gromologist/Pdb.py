@@ -575,6 +575,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                         break
             else:
                 aftnr = self.select_atom('{}resid {} and name {}'.format(chstr, resid, aft))
+            print(hooksel, atomsel, atom_add)
             if len(geo_ref) == 2:
                 p1sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[0])
                 p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])

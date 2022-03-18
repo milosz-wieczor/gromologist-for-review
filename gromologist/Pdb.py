@@ -310,8 +310,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                                             atom.resnum, atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta,
                                             atom.element)
         else:
-            return self._atom_format_gro.format(atom.resnum, atom.resname, atom.atomname, atom.serial, atom.x, atom.y,
-                                                atom.z)
+            return self._atom_format_gro.format(atom.resnum, atom.resname, atom.atomname, atom.serial, atom.x/10,
+                                                atom.y/10, atom.z/10)
 
     @staticmethod
     def _write_conect(atom, bonded):
@@ -449,7 +449,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         if renumber:
             self.renumber_atoms()
 
-    def match_elements(self):
+    def add_elements(self):
         for a in self.atoms:
             if not a.element:
                 a.element = [x for x in a.atomname if not x.isdigit()][0]
@@ -494,7 +494,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
 
     def _atoms_dist_pbc(self, at1, at2, nopbc=False):
         if not self.box[3] == self.box[4] == self.box[5] == 90.0 and not nopbc:
-            raise RuntimeError("Only rectangular boxes supported for PBC-based distanes")
+            raise RuntimeError("Only rectangular boxes supported for PBC-based distanes, "
+                               "use nopbc=True if you're sure the molecule is whole")
         return (min([abs(at2.x - at1.x), self.box[0] - abs(at2.x - at1.x)]) ** 2 +
                 min([abs(at2.y - at1.y), self.box[1] - abs(at2.y - at1.y)]) ** 2 +
                 min([abs(at2.z - at1.z), self.box[2] - abs(at2.z - at1.z)]) ** 2) ** 0.5
@@ -575,7 +576,6 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
                         break
             else:
                 aftnr = self.select_atom('{}resid {} and name {}'.format(chstr, resid, aft))
-            print(hooksel, atomsel, atom_add)
             if len(geo_ref) == 2:
                 p1sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[0])
                 p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])
@@ -617,7 +617,8 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         return dists
 
     def check_chiral_aa(self):
-        prot_atoms = self.get_atoms('name CA')
+        # TODO vec with PBC treatment
+        prot_atoms = self.get_atoms('name CA and not resname GLY')
         self.check_chiral(prot_atoms, 'N', 'C', 'HA HA1')
         ile_atoms = self.get_atoms('name CB and resname ILE')
         self.check_chiral(ile_atoms, 'CA', 'CG2', 'CG1', 'side chain chirality')

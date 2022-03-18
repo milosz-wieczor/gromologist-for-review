@@ -61,12 +61,13 @@ including name consistency checks:
 Check passed, all names match
 ```
 
-as well as renumbering, automatic addition of chains and fixing ordering issues in PDB
+as well as renumbering, automatic addition of chains/element labels and fixing ordering issues in PDB
 using topology ordering as a template:
 
 ```
 >>> t.pdb.renumber_all()
 >>> t.pdb.add_chains()
+>>> t.pdb.add_elements()
 >>> t.pdb.match_order_by_top_names()
 ```
 

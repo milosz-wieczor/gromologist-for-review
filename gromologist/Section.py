@@ -673,13 +673,14 @@ class SectionMol(Section):
 
     def _merge_fields(self, other):
         # TODO important: watch for POSRES
-        print('WARNING watch out for #ifdef POSRES keywords that might get misplaced')
+        self.top.print('WARNING watch out for #ifdef POSRES keywords that might get misplaced')
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap', 'position_restraints']:
             # TODO merge all subsections
             try:
                 subsection_other = other.get_subsection(subs)
                 subsection_own = self.get_subsection(subs)
                 subsection_own.add_entries([entry for entry in subsection_other if entry])
+                self.top.print(f"Merging sections {subs} from two molecules")
             except KeyError:
                 pass
     
@@ -848,10 +849,28 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
+    def add_posres(self, keyword, value):
+        try:
+            _ = self.get_subsection('position_restraints')
+        except KeyError:
+            try:
+                _ = value[0]
+            except TypeError:
+                value = 3 * [value]
+            content = ['[ position_restraints ]', f'#ifdef {keyword}', '; ai  funct  fcx    fcy    fcz']
+            for atom in self.atoms:
+                if len(atom.atomname) > 1:
+                    if not atom.atomname[0] == 'H' and not atom.atomname[1] == 'H':
+                        content.append(f"{atom.num:5}    1 {value[0]:5} {value[1]:5} {value[2]:5}")
+            content.append("#endif\n")
+            self.subsections.append(gml.SubsectionBonded(content, self))
+        else:
+            self.top.print(f"[ position_restraints ] already present in molecule {self.mol_name}, skipping")
+
     def mutate_protein_residue(self, resid, target, rtp=None, mutate_in_pdb=True):
         alt_names = {('THR', 'OG'): 'OG1', ('THR', 'HG'): 'HG1', ('LEU', 'CD'): 'CD1', ('LEU', 'HD1'): 'HD11',
                      ('LEU', 'HD2'): 'HD12', ('LEU', 'HD3'): 'HD13', ('VAL', 'CG'): 'CG1', ('VAL', 'HG1'): 'HG11',
-                     ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13',}
+                     ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13'}
         if rtp is None and not self.top.rtp:
             print("Found the following .rtp files:\n")
             for n, i in enumerate(glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')):
@@ -869,7 +888,7 @@ class SectionMol(Section):
         mutant = gml.ProteinMutant(orig.resname, target)
         # TODO double-check [ pairs ]
         targ = mutant.target_3l
-        print("\n  Mutating residue {} (resid {}) into {}\n".format(orig.resname, resid, targ))
+        self.top.print("\n  Mutating residue {} (resid {}) into {}\n".format(orig.resname, resid, targ))
         atoms_add, hooks, _, _, extra_bonds, afters = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
         types, charges, impropers, improper_type = self.parse_rtp(rtp)
@@ -887,14 +906,14 @@ class SectionMol(Section):
         for at in atoms_remove:
             equivalents = {'OG': 'OG1', 'HG': 'HG1', 'HG1': 'HG11', 'HG2': 'HG12', 'HG3': 'HG13', 'CG': 'CG1',
                            'CD': 'CD1', 'HD': 'HD1', 'HD1': 'HD11', 'HD2': 'HD12', 'HD3': 'HD13'}
-            print("Removing atom {} from resid {} in topology".format(at, resid))
+            self.top.print("Removing atom {} from resid {} in topology".format(at, resid))
             try:
                 atnum = self.get_atom('resid {} and name {}'.format(resid, at)).num
             except RuntimeError:
                 atnum = self.get_atom('resid {} and name {}'.format(resid, equivalents[at])).num
             self.del_atom(atnum, del_in_pdb=False)
         for atom_add, hook, aft in zip(atoms_add, hooks, afters):
-            print("Adding atom {} to resid {} in topology".format(atom_add, resid))
+            self.top.print("Adding atom {} to resid {} in topology".format(atom_add, resid))
             # if there are ambiguities in naming (two or more options):
             if (targ, atom_add) in alt_names.keys():
                 atom_add = alt_names[(targ, atom_add)]
@@ -1106,7 +1125,7 @@ class SectionMol(Section):
         atoms_add, hooks = [basename.replace('C', 'H') + str(i) for i in range(3)], 3 * [orig_name]
         for n, atom_add_hook in enumerate(zip(atoms_add, hooks), 1):
             atom_add, hook = atom_add_hook
-            print("Adding atom {} to resid {} in the topology".format(atom_add, resid))
+            self.top.print("Adding atom {} to resid {} in the topology".format(atom_add, resid))
             hooksel = 'resid {} and name {}'.format(resid, orig_name)
             hnum = self.get_atom(hooksel).num
             atnum = hnum + n
@@ -1119,7 +1138,6 @@ class SectionMol(Section):
                 raise RuntimeError("Adding groups in PDB only supported for systems containing one molecule")
             bonds = self.list_bonds(returning=True)
             hook = [j for i in bonds for j in i if orig_name in i and orig_name != j][0]
-            print(hook)
             aligns = [j for i in bonds for j in i if hook in i and hook != j and orig_name != j]
             aftnr = self.select_atom('resid {} and name {}'.format(resid, orig_name))
             for n, aliat in enumerate(zip(aligns, atoms_add), 1):
@@ -1165,6 +1183,8 @@ class SectionParam(Section):
         """
         subsection_labels = [sub.label for sub in self.subsections]
         duplicated_subsections = list({label for label in subsection_labels if subsection_labels.count(label) > 1})
+        if duplicated_subsections:
+            self.top.print(f"Merging sections {', '.join(duplicated_subsections)} together")
         for sub in duplicated_subsections:
             subsections_to_merge = [s for s in self.subsections if s.label == sub]
             merged_subsection = reduce(lambda x, y: x+y, subsections_to_merge)

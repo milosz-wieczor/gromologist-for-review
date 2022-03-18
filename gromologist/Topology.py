@@ -7,7 +7,7 @@ from collections import OrderedDict
 
 class Top:
     def __init__(self, filename, gmx_dir=None, gmx_exe=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None,
-                 keep_all=False, suppress=False):
+                 keep_all=True, suppress=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
@@ -33,13 +33,13 @@ class Top:
         self.defines = {}
         if define is not None:
             self.defines.update(define)
+        self._preprocess_conditional_includes(ifdef)
         self._include_all(ignore_ifdef)
         if not keep_all:
             self.resolve_ifdefs([] if ifdef is None else ifdef)
-            self.print("Trying to keep all conditional (#ifdef/#endif) sections, this might lead to issues if a section"
-                       " is defined more than once with different conditions - check your topology afterwards!")
         else:
-            pass
+            self.print("Keeping all conditional (#ifdef/#endif) sections, this might lead to issues if sections "
+                       "are being merged or moved around - look out for messages & check your topology afterwards!")
         self.sections = []
         self.header = []
         self._parse_sections()
@@ -156,6 +156,11 @@ class Top:
         for mol in self.molecules:
             mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B)
 
+    def add_posres(self, keyword='POSRES', value=1000):
+        for mol in self.molecules:
+            if len(mol.atoms) > 3:
+                mol.add_posres(keyword, value)
+
     def add_params_file(self, paramfile):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))
         own_defentry = [e for e in self.sections[0].subsections[0].entries if isinstance(e, gml.EntryParam)][0]
@@ -188,6 +193,35 @@ class Top:
             lines = [i for i in range(len(self._contents)) if self._contents[i].startswith("#include")
                      and i not in ignore_lines]
 
+    def _preprocess_conditional_includes(self, ifdef):
+        """
+        Because of the implementation of CHARMM36m/CHARMM36 in gmx,
+        the two variants are chosen depending on a preprocessing conditional
+        so we need to pre-treat the topology to account for that
+        -- I know it's extremely ugly but all other options require too much from the user --
+        :param ifdef: list of str, defined keywords
+        :return:
+        """
+        start_final = []
+        flag = False
+        for n, line in enumerate(self._contents):
+            if len(line.split()) > 2 and line.split()[0] == '#ifdef' and line.split()[1] == "USE_OLD_C36":
+                start_final.append(n)
+            elif len(start_final) == 1 and line.strip().startswith('#include'):
+                flag = True
+            elif len(start_final) == 1 and len(line.split()) > 1 and line.split()[0] == '#endif' and flag:
+                start_final.append(n)
+        if len(start_final) == 2:
+            if "USE_OLD_C36" in ifdef:
+                incl = '#include "old_c36_cmap.itp"\n'
+            else:
+                self.top.print('Will use (newer) CMAP parameters for CHARMM36m. To use CHARMM36, '
+                               'specify ifdef=["USE_OLD_C36"] (if your FF version supports that)')
+                incl = '#include "cmap.itp"\n'
+            for lnum in range(start_final[0], start_final[1]+1):
+                self._contents.pop(lnum)
+            self._contents.insert(start_final[0], incl)
+
     def _find_ifdef_lines(self):
         """
         Finds #ifdef/#endif blocks in the topology if user
@@ -214,6 +248,10 @@ class Top:
             keyword = None
             header_in_ifdef = False
             for n, line in enumerate(self._contents):
+                if line.strip().startswith('[') and counter > 0 and keyword != 'USE_OLD_C36':
+                    header = line.strip().strip('[]').strip()
+                    raise RuntimeError(f"Found a [ {header} ] section header within a conditional block, this can lead"
+                                       f"to issues if sections are rearranged. Please fix this first.")  # TODO
                 if line.startswith('#define') and len(line.strip().split()) == 2:
                     ifdefs.append(line.strip().split()[1])
                 if line.strip().startswith("#ifdef") or line.strip().startswith("#ifndef"):
@@ -242,10 +280,11 @@ class Top:
                         counter -= 1
                         if header_in_ifdef:
                             if remove_lines and keyword not in ifdefs:
-                                self.print("Part of the #ifdef {} section ({} lines) will be dropped as specified because "
-                                          "the keyword was not defined. To prevent it, add 'ifdef=['{}']' as an argument "
-                                          "when loading the topology to define a keyword, or set 'keep_all=True' (might "
-                                          "occasionally produce issues).".format(keyword, len(remove_lines), keyword))
+                                self.print("Part of the #ifdef {} section ({} lines) will be dropped as specified "
+                                           "because the keyword was not defined. To prevent it, add 'ifdef=['{}']' "
+                                           "as an argument when loading the topology to (unconditionally) keep "
+                                           "specific sections, or set 'keep_all=True' to preserve the original (might "
+                                           "occasionally produce issues).".format(keyword, len(remove_lines), keyword))
                             elif remove_lines and keyword in ifdefs:
                                 self.print("Part of the #ifdef {} section ({} lines) will be dropped "
                                            "as specified.".format(keyword, len(remove_lines), keyword))
@@ -288,7 +327,9 @@ class Top:
             filename = filename.strip()[2:]
         pref = '/'.join(filename.split('/')[:-1])
         suff = filename.split('/')[-1]
-        if os.path.isfile(self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
+        if filename.startswith('/') and os.path.isfile(filename):
+            return filename, pref
+        elif os.path.isfile(self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
             return self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
         elif os.path.isfile(self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
             return self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref

@@ -3,7 +3,7 @@ from collections import defaultdict
 import math
 
 
-class Pdb:  # TODO optionally save as gro? & think of trajectories
+class Pdb:
     prot_map = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
                 'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
                 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
@@ -31,7 +31,7 @@ class Pdb:  # TODO optionally save as gro? & think of trajectories
         if not self.atoms and self.top:
             self.atoms = [Atom.from_top_entry(entry) for mol in self.top.molecules for entry in mol.atoms]
         self.altloc = altloc
-        self.conect = {}  # TODO will require further adjustments
+        self.conect = {}
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                             "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
         self._atom_format_gro = "{:>5d}{:5s}{:>5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}\n"

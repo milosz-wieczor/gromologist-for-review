@@ -2,15 +2,15 @@ import gromologist as gml
 
 
 class ProteinMutant:
-    # TODO
+    # TODO mutate between protonation states
     # W > Z -> not working
-    map_pro = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
-               'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
-               'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
-               'TRP': 'W', 'TYR': 'Y'}
-    map_inv = {'A': 'ALA', 'C': 'CYS', 'D': 'ASP', 'E': 'GLU', 'F': 'PHE', 'G': 'GLY', 'H': 'HIS', 'I': 'ILE',
-               'K': 'LYS', 'L': 'LEU', 'M': 'MET', 'N': 'ASN', 'P': 'PRO', 'Q': 'GLN', 'R': 'ARG', 'S': 'SER',
-               'T': 'THR', 'V': 'VAL', 'W': 'TRP', 'Y': 'TYR'}
+    map_pro = {'ALA': 'A', 'ASH': 'B', 'ASPP': 'B', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E',
+               'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I',
+               'GLH': 'J', 'GLPP': 'J', 'LYS': 'K', 'LEU': 'L', 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q',
+               'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'}
+    map_inv = {'A': 'ALA', 'B': 'ASH', 'C': 'CYS', 'D': 'ASP', 'E': 'GLU', 'F': 'PHE', 'G': 'GLY', 'H': 'HIS',
+               'I': 'ILE', 'J': 'GLH', 'K': 'LYS', 'L': 'LEU', 'M': 'MET', 'N': 'ASN', 'P': 'PRO', 'Q': 'GLN',
+               'R': 'ARG', 'S': 'SER', 'T': 'THR', 'V': 'VAL', 'W': 'TRP', 'Y': 'TYR'}
 
     def __init__(self, orig, target):
         try:
@@ -95,6 +95,8 @@ class ProteinMutant:
                  'OH': ['OG', 'HG'],
                  'CO': ['CG', 'OD1', 'OD2'],
                  'DO': ['CD', 'OE1', 'OE2'],
+                 'CP': ['CG', 'OD1', 'OD2', 'HD2'],
+                 'DP': ['CD', 'OE1', 'OE2', 'HE2'],
                  'AM': ['CG', 'OD1', 'ND2', 'HD21', 'HD22'],
                  'AN': ['CD', 'OE1', 'NE2', 'HE21', 'HE22'],
                  'AR': ['CG', 'CD1', 'HD1', 'CD2', 'HD2', 'CE1', 'HE1', 'CE2', 'HE2', 'CZ'],
@@ -132,6 +134,8 @@ class ProteinMutant:
                    'OH': [('HB2', 'CG2'), ('OG', 'OG1')],
                    'CO': ['HB2', 'CG', 'OD1'],
                    'DO': [('HG2'), 'CD', 'OE1'],
+                   'CP': ['HB2', 'CG', 'OD1', 'OD2'],
+                   'DP': [('HG2'), 'CD', 'OE1', 'OE2'],
                    'AM': ['HB2', 'CG', 'OD1', 'ND2', 'HD21'],
                    'AN': ['HG2', 'CD', 'OE1', 'NE2', 'HE21'],
                    'GG': [('HB2', 'HG23'), 'CG1', 'HG11'],
@@ -163,6 +167,8 @@ class ProteinMutant:
                  'OH': [['CB', 'OG'], [('OG', 'OG1'), 'HG']],
                  'CO': [['CB', 'CG'], ['CG', 'OD1'], ['CG', 'OD2']],
                  'DO': [['CG', 'CD'], ['CD', 'OE1'], ['CD', 'OE2']],
+                 'CP': [['CB', 'CG'], ['CG', 'OD1'], ['CG', 'OD2'], ['OD2', 'HD2']],
+                 'DP': [['CG', 'CD'], ['CD', 'OE1'], ['CD', 'OE2'], ['OE2', 'HE2']],
                  'AM': [['CB', 'CG'], ['CG', 'OD1'], ['CG', 'ND2'], ['ND2', 'HD21'], ['ND2', 'HD22']],
                  'AN': [['CG', 'CD'], ['CD', 'OE1'], ['CD', 'NE2'], ['NE2', 'HE21'], ['NE2', 'HE22']],
                  'AR': [['CB', 'CG'], ['CG', 'CD1'], ['CD1', 'HD1'], ['CG', 'CD2'], ['CD2', 'HD2'], ['CD1', 'CE1'],
@@ -210,6 +216,8 @@ class ProteinMutant:
                    'OH': [['CB', 'CA', ('HB1', 'HB'), ('HB2', 'CG2')], ['CA', 'CB']],
                    'CO': [['CB', 'CA', 'HB1', 'HB2'], ['CA', 'CB'], ['CG', 'CG', 'CB', 'OD1']],
                    'DO': [['CG', 'CB', 'HG1', 'HG2'], ['CB', 'CG'], ['CD', 'CD', 'CG', 'OE1']],
+                   'CP': [['CB', 'CA', 'HB1', 'HB2'], ['CA', 'CB'], ['CG', 'CG', 'CB', 'OD1'], ['CB', 'CG']],
+                   'DP': [['CG', 'CB', 'HG1', 'HG2'], ['CB', 'CG'], ['CD', 'CD', 'CG', 'OE1'], ['CG', 'CD']],
                    'AM': [['CB', 'CA', 'HB1', 'HB2'], ['CA', 'CB'], ['CG', 'CB', 'OD1', 'CG'], ['CB', 'CG'],
                           ['OD1', 'CG']],
                    'AN': [['CG', 'CB', 'HG1', 'HG2'], ['CB', 'CG'], ['CD', 'CG', 'OE1', 'CD'], ['CG', 'CD'],
@@ -261,13 +269,15 @@ class ProteinMutant:
     @staticmethod
     def aminoacids(key):
         aa = {'A': ['CB', 'HB'],
+              'B': ['CB', 'CP'],  # protonated ASP
               'C': ['CB', 'SH'],
-              'D': ['CB', 'CO'],
               'E': ['CB', 'CG', 'DO'],
+              'D': ['CB', 'CO'],
               'F': ['CB', 'AR', 'HZ'],
               'G': ['HA'],
               'H': ['CB', 'HR'],
               'I': ['BM', 'GG', 'CD', 'HD'],
+              'J': ['CB', 'CG', 'DP'],  # protonated GLU
               'K': ['CB', 'CG', 'CD', 'KH'],
               'L': ['CB', 'LH', 'CD', 'HD'],
               'M': ['CB', 'CG', 'SM'],

@@ -146,12 +146,17 @@ class SubsectionBonded(Subsection):
         super().__init__(content, section)
         self.bkp_entries = None
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
+        # TODO rethink if we need self.prmtype (only used for __repr__ + inserting new entries)
         self.prmtype = self._check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
         self.fstring = "{:5} " * (SubsectionBonded.n_atoms[self.header] + 1) + '\n'
     
     def __repr__(self):
         return "Subsection {} with interaction type {}".format(self.header, self.prmtype)
+
+    @property
+    def entries_bonded(self):
+        return [e for e in self.entries if isinstance(e, gml.EntryBonded)]
     
     def sort(self):
         """
@@ -462,6 +467,10 @@ class SubsectionParam(Subsection):
                                                                                                 other.header))
         return SubsectionParam(["[ {} ]\n".format(self.header)] + self.entries + other.entries, self.section)
 
+    @property
+    def entries_param(self):
+        return [e for e in self.entries if isinstance(e, gml.EntryParam)]
+
     def sort(self):
         """
         In case we want to sort entries after some are added at the end of the section
@@ -526,7 +535,7 @@ class SubsectionParam(Subsection):
         dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]
         self.section.top.add_ff_params()
         indices = set()
-        for i in dopts:  # TODO so far only works for one molecule
+        for i in dopts:  # TODO so far only works for one (first) molecule
             for j in self.section.top.molecules[0].get_subsection('dihedrals'):
                 if isinstance(j, gml.EntryBonded):
                     if i in j.params_state_a_entry:
@@ -590,6 +599,10 @@ class SubsectionAtom(Subsection):
         super().__init__(content, section)
         self.fstring = "{:>6}{:>11}{:>7}{:>7}{:>7}{:>7}{:>11}{:>11}   ; " + '\n'
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
+
+    @property
+    def entries_atom(self):
+        return [e for e in self.entries if isinstance(e, gml.EntryAtom)]
 
     def get_dicts(self, force_update=False):
         """

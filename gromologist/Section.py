@@ -112,11 +112,21 @@ class SectionMol(Section):
     def mass(self):
         return sum([a.mass for a in self.atoms])
 
+    @property
+    def residues(self):
+        resid = None
+        reslist = []
+        for at in self.atoms:
+            if at.resid != resid:
+                resid = at.resid
+                reslist.append(f'{at.resname}-{at.resid}')
+        return reslist
+
     def set_type(self, type, resname, atomname):
         for a in self.atoms:
             if a.resname == resname and a.atomname == atomname:
                 a.type = type
-    
+
     def select_atoms(self, selection_string):
         """
         Returns atoms' indices according to the specified selection string
@@ -672,10 +682,10 @@ class SectionMol(Section):
         self.top.recalc_sys_params()
 
     def _merge_fields(self, other):
-        # TODO important: watch for POSRES
         self.top.print('WARNING watch out for #ifdef POSRES keywords that might get misplaced')
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap', 'position_restraints']:
             # TODO merge all subsections
+            # TODO need a more consistent treatment of impropers
             try:
                 subsection_other = other.get_subsection(subs)
                 subsection_own = self.get_subsection(subs)
@@ -789,7 +799,7 @@ class SectionMol(Section):
         :param add_section: str, to which section should the FF params be added
         :return: None
         """
-        if add_section == 'all':  # TODO optionally add type/atomname labels in comment
+        if add_section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
             subsections_to_add = [add_section]
@@ -804,7 +814,7 @@ class SectionMol(Section):
 
     def find_used_ff_params(self, section='all'):
         used_params = []
-        if section == 'all':  # TODO optionally add type/atomname labels in comment
+        if section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
             subsections_to_add = [section]
@@ -820,7 +830,7 @@ class SectionMol(Section):
 
     def find_missing_ff_params(self, add_section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False,
                                once=False):
-        if add_section == 'all':  # TODO optionally add type/atomname labels in comment
+        if add_section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
             subsections_to_add = [add_section]
@@ -886,7 +896,6 @@ class SectionMol(Section):
             rtp = ''
         orig = self.get_atom('resid {} and name CA'.format(resid))
         mutant = gml.ProteinMutant(orig.resname, target)
-        # TODO double-check [ pairs ]
         targ = mutant.target_3l
         self.top.print("\n  Mutating residue {} (resid {}) into {}\n".format(orig.resname, resid, targ))
         atoms_add, hooks, _, _, extra_bonds, afters = mutant.atoms_to_add()
@@ -1211,7 +1220,7 @@ class SectionParam(Section):
 
     def find_used_ff_params(self, section='all'):
         used_params = []
-        if section == 'all':  # TODO optionally add type/atomname labels in comment
+        if section == 'all':
             subsections_to_add = ['atomtypes', 'pairtypes', 'nonbonded_params', 'constrainttypes']
         else:
             subsections_to_add = [section]
@@ -1235,7 +1244,9 @@ class SectionParam(Section):
         :return: None
         """
         new_atomtype = prefix + atomtype if new_type is None else new_type
-        # TODO check first if new_atomtype overlaps with existing ones
+        existing_types = {e.types[0] for e in self.top.parameters.get_subsection('atomtypes').entries_param}
+        if new_atomtype in existing_types:
+            raise RuntimeError(f"Type {new_atomtype} already exists")
         for sub in self.subsections:
             to_add = []
             for ent in sub:

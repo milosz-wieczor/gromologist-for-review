@@ -1,5 +1,6 @@
 import os
 import datetime
+from copy import deepcopy
 
 import gromologist as gml
 from collections import OrderedDict
@@ -514,6 +515,16 @@ class Top:
                 if a.atomname.startswith('D'):
                     a.atomname = a.atomname.replace('DH', 'Hx').replace('DO', 'Ox').replace('DN', 'Nx').\
                         replace('DC', 'Cx').replace('DS', 'Sx')
+
+    def solute_tempering(self, temperatures, molecules):
+        self.explicit_defines()
+        for n, t in enumerate(temperatures):
+            self.print(f'generating topology for effective temperature of {t} K...')
+            mod = deepcopy(self)
+            mod.molecules[0].scale_rest2_bonded(temperatures[0] / t)
+            for i in molecules:
+                mod.molecules[i].scale_rest2_charges(temperatures[0]/t)
+            mod.save_top(self.fname.replace('.top', f'-rest{temperatures[0]/t:.3f}.top'))
 
     @staticmethod
     def _write_section(outfile, section):

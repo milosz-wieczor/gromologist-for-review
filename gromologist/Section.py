@@ -79,6 +79,17 @@ class Section:
             raise RuntimeError("Error: subsection {} duplicated in {}".format(section_name, str(self)))
         return ssect[0]
 
+    def get_subsections(self, section_name):
+        """
+        Returns the list of specified subsections
+        :param section_name: str
+        :return: None
+        """
+        ssect = [s for s in self.subsections if s.header == section_name]
+        if len(ssect) == 0:
+            raise KeyError("Subsection {} not found, check your molecule topology!".format(section_name))
+        return ssect
+
 
 class SectionMol(Section):
     """
@@ -1168,6 +1179,44 @@ class SectionMol(Section):
     def make_stateB_dummy(self, resid, orig_name, dummy_type='DH'):
         self.add_dummy_def(dummy_type)
         self.gen_state_b(atomname=orig_name, resid=resid, new_type=dummy_type, new_charge=0, new_mass=1.008)
+
+    def solute_tempering(self, temperatures, selection=None):
+        self.top.explicit_defines()
+        for n, t in enumerate(temperatures):
+            self.top.print(f'generating topology for effective temperature of {t} K...')
+            mod = deepcopy(self.top)
+            mod.get_molecule(self.mol_name).scale_rest2_charges(temperatures[0]/t, selection)
+            mod.get_molecule(self.mol_name).scale_rest2_bonded(temperatures[0]/t, selection)
+            mod.save_top(self.top.fname.replace('.top', f'-rest{temperatures[0]/t:.3f}.top'))
+
+    def scale_rest2_bonded(self, gamma, selection=None):
+        # get a list of atomtypes to clone
+        sel = self.get_atoms(selection) if selection is not None else self.atoms
+        types = {at.type for at in sel}
+        for tp in types:
+            self.top.parameters.clone_type(tp)
+        for sub in ['atomtypes', 'bondtypes', 'angletypes', 'dihedraltypes', 'nonbond_params', 'pairtypes']:
+            try:
+                for subsect in self.top.parameters.get_subsections(sub):
+                    for ent in subsect.entries_param:
+                        if any([tp.startswith('y') for tp in ent.types]):
+                            ent.params[1] *= gamma
+            except KeyError:
+                pass
+        try:
+            for ent in self.top.parameters.get_subsection('cmaptypes').entries_param:
+                if any([tp.startswith('y') for tp in ent.types]):
+                    ent.params = [float(x)*gamma for x in ent.params]
+        except KeyError:
+            pass
+
+    def scale_rest2_charges(self, gamma, selection=None):
+        sel = self.get_atoms(selection) if selection is not None else self.atoms
+        # scaling charges
+        for a in self.atoms:
+            if a in sel:
+                a.charge = round(a.charge * gamma**0.5, 4)
+                a.type = 'y' + a.type
 
 
 class SectionParam(Section):

@@ -1,17 +1,18 @@
-from subprocess import call
+from subprocess import call, run, PIPE
 import os
 
 
 def gmx_command(gmx_exe, command='grompp', answer=False, pass_values=None, quiet=False, **params):
     if pass_values is not None:
-        pv = "echo " + ' '.join([str(x) for x in pass_values]) + ' | '
+        pv = (' '.join([str(x) for x in pass_values]) + '\n').encode()
     else:
-        pv = ''
+        pv = None
     qui = ' &> /dev/null' if quiet else ''
-    call_command = f'{pv}{gmx_exe} {command} ' + ' '.join([f'-{k} {v}' for k, v in params.items()]) + qui
-    result = call(call_command, shell=True)
+    call_command = f'{gmx_exe} {command} ' + ' '.join([f'-{k} {v}' for k, v in params.items()]) + qui
+    result = run(call_command.split(), input=pv, stderr=PIPE, stdout=PIPE)
+    # result = call(call_command, shell=True)
     if answer:
-        return result
+        return result.stdout.decode() + result.stderr.decode()
 
 
 def gen_mdp(fname, runtype='md', **extra_args):
@@ -37,8 +38,13 @@ def read_xvg(fname):
     return content
 
 
-def calc_gmx_energy(struct, topfile, gmx='', quiet=False):
-    # TODO read all terms + hide output
+def get_legend(gmx, fname):
+    pp = run([gmx, 'energy', '-f', fname], input=b'0\n', stderr=PIPE, stdout=PIPE)
+    output = pp.stderr.decode().split()
+    return {output[i+1].lower(): int(output[i]) for i in range(output.index('1'), len(output), 2) if output[i].isnumeric()}
+
+
+def calc_gmx_energy(struct, topfile, gmx='', quiet=False, traj=None, terms='potential', cleanup=True):
     if not gmx:
         gmx = os.popen('which gmx 2> /dev/null').read().strip()
     if not gmx:
@@ -47,9 +53,19 @@ def calc_gmx_energy(struct, topfile, gmx='', quiet=False):
         gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
     gen_mdp('rerun.mdp')
     gmx_command(gmx, 'grompp', quiet=quiet,  f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5)
-    gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct)
-    gmx_command(gmx, 'energy', quiet=quiet, pass_values=[9], f='rerun')
+    gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj)
+    legend = get_legend(gmx, 'rerun.edr')
+    if terms == 'all':
+        terms = list(legend.keys())
+    if isinstance(terms, str):
+        terms = [terms]
+    try:
+        passv = [legend[i.lower()] for i in terms]
+    except KeyError:
+        raise RuntimeError(f'Could not process query {terms}; available keywords are: {legend.keys()}')
+    gmx_command(gmx, 'energy', quiet=quiet, pass_values=passv, f='rerun')
     out = read_xvg('energy.xvg')
-    for filename in ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log', 'energy.xvg']:
-        os.remove(filename)
-    return out[-1][-1]
+    if cleanup:
+        for filename in ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log', 'energy.xvg']:
+            os.remove(filename)
+    return {term: [o[onum] for o in out] for term, onum in zip(terms, range(len(out[0])))}

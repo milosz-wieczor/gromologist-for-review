@@ -188,6 +188,7 @@ class SubsectionBonded(Subsection):
         subsect_params = [sub for sub in self.section.top.parameters.subsections if sub.header == matchings[self.header]]
         self.bkp_entries = self.entries[:]  # we can't change what we're iterating over, so we modify the copy
         for entry in self.entries:
+            # let's omit the ones that already have params assigned:
             if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:
                 self._add_ff_params_to_entry(entry, subsect_params)
         self.entries = self.bkp_entries[:]  # now restore the modified copy
@@ -326,8 +327,8 @@ class SubsectionBonded(Subsection):
         int_type = entry.interaction_type
         entry.read_types()
         for types, params, parmentry in zip([entry.types_state_a, entry.types_state_b],
-                                        [entry.params_state_a, entry.params_state_b],
-                                        [entry.params_state_a_entry, entry.params_state_b_entry]):
+                                            [entry.params_state_a, entry.params_state_b],
+                                            [entry.params_state_a_entry, entry.params_state_b_entry]):
             wildcard_present = []
             non_wildcard_present = []
             for subsections in subsect_params:
@@ -417,7 +418,7 @@ class SubsectionBonded(Subsection):
 
     def add_type_labels(self):
         for entry in self.entries:
-            if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:
+            if isinstance(entry, gml.EntryBonded):
                 self._add_type_label(entry)
 
     @staticmethod

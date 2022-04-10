@@ -888,10 +888,7 @@ class SectionMol(Section):
         else:
             self.top.print(f"[ position_restraints ] already present in molecule {self.mol_name}, skipping")
 
-    def mutate_protein_residue(self, resid, target, rtp=None, mutate_in_pdb=True):
-        alt_names = {('THR', 'OG'): 'OG1', ('THR', 'HG'): 'HG1', ('LEU', 'CD'): 'CD1', ('LEU', 'HD1'): 'HD11',
-                     ('LEU', 'HD2'): 'HD12', ('LEU', 'HD3'): 'HD13', ('VAL', 'CG'): 'CG1', ('VAL', 'HG1'): 'HG11',
-                     ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13'}
+    def find_rtp(self, rtp):
         if rtp is None and not self.top.rtp:
             print("Found the following .rtp files:\n")
             for n, i in enumerate(glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')):
@@ -905,6 +902,13 @@ class SectionMol(Section):
                 rtp = glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')[rtpnum-1]
         elif self.top.rtp:
             rtp = ''
+        return rtp
+
+    def mutate_protein_residue(self, resid, target, rtp=None, mutate_in_pdb=True):
+        alt_names = {('THR', 'OG'): 'OG1', ('THR', 'HG'): 'HG1', ('LEU', 'CD'): 'CD1', ('LEU', 'HD1'): 'HD11',
+                     ('LEU', 'HD2'): 'HD12', ('LEU', 'HD3'): 'HD13', ('VAL', 'CG'): 'CG1', ('VAL', 'HG1'): 'HG11',
+                     ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13'}
+        rtp = self.find_rtp(rtp)
         orig = self.get_atom('resid {} and name CA'.format(resid))
         mutant = gml.ProteinMutant(orig.resname, target)
         targ = mutant.target_3l
@@ -1217,6 +1221,46 @@ class SectionMol(Section):
             if a in sel:
                 a.charge = round(a.charge * gamma**0.5, 4)
                 a.type = 'y' + a.type
+
+    def alchemical_proton(self, resid, rtp=None, b_is_protonated=False):
+        """
+        Creates an alchemical residue (starting from ASP or GLU) where the B-state
+        corresponds to a protonated variant of that residue
+        :param resid: int, number of the residue to modify
+        :param rtp: str, path to the aminoacids.rtp or merged.rtp file (optional)
+        :param b_is_protonated: bool, whether to make the B-state protonated
+        :return: None
+        """
+        atoms = self.get_atoms(f'resid {resid}')
+        resname = atoms[0].resname
+        if resname not in ['ASP', 'GLU']:
+            raise RuntimeError("So far only available for residues ASP and GLU")
+        mut_dict = {'ASP': 'B', 'GLU': 'J'}
+        self.mutate_protein_residue(resid, mut_dict[resname])
+        atoms = self.get_atoms(f'resid {resid}')
+        rtp = self.find_rtp(rtp)
+        types, charges, impropers, improper_type = self.parse_rtp(rtp)
+        for atom in atoms:
+            try:
+                atom.type_b = types[(resname, atom.atomname)]
+                atom.charge_b = charges[(resname, atom.atomname)]
+                atom.mass_b = atom.mass
+            except KeyError:
+                atom.type_b = 'DH'
+                atom.charge_b = 0.0
+                atom.mass_b = 1.008
+        if 'DH' not in self.top.defined_atomtypes:
+            self.top.parameters.get_subsection('atomtypes').add_entry('DH  0  0.0  0.0  A   0.0  0.0')
+        if b_is_protonated:
+            self.swap_states(resid=resid)
+        self.update_dicts()
+        self.add_ff_params()
+
+    def recalc_qtot(self):
+        charge = 0
+        for atom in self.atoms:
+            charge += atom.charge
+            atom.comment = f'qtot {charge:.3:f}'
 
 
 class SectionParam(Section):

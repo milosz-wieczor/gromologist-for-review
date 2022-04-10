@@ -107,6 +107,10 @@ class Top:
                     atomlist.append(a)
         return atomlist
 
+    @property
+    def defined_atomtypes(self):
+        return {ent.types[0] for ent in self.parameters.get_subsection('atomtypes').entries_param}
+
     def list_molecules(self):
         """
         Prints out a list of molecules contained in the System
@@ -515,6 +519,10 @@ class Top:
                 if a.atomname.startswith('D'):
                     a.atomname = a.atomname.replace('DH', 'Hx').replace('DO', 'Ox').replace('DN', 'Nx').\
                         replace('DC', 'Cx').replace('DS', 'Sx')
+
+    def recalculate_qtot(self):
+        for mol in self.molecules:
+            mol.recalc_qtot()
 
     def solute_tempering(self, temperatures, molecules):
         self.explicit_defines()

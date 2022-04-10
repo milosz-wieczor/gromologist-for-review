@@ -817,17 +817,26 @@ class Pdb:
             
 
 class Atom:
-    def __init__(self, line, qt=False):
+    def __init__(self, line, qt=False, renumber=False):
         self.label = line[:6].strip()
         try:
             self.serial = int(line[6:11].strip())
         except ValueError:
-            self.serial = int(line[6:11].strip(), 16)
+            try:
+                self.serial = int(line[6:11].strip(), 16)
+            except ValueError:
+                raise RuntimeError(f"Cannot interpret atom number {line[6:11].strip()} as decimal or hexadecimal")
         self.atomname = line[12:16].strip()
         self.altloc = line[16:17]
         self.resname = line[17:21].strip()
         self.chain = line[21:22]
-        self.resnum = int(line[22:26].strip())
+        try:
+            self.resnum = int(line[22:26].strip())
+        except ValueError:
+            try:
+                self.resnum = int(line[22:26].strip(), 16)
+            except ValueError:
+                raise RuntimeError(f"Cannot interpret residue number {line[22:26].strip()} as decimal or hexadecimal")
         self.insert = line[26:27]
         self.x, self.y, self.z = [float(line[30+8*a:30+8*(a+1)]) for a in range(3)]
         if not qt:

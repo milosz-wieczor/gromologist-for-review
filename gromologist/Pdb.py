@@ -526,6 +526,13 @@ class Pdb:
         return atoms, tuple(box), remarks
 
     def mutate_protein_residue(self, resid, target, chain=''):
+        """
+        Mutates a chosen residue to a different one (in a standard rotameric state)
+        :param resid: int, number of the residue to be mutated
+        :param target: str, single-letter code of the residue to be mutated
+        :param chain: str, optional name of the chain
+        :return: None
+        """
         self.renumber_atoms()
         chstr = 'chain {} and '.format(chain) if chain else ''
         orig = self.get_atom('{}resid {} and name CA'.format(chstr, resid))
@@ -599,6 +606,16 @@ class Pdb:
         return f*sum(v[0] for v in vecs)/nv, f*sum(v[1] for v in vecs)/nv, f*sum(v[2] for v in vecs)/nv
 
     def add_vs2(self, resid, name1, name2, vsname='V1', fraction=0.5):
+        """
+        Adds a virtual site (VS) defined by two atoms, interpolating between
+        their coordinates
+        :param resid: int, number of the residue that will contain the VS
+        :param name1: str, 1st atom to use for the construction of the VS
+        :param name2: str, 2nd atom to use for the construction of the VS
+        :param vsname: str, name of the new virtual site
+        :param fraction: float, where to put the VS (0 = on atom 1, 1 = on atom 2, can be interpolated or extrapolated)
+        :return: None
+        """
         indx = self.get_atoms(f"resid {resid}")[-1].serial + 1
         a1 = self.get_atom(f"resid {resid} and name {name1}")
         a2 = self.get_atom(f"resid {resid} and name {name2}")
@@ -610,6 +627,12 @@ class Pdb:
                          p2_sel=f"resid {resid} and name {name2}", atomname=vsname)
 
     def interatomic_dist(self, resid1=1, resid2=2):
+        """
+        Calculates all distances between atoms in two selected residues
+        :param resid1: int, 1st residue to consider
+        :param resid2: int, 2nd residue to consider
+        :return: list of float, all calculated interatomic distances
+        """
         dists = []
         for atom1 in self.get_atoms(f"resid {resid1}"):
             for atom2 in self.get_atoms(f"resid {resid2}"):
@@ -626,6 +649,17 @@ class Pdb:
         self.check_chiral(thr_atoms, 'CA', 'CG1 CG2', 'OG1 OG2', 'side chain chirality')
 
     def check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality', printing=True):
+        """
+        Decides on correct or wrong chirality of selected chiral
+        centers by calculating selected dihedrals
+        :param cent_atoms_list: list of Atom instances, central atoms around which to check chirality
+        :param at1: str, name of the 1st surrounding atom
+        :param at2: str, name of the 2nd surrounding atom
+        :param at3: str, name of the 3rd surrounding atom
+        :param label: str, type of chirality (only to display in the warning)
+        :param printing: whether to print warnings (default) or return True if all checks are passed
+        :return: None (if printing), bool (if not printing)
+        """
         for at in cent_atoms_list:
             resnum, resname, chain = at.resnum, at.resname, at.chain
             chn = ' and chain ' + chain if chain.strip() else ''
@@ -647,6 +681,12 @@ class Pdb:
                 return True
 
     def _get_chirality(self, *atoms):
+        """
+        Calculates a dihedral defined by 4 atoms that
+        constitute a chiral center
+        :param atoms: list of len 4, atoms defining the chiral center
+        :return: float, the dihedral's value
+        """
         v1 = self._atoms_vec(atoms[1], atoms[0])
         v2 = self._atoms_vec(atoms[0], atoms[2])
         v3 = self._atoms_vec(atoms[2], atoms[3])
@@ -659,19 +699,42 @@ class Pdb:
 
     @staticmethod
     def _cross_product(v1, v2):
+        """
+        Calculates a cross product between two vectors
+        :param v1: iterable of floats, len 3
+        :param v2: iterable of floats, len 3
+        :return: list, vector of length 3
+        """
         return v1[1]*v2[2] - v1[2]*v2[1], v1[2]*v2[0] - v1[0]*v2[2], v1[0]*v2[1] - v1[1]*v2[0]
 
     @staticmethod
     def _scalar_product(v1, v2):
+        """
+        Calculates a dot product between two vectors
+        :param v1: iterable of floats, len 3
+        :param v2: iterable of floats, len 3
+        :return: list, vector of length 3
+        """
         return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2]
 
     @staticmethod
     def _normalize(v):
+        """
+        Normalizes a vector
+        :param v: iterable of floats, len 3
+        :return: list, vector of length 3
+        """
         norm = (v[0]**2 + v[1]**2 + v[2]**2)**0.5
         return [a/norm for a in v]
 
     @staticmethod
     def _parse_contents_gro(contents):
+        """
+        A parser to extract data from .gro files
+        and convert them to internal parameters
+        :param contents: list of str, contents of the .gro file
+        :return: (list of Atom instances, tuple of floats of len 6, list of str)
+        """
         contents = [x for x in contents if x.strip()]
         atoms, remarks = [], []
         header = contents[0]
@@ -698,7 +761,14 @@ class Pdb:
         return atoms, tuple(box), remarks
 
     def add_conect(self, cutoff=1.55):
+        """
+        Adds CONECT entries to the PDB, using the value of
+        cutoff to determine molecule connectivity
+        :param cutoff: float, cut-off to determine atom bonding patterns
+        :return: None
+        """
         import numpy as np
+        # TODO implement a numpy-free version
         coords = np.array(self.get_coords())
         for n, atom in enumerate(self.atoms):
             dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
@@ -817,7 +887,12 @@ class Pdb:
             
 
 class Atom:
-    def __init__(self, line, qt=False, renumber=False):
+    def __init__(self, line, qt=False):
+        """
+        Represents a single atom contained in the structure file
+        :param line: str, line from the structure file
+        :param qt: bool, whether there are extra charge (q) and type (t) fields at the end
+        """
         self.label = line[:6].strip()
         try:
             self.serial = int(line[6:11].strip())
@@ -860,6 +935,12 @@ class Atom:
 
     @classmethod
     def from_gro(cls, line):
+        """
+        Reads fields from a line formatted according
+        to the .gro format specification
+        :param line: str, line from a .gro file
+        :return: an Atom instance
+        """
         data = "ATOM  {:>5d} {:4s} {:4s} {:>4d}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00  0.00"
         resnum = int(line[:5].strip()) % 10000
         resname = line[5:10].strip()
@@ -870,6 +951,12 @@ class Atom:
 
     @classmethod
     def from_top_entry(cls, entry):
+        """
+        Creates a dummy Atom instance (no coordinates)
+        based on atom information provided by the .top file
+        :param entry: a gromologist.EntryAtom instance
+        :return: an Atom instance
+        """
         data = "ATOM  {:>5d} {:4s} {:4s} {:>4d}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00  0.00"
         resnum = entry.resid
         resname = entry.resname
@@ -880,9 +967,18 @@ class Atom:
 
     @property
     def coords(self):
+        """
+        The coordinates of a given atom
+        :return: list of float
+        """
         return [self.x, self.y, self.z]
     
     def set_coords(self, coords):
+        """
+        A setter for Atom coordinates
+        :param coords: iterable of len 3
+        :return: None
+        """
         self.x, self.y, self.z = coords
         
     def __repr__(self):
@@ -891,6 +987,9 @@ class Atom:
 
 
 class Traj(Pdb):
+    """
+    Still not implemented correctly!
+    """
     def __init__(self, structfile=None, compressed_traj=None, top=None, array=None, altloc='A', **kwargs):
         super().__init__(structfile, top, altloc, **kwargs)
         self.sfname = structfile

@@ -156,6 +156,11 @@ class SubsectionBonded(Subsection):
 
     @property
     def entries_bonded(self):
+        """
+        Lists all entries that are of EntryBonded type (i.e. excluding comments,
+        headers, empty lines etc)
+        :return: list of EntryBonded instances
+        """
         return [e for e in self.entries if isinstance(e, gml.EntryBonded)]
     
     def sort(self):
@@ -178,6 +183,11 @@ class SubsectionBonded(Subsection):
         return val
 
     def explicit_defines(self):
+        """
+        Substitutes predefined fields with their corresponding values
+        as specified by the #DEFINE preprocessor commands
+        :return: None
+        """
         for entry in self.entries_bonded:
             entry.explicit_defines()
     
@@ -205,6 +215,11 @@ class SubsectionBonded(Subsection):
         self.entries = self.bkp_entries[:]  # now restore the modified copy
 
     def find_used_ff_params(self):
+        """
+        Looks up a list of FF parameters that are actually used in the molecular
+        system at hand
+        :return: list of str, labels of used parameters
+        """
         used_parm_entries = []
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
@@ -217,6 +232,13 @@ class SubsectionBonded(Subsection):
 
     @staticmethod
     def _find_used_ff_params(entry, subsect_params):
+        """
+        Identifies the FF parameter(s) that is used for the particular
+        bonded interaction entry
+        :param entry: a BondedEntry instance, an entry we're finding the parameter for
+        :param subsect_params: a SubsectionParam instance containing candidate parameters for the entry
+        :return: list of str, labels of used parameters
+        """
         entries = []
         int_type = entry.interaction_type
         entry.read_types()
@@ -244,6 +266,15 @@ class SubsectionBonded(Subsection):
         return entries
 
     def find_missing_ff_params(self, fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False, once=False):
+        """
+        Identifies FF parameters that cannot by matched to the existing set of
+        bonded interactions, allowing to find & target these for fixing
+        :param fix_by_analogy: dict, tells how to choose new parameters from existing equivalent types
+        :param fix_B_from_A: bool, chooses missing parameters assuming B-state should have similar types to A-state
+        :param fix_A_from_B: bool, chooses missing parameters assuming A-state should have similar types to B-state
+        :param once: bool, only shows the missing parameter once if repeated
+        :return: None
+        """
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections if

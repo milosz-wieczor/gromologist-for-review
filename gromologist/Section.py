@@ -108,8 +108,7 @@ class SectionMol(Section):
 
     @property
     def atoms(self):
-        sub = self.get_subsection('atoms')
-        return [entry for entry in sub if isinstance(entry, gml.EntryAtom)]
+        return self.get_subsection('atoms').entries_atom
 
     @property
     def natoms(self):
@@ -175,8 +174,8 @@ class SectionMol(Section):
     @property
     def is_alchemical(self):
         sect = self.get_subsection('atoms')
-        for ent in sect.entries:
-            if isinstance(ent, gml.EntryAtom) and ent.type_b is not None:
+        for ent in sect.entries_atom:
+            if ent.type_b is not None:
                 return True
         return False
 
@@ -186,8 +185,8 @@ class SectionMol(Section):
         if 'DTS' in resnames:
             selected = [x+1 for x in self.select_atoms('resname DTS')]
             sect = self.get_subsection('bonds')
-            for entry in sect:
-                if isinstance(entry, gml.EntryBonded) and all([x in selected for x in entry.atom_numbers]):
+            for entry in sect.entries_bonded:
+                if all([x in selected for x in entry.atom_numbers]):
                     entry.read_types()
                     if entry.atom_names == ("C5'", "O5'") or entry.atom_names == ("O5'", "C5'"):
                         if 'OS' in entry.types_state_a:
@@ -214,8 +213,8 @@ class SectionMol(Section):
         if 'DTD' in resnames or 'DTE' in resnames:
             selected = [x+1 for x in self.select_atoms('resname DTD DTE')]
             sect = self.get_subsection('bonds')
-            for entry in sect:
-                if isinstance(entry, gml.EntryBonded) and all([x in selected for x in entry.atom_numbers]):
+            for entry in sect.entries_bonded:
+                if all([x in selected for x in entry.atom_numbers]):
                     entry.read_types()
                     if entry.types_state_a == ("DUM_CT", "DUM_C2") \
                             and entry.atom_numbers[1] - entry.atom_numbers[0] > 30:
@@ -224,8 +223,8 @@ class SectionMol(Section):
         if 'DTX' in resnames or 'DTY' in resnames:
             selected = [x+1 for x in self.select_atoms('resname DTX DTY')]
             sect = self.get_subsection('bonds')
-            for entry in sect:
-                if isinstance(entry, gml.EntryBonded) and all([x in selected for x in entry.atom_numbers]):
+            for entry in sect.entries_bonded:
+                if all([x in selected for x in entry.atom_numbers]):
                     entry.read_types()
                     if entry.types_state_a == ("DUM_CT", "DUM_CT") \
                             and entry.atom_numbers[1] - entry.atom_numbers[0] > 30:
@@ -234,8 +233,8 @@ class SectionMol(Section):
 
     def nullify_bonded(self, atom1, atom2, subsection, stateB=True):
         subs = self.get_subsection(subsection)
-        for entry in subs:
-            if isinstance(entry, gml.EntryBonded) and atom1 in entry.atom_numbers and atom2 in entry.atom_numbers:
+        for entry in subs.entries_bonded:
+            if atom1 in entry.atom_numbers and atom2 in entry.atom_numbers:
                 entry.read_types()
                 if subsection == 'angles' and any(x.startswith('D') for x in entry.types_state_a):
                     continue
@@ -267,8 +266,8 @@ class SectionMol(Section):
         :return: None
         """
         subsection = self.get_subsection('atoms')
-        for entry_num, entry in enumerate(subsection):
-            if isinstance(entry, gml.EntryAtom) and entry.num >= startfrom:
+        for entry in subsection.entries_atom:
+            if entry.num >= startfrom:
                 entry.num += offset
 
     def _offset_params(self, offset, startfrom):
@@ -281,9 +280,8 @@ class SectionMol(Section):
         """
         for sub_name in [s.header for s in self.subsections if s.header != 'atoms']:
             subsection = self.get_subsection(sub_name)
-            for entry_num, entry in enumerate(subsection):
-                if isinstance(entry, gml.EntryBonded):
-                    entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
+            for entry in subsection.entries_bonded:
+                entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
 
     def gen_state_b(self, atomname=None, resname=None, resid=None, atomtype=None, new_type=None, new_charge=None,
                     new_mass=None):
@@ -300,15 +298,15 @@ class SectionMol(Section):
         :return: None
         """
         sub = self.get_subsection('atoms')
-        for entries in [entry for entry in sub if isinstance(entry, gml.EntryAtom)]:
-            criteria = all([(atomname is None or entries.atomname == atomname),
-                            (resname is None or entries.resname == resname),
-                            (resid is None or int(entries.resid) == int(resid)),
-                            (atomtype is None or entries.type == atomtype)])
+        for entry in sub.entries_atom:
+            criteria = all([(atomname is None or entry.atomname == atomname),
+                            (resname is None or entry.resname == resname),
+                            (resid is None or int(entry.resid) == int(resid)),
+                            (atomtype is None or entry.type == atomtype)])
             if criteria:
-                entries.type_b = new_type if new_type is not None else entries.type
-                entries.mass_b = new_mass if new_mass is not None else entries.mass
-                entries.charge_b = new_charge if new_charge is not None else entries.charge
+                entry.type_b = new_type if new_type is not None else entry.type
+                entry.mass_b = new_mass if new_mass is not None else entry.mass
+                entry.charge_b = new_charge if new_charge is not None else entry.charge
         self.update_dicts()
 
     def drop_state_a(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
@@ -328,25 +326,25 @@ class SectionMol(Section):
         if atomname or resname or resid or atomtype:
             selected = set()
             sub = self.get_subsection('atoms')
-            for entries in [entry for entry in sub if isinstance(entry, gml.EntryAtom)]:
-                criteria = all([(atomname is None or entries.atomname == atomname),
-                                (resname is None or entries.resname == resname),
-                                (resid is None or int(entries.resid) == int(resid)),
-                                (atomtype is None or entries.type == atomtype)])
+            for entry in sub.entries_atom:
+                criteria = all([(atomname is None or entry.atomname == atomname),
+                                (resname is None or entry.resname == resname),
+                                (resid is None or int(entry.resid) == int(resid)),
+                                (atomtype is None or entry.type == atomtype)])
                 if criteria:
-                    selected.add(entries.num)
+                    selected.add(entry.num)
         else:
             selected = list(range(1, self.natoms+1))
         if remove_dummies:
             sub = self.get_subsection('atoms')
-            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b and
-                       entry.type_b[0] == "D" and entry.num in selected]
+            dummies = [entry for entry in sub.entries_atom if entry.type_b and entry.type_b[0] == "D"
+                       and entry.num in selected]
             print(dummies)
             while dummies:
                 to_remove = dummies[-1]
                 self.del_atom(to_remove.num)
-                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type_b and
-                           entry.type_b[0] == "D" and entry.num in selected]
+                dummies = [entry for entry in sub.entries_atom if entry.type_b and entry.type_b[0] == "D"
+                           and entry.num in selected]
         for sub in self.subsections:
             for entry in sub:
                 if (isinstance(entry, gml.EntryAtom) and entry.num in selected) \
@@ -374,13 +372,13 @@ class SectionMol(Section):
         if atomname or resname or resid or atomtype:
             selected = set()
             sub = self.get_subsection('atoms')
-            for entries in [entry for entry in sub if isinstance(entry, gml.EntryAtom)]:
-                criteria = all([(atomname is None or entries.atomname == atomname),
-                                (resname is None or entries.resname == resname),
-                                (resid is None or int(entries.resid) == int(resid)),
-                                (atomtype is None or entries.type == atomtype)])
+            for entry in sub.entries_atom:
+                criteria = all([(atomname is None or entry.atomname == atomname),
+                                (resname is None or entry.resname == resname),
+                                (resid is None or int(entry.resid) == int(resid)),
+                                (atomtype is None or entry.type == atomtype)])
                 if criteria:
-                    selected.add(entries.num)
+                    selected.add(entry.num)
         else:
             selected = list(range(1, self.natoms + 1))
         for sub in self.subsections:
@@ -413,13 +411,13 @@ class SectionMol(Section):
         if atomname or resname or resid or atomtype:
             selected = set()
             sub = self.get_subsection('atoms')
-            for entries in [entry for entry in sub if isinstance(entry, gml.EntryAtom)]:
-                criteria = all([(atomname is None or entries.atomname == atomname),
-                                (resname is None or entries.resname == resname),
-                                (resid is None or int(entries.resid) == int(resid)),
-                                (atomtype is None or entries.type == atomtype)])
+            for entry in sub.entries_atom:
+                criteria = all([(atomname is None or entry.atomname == atomname),
+                                (resname is None or entry.resname == resname),
+                                (resid is None or int(entry.resid) == int(resid)),
+                                (atomtype is None or entry.type == atomtype)])
                 if criteria:
-                    selected.add(entries.num)
+                    selected.add(entry.num)
         else:
             selected = list(range(1, self.natoms + 1))
         for sub in self.subsections:
@@ -434,13 +432,11 @@ class SectionMol(Section):
                         entry.types_state_b = None
         if remove_dummies:
             sub = self.get_subsection('atoms')
-            dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type[0] == "D"
-                       and entry.num in selected]
+            dummies = [entry for entry in sub.entries_atom if entry.type[0] == "D" and entry.num in selected]
             while dummies:
                 to_remove = dummies[-1]
                 self.del_atom(to_remove.num)
-                dummies = [entry for entry in sub if isinstance(entry, gml.EntryAtom) and entry.type[0] == "D"
-                           and entry.num in selected]
+                dummies = [entry for entry in sub.entries_atom if entry.type[0] == "D" and entry.num in selected]
         self.update_dicts()
     
     def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None, prnt=True):

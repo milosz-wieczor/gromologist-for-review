@@ -178,19 +178,30 @@ class SubsectionBonded(Subsection):
         return val
 
     def explicit_defines(self):
-        for entry in self.entries:
-            if isinstance(entry, gml.EntryBonded):
-                entry.explicit_defines()
+        for entry in self.entries_bonded:
+            entry.explicit_defines()
     
-    def add_ff_params(self):
+    def add_ff_params(self, force_all=False):
+        """
+        Adds explicit values of FF parameters in sections 'bonds', 'angles', 'dihedrals'
+        :param force_all: bool, whether to add params from scratch if some are assigned already
+        :return: None
+        """
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections if sub.header == matchings[self.header]]
         self.bkp_entries = self.entries[:]  # we can't change what we're iterating over, so we modify the copy
-        for entry in self.entries:
+        for entry in self.entries_bonded:
             # let's omit the ones that already have params assigned:
-            if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:
-                self._add_ff_params_to_entry(entry, subsect_params)
+            if entry.params_state_a:
+                if not force_all:
+                    continue
+                else:
+                    entry.params_state_a = []
+                    entry.params_state_b = []
+                    entry.params_state_a_entry = []
+                    entry.params_state_b_entry = []
+            self._add_ff_params_to_entry(entry, subsect_params)
         self.entries = self.bkp_entries[:]  # now restore the modified copy
 
     def find_used_ff_params(self):
@@ -199,8 +210,8 @@ class SubsectionBonded(Subsection):
                      'impropers': 'dihedraltypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections if
                           sub.header == matchings[self.header]]
-        for entry in self.entries:
-            if isinstance(entry, gml.EntryBonded) and not entry.params_state_a:
+        for entry in self.entries_bonded:
+            if not entry.params_state_a:
                 used_parm_entries.extend(self._find_used_ff_params(entry, subsect_params))
         return used_parm_entries
 
@@ -213,7 +224,7 @@ class SubsectionBonded(Subsection):
             wildcard_present = []
             non_wildcard_present = []
             for subsections in subsect_params:
-                for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
+                for parm_entry in [e for e in subsections.entries_param]:
                     if parm_entry.match(types, int_type):
                         is_wildcard = 'X' in parm_entry.types
                         if not wildcard_present and not is_wildcard:
@@ -237,9 +248,8 @@ class SubsectionBonded(Subsection):
                      'impropers': 'dihedraltypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections if
                           sub.header == matchings[self.header]]
-        for entry in self.entries:
-            if isinstance(entry, gml.EntryBonded):
-                self._find_missing_ff_params(entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B, once)
+        for entry in self.entries_bonded:
+            self._find_missing_ff_params(entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B, once)
 
     def _find_missing_ff_params(self, entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B, once):
         if (entry.params_state_a and entry.params_state_b) or (entry.params_state_a and not entry.types_state_b):
@@ -248,7 +258,7 @@ class SubsectionBonded(Subsection):
         entry.read_types()
         found_a, found_b = False, False
         for subsections in subsect_params:
-            for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
+            for parm_entry in subsections.entries_param:
                 if parm_entry.match(entry.types_state_a, int_type):
                     found_a = True
         if not found_a and not entry.params_state_a:
@@ -263,7 +273,7 @@ class SubsectionBonded(Subsection):
                     entry.params_state_a = candid
         if entry.types_state_b and not entry.params_state_b:
             for subsections in subsect_params:
-                for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
+                for parm_entry in subsections.entries_param:
                     if parm_entry.match(entry.types_state_b, int_type):
                         found_b = True
             if not found_b and not entry.params_state_b:
@@ -297,7 +307,7 @@ class SubsectionBonded(Subsection):
         else:
             types = other_typelist
         for subsection in subsect_params:
-            for parm_entry in [e for e in subsection if isinstance(e, gml.EntryParam)]:
+            for parm_entry in subsection.entries_param:
                 if parm_entry.match(types, int_type):
                     if from_wildtype is None:
                         if 'X' in parm_entry.types:
@@ -332,7 +342,7 @@ class SubsectionBonded(Subsection):
             wildcard_present = []
             non_wildcard_present = []
             for subsections in subsect_params:
-                for parm_entry in [e for e in subsections if isinstance(e, gml.EntryParam)]:
+                for parm_entry in subsections.entries_param:
                     if parm_entry.match(types, int_type):
                         is_wildcard = 'X' in parm_entry.types
                         if not wildcard_present and not is_wildcard:
@@ -411,15 +421,13 @@ class SubsectionBonded(Subsection):
         while Amber uses angletype '1' (simple harmonic)
         :return: str, interaction type
         """
-        for entry in self:
-            if isinstance(entry, gml.EntryBonded):
-                return entry.interaction_type
+        for entry in self.entries_bonded:
+            return entry.interaction_type
         return '0'
 
     def add_type_labels(self):
-        for entry in self.entries:
-            if isinstance(entry, gml.EntryBonded):
-                self._add_type_label(entry)
+        for entry in self.entries_bonded:
+            self._add_type_label(entry)
 
     @staticmethod
     def _add_type_label(entry):
@@ -484,13 +492,10 @@ class SubsectionParam(Subsection):
 
     def find_used_ff_params(self):
         used_parm_entries = []
-        used_atomtypes_a = {a.type for mol in self.section.top.molecules for a in mol.atoms
-                            if isinstance(a, gml.EntryAtom)}
-        used_atomtypes_b = {a.type_b for mol in self.section.top.molecules for a in mol.atoms
-                            if isinstance(a, gml.EntryAtom) and a.type_b is not None}
+        used_atomtypes_a = {a.type for mol in self.section.top.molecules for a in mol.atoms}
+        used_atomtypes_b = {a.type_b for mol in self.section.top.molecules for a in mol.atoms if a.type_b is not None}
         used_atomtypes = used_atomtypes_a.union(used_atomtypes_b)
-        for entry in self.entries:
-            if isinstance(entry, gml.EntryParam):
+        for entry in self.entries_param:
                 if all(tp in used_atomtypes for tp in entry.types):
                     used_parm_entries.append(entry.identifier)
         return used_parm_entries
@@ -526,25 +531,24 @@ class SubsectionParam(Subsection):
         return '0'
 
     def get_opt_dih(self, types=False):
-        dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]
+        dopts = [entry for entry in self.entries_param if 'DIHOPT' in entry.comment]
         if not types:
             return [e.params[x] for e in dopts for x in [0, 1]]
         else:
             return [(*e.types, e.params[2]) for e in dopts]
 
     def get_opt_dih_indices(self):
-        dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]
+        dopts = [entry for entry in self.entries_param if 'DIHOPT' in entry.comment]
         self.section.top.add_ff_params()
         indices = set()
         for i in dopts:  # TODO so far only works for one (first) molecule
-            for j in self.section.top.molecules[0].get_subsection('dihedrals'):
-                if isinstance(j, gml.EntryBonded):
-                    if i in j.params_state_a_entry:
-                        indices.add(j.atom_numbers)
+            for j in self.section.top.molecules[0].get_subsection('dihedrals').entries_bonded:
+                if i in j.params_state_a_entry:
+                    indices.add(j.atom_numbers)
         return list(indices)
 
     def set_opt_dih(self, values):
-        dopts = [entry for entry in self.entries if isinstance(entry, gml.EntryParam) and 'DIHOPT' in entry.comment]
+        dopts = [entry for entry in self.entries_param if 'DIHOPT' in entry.comment]
         for e, ang, k in zip(dopts, values[::2], values[1::2]):
             e.params[0] = ang
             e.params[1] = k
@@ -623,12 +627,11 @@ class SubsectionAtom(Subsection):
         molname:(num:type) bindings
         """
         name_to_num, num_to_name, num_to_type, num_to_type_b = {}, {}, {}, {}
-        for entry in self:
-            if isinstance(entry, gml.EntryAtom):
-                name_to_num[(entry.resid, entry.atomname)] = entry.num
-                num_to_name[entry.num] = entry.atomname
-                num_to_type[entry.num] = entry.type
-                num_to_type_b[entry.num] = entry.type_b if entry.type_b is not None else entry.type
+        for entry in self.entries_atom:
+            name_to_num[(entry.resid, entry.atomname)] = entry.num
+            num_to_name[entry.num] = entry.atomname
+            num_to_type[entry.num] = entry.type
+            num_to_type_b[entry.num] = entry.type_b if entry.type_b is not None else entry.type
         return name_to_num, num_to_name, num_to_type, num_to_type_b
 
     

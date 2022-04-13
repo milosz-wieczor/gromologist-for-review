@@ -132,10 +132,18 @@ class SectionMol(Section):
                 reslist.append(f'{at.resname}-{at.resid}')
         return reslist
 
-    def set_type(self, type, resname, atomname):
+    def set_type(self, type_to_set, atomname, resname=None):
+        if resname is None:
+            resnames = list({a.resname for a in self.atoms})
+        else:
+            if isinstance(list, resname) or isinstance(tuple, resname):
+                resnames = resname
+            else:
+                resnames = [resname]
         for a in self.atoms:
-            if a.resname == resname and a.atomname == atomname:
-                a.type = type
+            for rname in resnames:
+                if a.resname == rname and a.atomname == atomname:
+                    a.type = type_to_set
 
     def select_atoms(self, selection_string):
         """
@@ -799,11 +807,12 @@ class SectionMol(Section):
                           if (c, d) in self.bonds or (d, c) in self.bonds]
         return new_pairs, new_dihedrals
     
-    def add_ff_params(self, add_section='all'):
+    def add_ff_params(self, add_section='all', force_all=False):
         """
         Looks for FF parameters to be put for every bonded term in the topology,
         then adds them so that they can be explicitly seen/modified
         :param add_section: str, to which section should the FF params be added
+        :param force_all: bool, whether to overwrite existing parameters
         :return: None
         """
         if add_section == 'all':
@@ -817,7 +826,7 @@ class SectionMol(Section):
                 pass
             else:
                 for ssub in subsections:
-                    ssub.add_ff_params()
+                    ssub.add_ff_params(force_all)
 
     def find_used_ff_params(self, section='all'):
         used_params = []

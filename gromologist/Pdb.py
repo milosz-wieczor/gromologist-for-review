@@ -30,6 +30,7 @@ class Pdb:
             self.top.pdb = self
         if not self.atoms and self.top:
             self.atoms = [Atom.from_top_entry(entry) for mol in self.top.molecules for entry in mol.atoms]
+        self.gbox = self._calc_gro_box()
         self.altloc = altloc
         self.conect = {}
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
@@ -55,10 +56,11 @@ class Pdb:
     @classmethod
     def from_selection(cls, pdb, selection):
         """
-        Creates
-        :param pdb:
-        :param selection:
-        :return:
+        Creates a new Pdb instance as a subset of an existing one,
+        given a selection that defines a subset of atoms
+        :param pdb: Pdb instance, source structure
+        :param selection: str, a syntactically correct selection
+        :return: Pdb, a subset of the original structure
         """
         # TODO what to do in case of a bound Top object? implement Top.slice()?
         selected_indices = pdb.select_atoms(selection)
@@ -88,6 +90,12 @@ class Pdb:
         return new_pdb
 
     def print_protein_sequence(self, gaps=False):
+        """
+        Prints protein sequence chain by chain, recognizing amino acids
+        as residues that contain a CA atom; unrecognized residues are written as X
+        :param gaps: bool, whether to pad gaps (non-continuous numbering) with dashes '-'
+        :return: str, the protein sequence
+        """
         chains = list({a.chain.strip() for a in self.atoms if a.atomname == 'CA'})
         sequences = []
         if not chains:
@@ -114,6 +122,11 @@ class Pdb:
         return sequences
 
     def print_nucleic_sequence(self):
+        """
+        Prints nucleic acid sequences chain by chain, recognizing nucleotides
+        as residues that contain an O4' atom; unrecognized residues are written as X
+        :return: str, the nucleic acid sequence
+        """
         mapping = defaultdict(lambda: 'X')
         sequences = []
         mapping.update(Pdb.nucl_map)
@@ -128,6 +141,11 @@ class Pdb:
         return sequences
 
     def find_missing(self):
+        """
+        Assuming standard naming conventions, finds atoms that are missing
+        in protein structures and prints them
+        :return: None
+        """
         pro_bb = ['N', 'O', 'C', 'CA']
         pro_sc = {'A': ['CB'], 'C': ['CB', 'SG'], 'D': ['CB', 'CG', 'OD1', 'OD2'], 'E': ['CB', 'CG', 'CD', 'OE1',
                   'OE2'], 'F': ['CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ'], 'G': [], 'H': ['CB', 'CG', 'ND1', 'CE1',
@@ -157,7 +175,7 @@ class Pdb:
                 atomlist = []
             atomlist.append(at.atomname)
 
-    def add_chains(self, serials=None, chain=None, offset=0, maxwarn=100, cutoff=10, protein_only=False, nopbc=False):
+    def add_chains(self, selection=None, chain=None, offset=0, maxwarn=100, cutoff=10, protein_only=False, nopbc=False):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual
@@ -166,8 +184,8 @@ class Pdb:
         are supported as valid chain identifiers.
         Optionally, given `serials` and `chain`, one can set all atoms
         with atom numbers in `serials` as belonging to chain `chain`.
-        :param serials: iterable of ints, atom numbers to set chain for (default is all)
-        :param chain: chain to set for serials (default is use consecutive letters)
+        :param selection: str, select only a subset of atoms whose chain ID will be set to the value of 'chain'
+        :param chain: str, chain to set for the specified selection
         :param offset: int, start chain ordering from letter other than A
         :param maxwarn: int, max number of warnings before an error shows up
         :param cutoff: float, distance threshold (in A) for chain separation if using geometric criteria
@@ -178,6 +196,12 @@ class Pdb:
         base_char = 65 + offset  # 65 is ASCII for "A"
         curr_resid = None
         prev_atom = None
+        if (selection is None and chain is not None) or (selection is not None and chain is None):
+            raise ValueError("Both serials and chain have to be specified simultaneously")
+        if selection is not None and chain is not None:
+            for atom in self.get_atoms(selection):
+                atom.chain = chain
+            return
         if not self.top:
             for atom in self.atoms:
                 if not prev_atom:
@@ -196,9 +220,7 @@ class Pdb:
                     atom.chain = chr(base_char)
         else:
             self.check_top(maxwarn=maxwarn)
-            if (serials is None and chain is not None) or (serials is not None and chain is None):
-                raise ValueError("Both serials and chain have to be specified simultaneously")
-            excluded = {'SOL', 'HOH', 'TIP3', 'K', 'NA', 'CL', 'POT'}
+            excluded = {'SOL', 'HOH', 'TIP3', 'WAT', 'OPC', 'K', 'NA', 'CL', 'POT', 'SOD', 'NA+', 'K+', 'CLA'}
             index = 0
             for mol_name in self.top.system.keys():
                 if mol_name.upper() not in excluded:
@@ -207,17 +229,22 @@ class Pdb:
                     n_atoms = mol.natoms
                     for m in range(n_mols):
                         for a in range(n_atoms):
-                            if serials is None and chain is None:
-                                self.atoms[index].chain = chr(base_char)
-                            else:
-                                if self.atoms[index].serial in serials:
-                                    self.atoms[index].chain = chain
+                            self.atoms[index].chain = chr(base_char)
                             index += 1
-                        base_char += 1
+                        if (protein_only and self.atoms[index].resname in Pdb.prot_map.keys()) or not protein_only:
+                            base_char += 1
                         if base_char > 90:
                             return
 
     def check_top(self, maxwarn=20, fix_pdb=False, fix_top=False):
+        """
+        Checks the structure against the associated topology to identify
+        and list potential mismatches in atom names
+        :param maxwarn: int, maximum number of warnings to print, default is 20
+        :param fix_pdb: bool, whether to set names in Pdb using names from the Top
+        :param fix_top: bool, whether to set names in Top using names from the Pdb
+        :return: None
+        """
         if fix_pdb and fix_top:
             raise ValueError("You either want to fix topology or pdb naming")
         if self.top is None:
@@ -245,6 +272,14 @@ class Pdb:
     
     @staticmethod
     def _check_mismatch(atom_entry, atom_instance, mol_name):
+        """
+        Checks a Pdb entry against a Top entry to make sure the atom names match
+        :param atom_entry: EntryAtom instance from the Top
+        :param atom_instance: Atom instance from the Pdb
+        :param mol_name: str, name of the molecule to print in the message
+        :return: int, 0 if names match or 1 otherwise
+        """
+        # TODO should we check residue names too?
         if atom_entry.atomname != atom_instance.atomname:
             print("Atoms {} ({}) in molecule {} topology and {} ({}) in .pdb have "
                   "non-matching names".format(atom_entry.num, atom_entry.atomname, mol_name,
@@ -253,6 +288,10 @@ class Pdb:
         return 0
 
     def print_mols(self):
+        """
+        Identifies and lists molecules contained in the structure, chain by chain
+        :return: None
+        """
         chains = list({a.chain.strip() for a in self.atoms})
         if not chains:
             print("No chains in the molecule, run Pdb.add_chains() first")
@@ -292,13 +331,19 @@ class Pdb:
 
     def _remove_altloc(self):
         """
-        We only keep one of the alternative locations in case
+        Only keeps one of the alternative locations in case
         there is more (by default, A is kept)
         :return: None
         """
         self.atoms = [a for a in self.atoms if a.altloc in [' ', self.altloc]]
     
     def _write_atom(self, atom, pdb=True):
+        """
+        Fn to convert an Atom instance to a line compatible with .pdb or .gro formatting
+        :param atom: an Atom instance to be written
+        :param pdb: bool, whether to write as .pdb (otherwise .gro)
+        :return: str, formatted line
+        """
         atom.serial %= 100000
         atom.resnum %= 10000
         if atom.occ > 1000:
@@ -317,7 +362,13 @@ class Pdb:
     def _write_conect(atom, bonded):
         return 'CONECT' + ('{:>5}' * (len(bonded)+1)).format(atom, *bonded) + '\n'
 
-    def tip3_to_opc(self):
+    def tip3_to_opc(self, offset=0.147722363):
+        """
+        Converts a 3-point water model in a structure to a 4-point
+        by adding a virtual site to each water molecule
+        :param offset: a fractional value used to define the position of the virtual site, for OPC equal to 0.147722363
+        :return: None
+        """
         names = {"TIP3", "WAT", "SOL", "HOH", "TIP"}
         o_names = {"O", "OW"}
         h_names = {"H", "HW"}
@@ -338,8 +389,7 @@ class Pdb:
                     new_atoms.append(a)
                     new_atom = Atom(self._write_atom(water_mol["O"]))
                     new_atom.atomname = "MW"
-                    offs = 0.147722363
-                    new_atom.set_coords([a + offs*(b + c - 2*a) for a, b, c
+                    new_atom.set_coords([a + offset*(b + c - 2*a) for a, b, c
                                          in zip(new_atom.coords, water_mol["H1"].coords, water_mol["H2"].coords)])
                     new_atoms.append(new_atom)
                     water_mol = {}
@@ -349,13 +399,27 @@ class Pdb:
                 new_atoms.append(a)
         self.atoms = new_atoms
     
-    def renumber_atoms(self, offset=1):
-        for n, atom in enumerate(self.atoms, offset):
+    def renumber_atoms(self, offset=1, selection=None):
+        """
+        Consecutively renumbers all atoms in the structure
+        :param offset: int, number of the first atom to be set
+        :param selection: str, will only renumber atoms matching the selection
+        :return: None
+        """
+        ats = self.atoms if selection is None else self.select_atoms(selection)
+        for n, atom in enumerate(ats, offset):
             atom.serial = n
-    
-    def renumber_residues(self, offset=1):
+
+    def renumber_residues(self, offset=1, selection=None):
+        """
+        Consecutively renumbers all residues in the structure
+        :param offset: int, number of the first residue to be set
+        :param selection: str, will only renumber residues matching the selection
+        :return: None
+        """
         count = offset
-        for n in range(len(self.atoms)):
+        ats = self.atoms if selection is None else self.select_atoms(selection)
+        for n in ats:
             temp = count
             try:
                 if self.atoms[n].resnum != self.atoms[n+1].resnum or self.atoms[n].chain != self.atoms[n+1].chain:
@@ -450,15 +514,31 @@ class Pdb:
             self.renumber_atoms()
 
     def add_elements(self):
+        """
+        Guesses the element (last element in the .pdb file) based on the atom name,
+        useful for e.g. element-based coloring in VMD
+        :return: None
+        """
         for a in self.atoms:
             if not a.element:
                 a.element = [x for x in a.atomname if not x.isdigit()][0]
 
     def select_atoms(self, selection_string):
+        """
+        Applies a selection to the structure and returns the 0-based indices of selected atoms
+        :param selection_string: str, consistent with the selection language syntax (see README)
+        :return: list of int, 0-based (!!!) indices of atoms
+        """
         sel = gml.SelectionParser(self)
         return sel(selection_string)
 
     def select_atom(self, selection_string):
+        """
+        Applies a selection to the structure and returns the 0-based index of the selected atom,
+        assuming the selection corresponds to a single unique atom (will throw an error otherwise)
+        :param selection_string: str, consistent with the selection language syntax (see README)
+        :return: int, 0-based (!!!) index of the selected atom
+        """
         sel = gml.SelectionParser(self)
         result = sel(selection_string)
         if len(result) > 1:
@@ -468,12 +548,27 @@ class Pdb:
         return result[0]
 
     def get_atom(self, selection_string):
+        """
+        Works as select_atom, but returns an atom instead of a list of indices
+        :param selection_string: str, consistent with the selection language syntax (see README)
+        :return: an Atom instance, the selected atom
+        """
         return self.atoms[self.select_atom(selection_string)]
 
     def get_atoms(self, selection_string):
+        """
+        Works as select_atoms, but returns a list of atoms instead of a list of indices
+        :param selection_string: str, consistent with the selection language syntax (see README)
+        :return: a list of Atom instances, the selected atoms
+        """
         return [self.atoms[i] for i in self.select_atoms(selection_string)]
     
     def same_residue_as(self, query_iter):
+        """
+        Broadens the query to all atoms contained in residues from which atoms were selected
+        :param query_iter: iterable of int, indices of the atoms in the query
+        :return: set, a broadened list of atom indices
+        """
         new_list = []
         for atom in query_iter:
             residue, resid = self.atoms[atom].resname, self.atoms[atom].resnum
@@ -482,6 +577,12 @@ class Pdb:
         return set(new_list)
     
     def within(self, query_iter, threshold):
+        """
+        Returns a set of all atoms contained within the specified radius of a selection
+        :param query_iter: iterable of int, indices of the atoms in the query
+        :param threshold: float, a distance within which atoms will be included
+        :return: set, a broadened list of atom indices
+        """
         new_list = []
         for n, atom in enumerate(self.atoms):
             if any([self._atoms_dist(atom, self.atoms[query]) <= threshold for query in query_iter]):
@@ -506,6 +607,13 @@ class Pdb:
         
     @staticmethod
     def _parse_contents(contents, qt):
+        """
+        A parser to extract data from .pdb files
+        and convert them to internal parameters
+        :param contents: list of str, contents of the .pdb file
+        :param qt: bool, whether the .pdb contains extra charge/type columns
+        :return: (list of Atom instances, tuple of floats of len 6, list of str)
+        """
         atoms, remarks, conect = [], [], {}
         box = [7.5, 7.5, 7.5, 90, 90, 90]  # generic default, will be overwritten if present
         for line in contents:
@@ -772,7 +880,7 @@ class Pdb:
         coords = np.array(self.get_coords())
         for n, atom in enumerate(self.atoms):
             dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
-            selected = list(np.where(np.logical_and(dists<cutoff, dists>0.1))[0]+1)
+            selected = list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0]+1)
             self.conect[n+1] = selected
         
     def fill_beta(self, values, serials=None, smooth=False, ignore_mem=False):
@@ -791,7 +899,7 @@ class Pdb:
         if not serials:
             serials = [a.serial for a in self.atoms]
         if not all([i == j for i, j in zip(serials, sorted(serials))]):
-            raise ValueError("Atoms' serial numbers are not sorted, consider running .renumber_all() first")
+            raise ValueError("Atoms' serial numbers are not sorted, consider running .renumber_atoms() first")
         if len(values) != len(serials):
             raise ValueError("Lists 'value' and 'serials' have inconsistent sizes: {} and {}".format(len(values),
                                                                                                      len(serials)))

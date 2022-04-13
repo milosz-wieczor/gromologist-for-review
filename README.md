@@ -23,6 +23,8 @@ should be passed to the constructor:
 >>> from gromologist import Top, Pdb
 >>> t = Top('md/topol.top')
 >>> p = Pdb('md/conf.pdb')
+>>> p
+PDB file md/conf.pdb with 100 atoms
 ```
 
 Since all .itp files are by default included into the `Top` object, sometimes it is
@@ -49,6 +51,7 @@ After changes have been made, modified files can be saved:
 ```
 >>> t.save_top('md/new_topol.top')
 >>> t.pdb.save_pdb('md/new_conf.pdb')
+>>> t.pdb.save_gro('md/new_conf.gro')
 ```
 
 ##### File inspection, checks and printing
@@ -59,15 +62,19 @@ including name consistency checks:
 ```
 >>> t.check_pdb()
 Check passed, all names match
+### or, alternatively:
+>>> t.pdb.check_top()
+Check passed, all names match
 ```
 
-as well as renumbering, automatic addition of chains/element labels and fixing ordering issues in PDB
+By default, up to 20 mismatches are shown, but more can be enabled with `maxwarn=...`.
+If there are mismatches, in order to keep one naming convention and discard the other
+use `fix_pdb=True` or `fix_top=True`.
+
+If atom and residue names match but atom order does not, one can enforce correct ordering in Pdb
 using topology ordering as a template:
 
 ```
->>> t.pdb.renumber_all()
->>> t.pdb.add_chains()
->>> t.pdb.add_elements()
 >>> t.pdb.match_order_by_top_names()
 ```
 
@@ -77,7 +84,16 @@ Missing atoms in (standard) protein residues can also be identified rapidly:
 >>> t.pdb.find_missing()
 ```
 
-With `Pdb.select_atoms()`, selections can be made in a VMD-like manner:
+To check if all protein residues assume correct chirality, run:
+
+```
+>>> t.pdb.check_chiral_aa()
+```
+
+(By analogy to `Pdb.check_chiral_aa`, one can devise their own tests with `Pdb.check_chiral`.)
+
+With `Pdb.select_atoms()`, selections can be made in a VMD-like manner (see full syntax
+description at the bottom):
 
 ```
 >>> t.pdb.select_atoms('name CA and (resname ASP or chain B)')
@@ -121,6 +137,12 @@ To print the sequence of the macromolecules in the file, use:
 
 With `Pdb.print_protein_sequence()`, you can add `gaps=True` to fill in missing residues
 with dashes (-), e.g. for alignment in Modeller.
+
+To list all molecules in the Pdb instance (assigned from chains), use:
+
+```
+>>> p.print_mols()
+```
 
 ##### Producing lightweight files
 
@@ -301,7 +323,7 @@ If you want to invert the direction of the alchemical change by swapping states 
 >>> protein.swap_states()
 ```
 
-##### Duplicating types
+##### Duplicating and reassigning types
 
 Often it's useful to duplicate an atomtype exactly, i.e., assign it a different name while
 retaining all bonded and nonbonded parameters of the original. This can be done easily with:
@@ -309,9 +331,19 @@ retaining all bonded and nonbonded parameters of the original. This can be done 
 ```
 >>> params = t.parameters
 >>> params.clone_type("CT", prefix="Y")
+>>> params.clone_type("CT", new_type="CY")
 ```
 
-This will create a type "YCT" that shares all properties with "CT" but can be modified independently.
+This will create a type "YCT" (2nd line) and a type "CY" (3rd line) that both share 
+all properties with "CT" but can be modified independently.
+
+To then set e.g. all CA atoms in the 1st molecule to the new type, run the following:
+
+```
+>>> t.molecules[0].set_type("CY", atomname="CA")  # sets all CAs's type as CY
+>>> t.molecules[0].set_type("CY", atomname="CA", resname="ALA")  # sets CAs in ALA as CY
+>>> t.molecules[0].set_type("CY", atomname="CA", resname=["ALA", "LYS"])  # sets CAs in ALA and LYS as CY
+```
 
 ##### Adding NBFIX terms
 
@@ -324,7 +356,7 @@ To generate an NBFIX (custom combination rule) entry, use the following snippet:
 This will introduce a term modifying the CT-HA Lennard-Jones interaction, increasing the default 
 (Lorenz-Berthelot) sigma by 0.01 nm, and decreasing the default epsilon by 0.1 kJ/mol.
 
-##### Explicitly listing parameters in topology 
+##### Explicitly listing parameters in topology & finding missing parameters 
 
 To explicitly include all parameters in sections `[ bonds ]`, `[ angles ]` and `[ dihedrals ]`,
 one can use:
@@ -334,8 +366,6 @@ one can use:
 >>> t.save_top('with_params.top')
 ```
 
-##### Finding missing parameters in topology
-
 To find FF parameters that are missing (e.g. to include them by analogy, or optimize), run:
 
 ```
@@ -344,6 +374,22 @@ To find FF parameters that are missing (e.g. to include them by analogy, or opti
 
 Note that both `add_ff_params()` and `find_missing_ff_params()` have an optional `section` parameter
 that can specify you only want to look at `bonds`, `angles`, `dihedrals` or `impropers`.
+
+##### Preparing REST2 topologies
+
+To prepare a molecule for replica exchange/solute tempering simulations, one can use the 
+top-level Top object:
+
+```
+>>> t.solute_tempering(temperatures=[300, 320, 350], molecules=[0,1])
+```
+
+If the "hot" region is localized within one molecule, one can use the lower-level interface 
+instead, and specify a selection for the "hot" subsystem:
+
+```
+>>> t.molecules[0].solute_tempering(temperatures=[300, 320, 350], selection='resid 1 to 50')
+```
 
 ### Dihedral optimization
 
@@ -386,7 +432,7 @@ Let's start by reading a PDB file:
 >>> p = Pdb('md/other.pdb')
 ```
 
-##### Adding atoms along a vector specified by other atoms
+##### Adding atoms along a vector specified by other atoms, and deleting them
 
 To add e.g. a hydrogen atom to an existing atom CB, with a bond length of 1 A in the direction
 specified by a vector from atom C to atom CA, one can use:
@@ -399,6 +445,13 @@ specified by a vector from atom C to atom CA, one can use:
 All the selections should be unique (corresponding to a single atom), and combinations can be
 used like in VMD, e.g. `name CB and resid 10 and chain A`. This way you can e.g. automate
 the addition of dummy atoms, DNA/RNA conversions etc.
+
+For advanced users, it is possible to directly specify the `vector=...` parameter instead of
+`p1_sel` and `p2_sel`, while the vector can be conveniently calculated using `Pdb._vector()`
+(in fact, this is how the mutation module is implemented).
+
+Atoms can be easily deleted with `Pdb.delete_atom()` using the serial number, with the optional
+`renumber=True` parameter to renumber the remaining atoms from 1.
 
 ##### Interpolating between two pre-aligned structures
 
@@ -432,6 +485,92 @@ using a Gaussian kernel with a specified standard deviation (in A).
 To choose and save e.g. only the DNA atoms from a protein-DNA complex, use:
 
 ```
->>> dna =  Pdb.from_selection(p, 'dna')
+>>> dna = Pdb.from_selection(p, 'dna')
 >>> dna.save_pdb('dna.pdb')
 ```
+
+##### Renumbering atoms or residues in a structure
+
+`Pdb.renumber_atoms()` and `Pdb.renumber_residues()` serve to easily reset the numbering
+of atoms or residues, respectively. The renumbering can be modified with the `offset` 
+and `selection` parameters:
+
+```
+>>> p.renumber_residues(offset=20)  # starts numbering residues from 20
+>>> p.renumber_atoms(selection='chain B')  # only renumbers atoms in chain B
+```
+
+##### Adding chain, CONECT or element information
+
+When chain information goes missing (common issue with conversion between .pdb and .gro),
+this information can be easily recovered with `Pdb.add_chains()`. Note: if the `Pdb` instance
+does not have a bound `Top` object, it will try to guess chain end/start based on the `cutoff`
+parameter (default is 10 A); otherwise, it will first check Pdb/Top for consistency and use 
+molecule information from `Top` to assign chains.
+
+```
+>>> p.add_chains()
+```
+
+In order to only assign chains to proteins, use `protein_only=True`. To start numbering chains
+from a letter different than A, use `offset=X`, where X is a 0-based integer.
+
+If the distance calculation fails due to PBC issues, use `nopbc=True` and **make sure** that
+your molecule is whole.
+
+To guess the information about elements (e.g. to add element-based coloring in VMD),
+use:
+
+```
+>>> p.add_elements()
+```
+
+Finally, if CONECT entries are needed in the PDB (as required by some programs), one can run:
+
+```
+>>> p.add_conect()
+```
+
+with a default distance cut-off of 1.55 A to define a chemical bond. Note that this last
+feature depends on `numpy` for speed!
+
+##### Converting a 3-point water model to a 4-point one
+
+If your system was prepared e.g. with TIP3P water and you want to change it to OPC (or other 4-point)
+without rerunning `gmx pdb2gmx`, the following function will do the job:
+
+```
+>>> p.tip3_to_opc()
+```
+
+The default `offset` parameter is set to 0.147722363, typical for OPC; for TIP4P, use
+`offset=0.128012065`, and in general check the `[ virtual_sites3 ]` section in the solvent's .itp file.
+
+### Selection language syntax
+
+The custom selection language was meant to be as similar as possible to that 
+available in VMD: 
++ keywords such as "name", "resid", "resname", "serial", "chain" (for structures) or "type" (for topologies)
++ phrases "same residue as ..." and "within ... of" 
++ predefined selections include "protein", "dna", "rna" and "solvent"
++ logical operators as "or" & "and" work on sets of atoms; "not" inverses the selection
++ ranges can be specified as e.g. "resid 5 to 25" or by simple enumeration
++ parentheses can be used to customize order of operations
+
+Examples: 
++ "(resid 1 to 100 and name CA) or (same residue as within 5 of resname LIG)"
++ "chain A B D and not solvent"
+
+### Access to Gromacs utilities
+
+To perform energy decomposition using the Gromacs rerun module, use the
+`calc_gmx_energy()` utility function:
+
+```
+>>> import gromologist as gml
+>>> gml.calc_gmx_energy(struct='md/conf.pdb', topfile='md/topol.top', traj='traj.xtc', terms='all')
+```
+
+The `terms` keyword can be "all" (returns all available energy/pressure/volume terms), 
+any specific keyword allowed by `gmx energy` (e.g. "potential"), 
+or a list of these (e.g. ["bonds", "angles", "potential"]).

@@ -910,6 +910,7 @@ class SectionMol(Section):
         return rtp
 
     def mutate_protein_residue(self, resid, target, rtp=None, mutate_in_pdb=True):
+        # TODO if no RTP found, throw error and ask for explicit path
         alt_names = {('THR', 'OG'): 'OG1', ('THR', 'HG'): 'HG1', ('LEU', 'CD'): 'CD1', ('LEU', 'HD1'): 'HD11',
                      ('LEU', 'HD2'): 'HD12', ('LEU', 'HD3'): 'HD13', ('VAL', 'CG'): 'CG1', ('VAL', 'HG1'): 'HG11',
                      ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13'}
@@ -1039,6 +1040,7 @@ class SectionMol(Section):
             print("No .pdb file bound to the topology, use Top.add_pdb() to add one")
 
     def parse_rtp(self, rtp):
+        # TODO check against amber/ILDN
         if self.top.rtp:
             return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['impropers'], \
                    self.top.rtp['bondedtypes']

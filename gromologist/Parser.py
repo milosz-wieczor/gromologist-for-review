@@ -97,7 +97,10 @@ class SelectionParser:
             sel_string = ' '.join(sel_string.split()[3:])
             same = True
         if sel_string.split()[0] == 'within' and sel_string.split()[2] == 'of':
-            within = float(sel_string.split()[1])
+            within = (float(sel_string.split()[1]), False)
+            sel_string = ' '.join(sel_string.split()[3:])
+        elif sel_string.split()[0] == 'pbwithin' and sel_string.split()[2] == 'of':
+            within = (float(sel_string.split()[1]), True)
             sel_string = ' '.join(sel_string.split()[3:])
         keyw = sel_string.split()[0]
         if self.ispdb(self.master):
@@ -130,7 +133,10 @@ class SelectionParser:
         if same:
             chosen = self.master.same_residue_as(chosen)  # TODO implement for SectMol
         if within and self.ispdb(self.master):
-            chosen = self.master.within(chosen, within)
+            if within[1]:
+                chosen = self.master.within(chosen, within, nopbc=False)
+            else:
+                chosen = self.master.within(chosen, within, nopbc=True)
         if within and not self.ispdb(self.master):
             raise ValueError("the within keyword only works for structural data, not topology")
         return set(chosen)

@@ -208,7 +208,10 @@ class Pdb:
                     prev_atom = atom
                     curr_resid = atom.resnum
                 if atom.resnum != curr_resid:
-                    dist = self._atoms_dist_pbc(atom, prev_atom, nopbc)
+                    if nopbc:
+                        dist = self._atoms_dist_pbc(atom, prev_atom)
+                    else:
+                        dist = self._atoms_dist(atom, prev_atom)
                     prev_atom = atom
                     curr_resid = atom.resnum
                     if dist > cutoff:
@@ -576,33 +579,48 @@ class Pdb:
             new_list.extend(matching)
         return set(new_list)
     
-    def within(self, query_iter, threshold):
+    def within(self, query_iter, threshold, nopbc=False):
         """
         Returns a set of all atoms contained within the specified radius of a selection
         :param query_iter: iterable of int, indices of the atoms in the query
         :param threshold: float, a distance within which atoms will be included
+        :param nopbc: bool, whether to include PBC in the distance calculation
         :return: set, a broadened list of atom indices
         """
         new_list = []
         for n, atom in enumerate(self.atoms):
-            if any([self._atoms_dist(atom, self.atoms[query]) <= threshold for query in query_iter]):
-                new_list.append(n)
+            if nopbc:
+                if any([self._atoms_dist(atom, self.atoms[query]) <= threshold for query in query_iter]):
+                    new_list.append(n)
+            else:
+                if any([self._atoms_dist_pbc(atom, self.atoms[query]) <= threshold for query in query_iter]):
+                    new_list.append(n)
         return set(new_list)
-    
+
     @staticmethod
     def _atoms_dist(at1, at2):
         return ((at2.x - at1.x)**2 + (at2.y - at1.y)**2 + (at2.z - at1.z)**2)**0.5
 
-    def _atoms_dist_pbc(self, at1, at2, nopbc=False):
-        if not self.box[3] == self.box[4] == self.box[5] == 90.0 and not nopbc:
-            raise RuntimeError("Only rectangular boxes supported for PBC-based distanes, "
-                               "use nopbc=True if you're sure the molecule is whole")
-        return (min([abs(at2.x - at1.x), self.box[0] - abs(at2.x - at1.x)]) ** 2 +
-                min([abs(at2.y - at1.y), self.box[1] - abs(at2.y - at1.y)]) ** 2 +
-                min([abs(at2.z - at1.z), self.box[2] - abs(at2.z - at1.z)]) ** 2) ** 0.5
+    def _atoms_dist_pbc(self, at1, at2):
+        if not self.box[3] == self.box[4] == self.box[5] == 90.0:
+            a = [self.gbox[0]*10, self.gbox[3]*10, self.gbox[4]*10]
+            b = [self.gbox[5]*10, self.gbox[1]*10, self.gbox[6]*10]
+            c = [self.gbox[7]*10, self.gbox[8]*10, self.gbox[2]*10]
+            d = self._atoms_vec(at1, at2)
+            mindist = []
+            for i in [-1, 0, 1]:
+                for j in [-1, 0, 1]:
+                    for k in [-1, 0, 1]:
+                        mindist.append(sum([(d[x] + a[x]*i + b[x]*j + c[x]*k)**2 for x in range(3)])**0.5)
+            return min(mindist)
+        else:
+            return (min([abs(at2.x - at1.x), self.box[0] - abs(at2.x - at1.x)]) ** 2 +
+                    min([abs(at2.y - at1.y), self.box[1] - abs(at2.y - at1.y)]) ** 2 +
+                    min([abs(at2.z - at1.z), self.box[2] - abs(at2.z - at1.z)]) ** 2) ** 0.5
 
     @staticmethod
     def _atoms_vec(at1, at2):
+        # TODO make a PBC version too
         return at2.x - at1.x, at2.y - at1.y, at2.z - at1.z
         
     @staticmethod
@@ -632,6 +650,16 @@ class Pdb:
             if line.startswith('END') or line.startswith('ENDMDL'):
                 break
         return atoms, tuple(box), remarks
+
+    def remove_hydrogens(self):
+        """
+        Uses the standard naming convention (see Pdb.add_elements()
+        to identify and remove hydrogen atoms
+        :return: None
+        """
+        self.add_elements()
+        new_list = [a for a in self.atoms if a.element != 'H']
+        self.atoms = new_list
 
     def mutate_protein_residue(self, resid, target, chain=''):
         """
@@ -744,7 +772,7 @@ class Pdb:
         dists = []
         for atom1 in self.get_atoms(f"resid {resid1}"):
             for atom2 in self.get_atoms(f"resid {resid2}"):
-                dists.append(self._atoms_dist(atom1, atom2))
+                dists.append(self._atoms_dist_pbc(atom1, atom2))
         return dists
 
     def check_chiral_aa(self):

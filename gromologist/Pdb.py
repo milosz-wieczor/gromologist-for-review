@@ -16,13 +16,22 @@ class Pdb:
                 'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"}
 
     def __init__(self, filename=None, top=None, altloc='A', qt=False, **kwargs):
+        """
+        Initializes a Pdb instnace
+        :param filename: str, name of the file (.gro or .pdb)
+        :param top: str or Top, a topology matching the structure
+        :param altloc: str ('A' or 'B'), which altloc to keep if relevant
+        :param qt: bool, whether to try to read the PDBQT format (with charges and types)
+        :param kwargs: will be passed to Top constructor if top is a string/path
+        """
         self.fname = filename
         if self.fname:
             if self.fname.endswith('gro'):
                 self.atoms, self.box, self.remarks = self._parse_contents_gro([line.rstrip()
                                                                                for line in open(self.fname)])
             else:
-                self.atoms, self.box, self.remarks = self._parse_contents([line.strip() for line in open(self.fname)], qt)
+                self.atoms, self.box, self.remarks = self._parse_contents([line.strip() for line in open(self.fname)],
+                                                                          qt)
         else:
             self.atoms, self.box, self.remarks = [], 3 * [100] + 3 * [90], []
         self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
@@ -73,10 +82,16 @@ class Pdb:
 
     @classmethod
     def from_text(cls, text, orig_pdb):
+        """
+        Reads coordinates from text, useful for reading trajectories
+        :param text: str, contents of the pdb/gro
+        :param orig_pdb: Pdb instance, contains general information about the structure (box size, remarks etc)
+        :return: a new Pdb instance
+        """
         new_pdb = Pdb()
         try:
             ftype = orig_pdb.fname[-3:]
-        except:
+        except AttributeError:
             ftype = orig_pdb.sfname[-3:]
         if ftype == 'pdb':
             new_pdb.atoms = cls._parse_contents([line.strip() for line in text.split('\n')], False)
@@ -111,7 +126,7 @@ class Pdb:
                 res = [a.resnum for n, a in enumerate(self.atoms) if n in cas and a.altloc in [' ', self.altloc]]
                 seq = []
                 counter = 0
-                for r in range(res[0], res[-1]+1):
+                for r in range(res[0], res[-1] + 1):
                     if r in res:
                         rname = atoms[counter].resname
                         counter += 1
@@ -148,13 +163,20 @@ class Pdb:
         """
         pro_bb = ['N', 'O', 'C', 'CA']
         pro_sc = {'A': ['CB'], 'C': ['CB', 'SG'], 'D': ['CB', 'CG', 'OD1', 'OD2'], 'E': ['CB', 'CG', 'CD', 'OE1',
-                  'OE2'], 'F': ['CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ'], 'G': [], 'H': ['CB', 'CG', 'ND1', 'CE1',
-                  'CD2', 'NE2'], 'I': ['CB', 'CG1', 'CG2', 'CD'], 'K': ['CB', 'CG', 'CD', 'CE', 'NZ'], 'L': ['CB', 'CG',
-                  'CD1', 'CD2'], 'M': ['CB', 'CG', 'SD', 'CE'], 'N': ['CB', 'CG', 'OD1', 'ND2'], 'P': ['CB', 'CG',
-                  'CD'], 'Q': ['CB', 'CG', 'CD', 'OE1', 'NE2'], 'R': ['CB', 'CG', 'CD', 'NE', 'CZ', 'NH1', 'NH2'],
+                                                                                         'OE2'],
+                  'F': ['CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ'], 'G': [], 'H': ['CB', 'CG', 'ND1', 'CE1',
+                                                                                      'CD2', 'NE2'],
+                  'I': ['CB', 'CG1', 'CG2', 'CD'], 'K': ['CB', 'CG', 'CD', 'CE', 'NZ'], 'L': ['CB', 'CG',
+                                                                                              'CD1', 'CD2'],
+                  'M': ['CB', 'CG', 'SD', 'CE'], 'N': ['CB', 'CG', 'OD1', 'ND2'], 'P': ['CB', 'CG',
+                                                                                        'CD'],
+                  'Q': ['CB', 'CG', 'CD', 'OE1', 'NE2'], 'R': ['CB', 'CG', 'CD', 'NE', 'CZ', 'NH1', 'NH2'],
                   'S': ['CB', 'OG'], 'T': ['CB', 'CG2', 'OG1'], 'V': ['CB', 'CG1', 'CG2'], 'W': ['CB', 'CG', 'CD1',
-                  'CD2', 'NE1', 'CE2', 'CE3', 'CH2', 'CZ2', 'CZ3'], 'Y': ['CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ',
-                  'OH']}
+                                                                                                 'CD2', 'NE1', 'CE2',
+                                                                                                 'CE3', 'CH2', 'CZ2',
+                                                                                                 'CZ3'],
+                  'Y': ['CB', 'CG', 'CD1', 'CD2', 'CE1', 'CE2', 'CZ',
+                        'OH']}
         alt = {'I': ['CD', 'CD1']}  # pretty temporary and non-extensible, need to rethink
         curr_res = ('X', 0)
         atomlist = []
@@ -272,7 +294,7 @@ class Pdb:
                 raise RuntimeError("Error: too many warnings; use maxwarn=N to allow for up to N exceptions,"
                                    "or -1 to allow for any number of them")
         print("Check passed, all names match")
-    
+
     @staticmethod
     def _check_mismatch(atom_entry, atom_instance, mol_name):
         """
@@ -282,11 +304,10 @@ class Pdb:
         :param mol_name: str, name of the molecule to print in the message
         :return: int, 0 if names match or 1 otherwise
         """
-        # TODO should we check residue names too?
-        if atom_entry.atomname != atom_instance.atomname:
-            print("Atoms {} ({}) in molecule {} topology and {} ({}) in .pdb have "
-                  "non-matching names".format(atom_entry.num, atom_entry.atomname, mol_name,
-                                              atom_instance.serial, atom_instance.atomname))
+        if atom_entry.atomname != atom_instance.atomname or atom_entry.resname != atom_instance.resname:
+            print("Atoms {} ({}/{}) in molecule {} topology and {} ({}/{}) in .pdb have "
+                  "non-matching names".format(atom_entry.num, atom_entry.atomname, atom_entry.resname, mol_name,
+                                              atom_instance.serial, atom_instance.atomname, atom_instance.resname))
             return 1
         return 0
 
@@ -298,6 +319,7 @@ class Pdb:
         chains = list({a.chain.strip() for a in self.atoms})
         if not chains:
             print("No chains in the molecule, run Pdb.add_chains() first")
+
         def identify(atom):
             first = atom.resname
             if first in Pdb.prot_map.keys() or (first[1:] in Pdb.prot_map.keys() and first[0] in 'NC'):
@@ -306,6 +328,7 @@ class Pdb:
                 return 'Nucleic'
             else:
                 return atom.resname
+
         mol_list = []
         mol = identify(self.atoms[0])
         chain = self.atoms[0].chain
@@ -339,7 +362,7 @@ class Pdb:
         :return: None
         """
         self.atoms = [a for a in self.atoms if a.altloc in [' ', self.altloc]]
-    
+
     def _write_atom(self, atom, pdb=True):
         """
         Fn to convert an Atom instance to a line compatible with .pdb or .gro formatting
@@ -358,12 +381,12 @@ class Pdb:
                                             atom.resnum, atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta,
                                             atom.element)
         else:
-            return self._atom_format_gro.format(atom.resnum, atom.resname, atom.atomname, atom.serial, atom.x/10,
-                                                atom.y/10, atom.z/10)
+            return self._atom_format_gro.format(atom.resnum, atom.resname, atom.atomname, atom.serial, atom.x / 10,
+                                                atom.y / 10, atom.z / 10)
 
     @staticmethod
     def _write_conect(atom, bonded):
-        return 'CONECT' + ('{:>5}' * (len(bonded)+1)).format(atom, *bonded) + '\n'
+        return 'CONECT' + ('{:>5}' * (len(bonded) + 1)).format(atom, *bonded) + '\n'
 
     def tip3_to_opc(self, offset=0.147722363):
         """
@@ -392,7 +415,7 @@ class Pdb:
                     new_atoms.append(a)
                     new_atom = Atom(self._write_atom(water_mol["O"]))
                     new_atom.atomname = "MW"
-                    new_atom.set_coords([a + offset*(b + c - 2*a) for a, b, c
+                    new_atom.set_coords([a + offset * (b + c - 2 * a) for a, b, c
                                          in zip(new_atom.coords, water_mol["H1"].coords, water_mol["H2"].coords)])
                     new_atoms.append(new_atom)
                     water_mol = {}
@@ -401,7 +424,7 @@ class Pdb:
             else:
                 new_atoms.append(a)
         self.atoms = new_atoms
-    
+
     def renumber_atoms(self, offset=1, selection=None):
         """
         Consecutively renumbers all atoms in the structure
@@ -425,7 +448,7 @@ class Pdb:
         for n in ats:
             temp = count
             try:
-                if self.atoms[n].resnum != self.atoms[n+1].resnum or self.atoms[n].chain != self.atoms[n+1].chain:
+                if self.atoms[n].resnum != self.atoms[n + 1].resnum or self.atoms[n].chain != self.atoms[n + 1].chain:
                     temp = count + 1
             except IndexError:
                 pass
@@ -433,6 +456,17 @@ class Pdb:
             count = temp
 
     def reposition_atom_from_hook(self, atomsel, hooksel, bondlength, p1_sel=None, p2_sel=None, vector=None):
+        """
+        Sets coordinates of an atom based on a "hook" atom (one it's bound to), bond length, and a vector defining
+        the direction of the bond
+        :param atomsel: str, unique selection for the atom being moved
+        :param hooksel: str, unique selection for the hook atom
+        :param bondlength: float, length of the bond (in A)
+        :param p1_sel: str, selection for the 1st atom defining the vector to position the new atom
+        :param p2_sel: str, selection for the 2nd atom defining the vector to position the new atom
+        :param vector: iterable, defines the vector direction to position the new atom
+        :return: None
+        """
         if p1_sel is not None and p2_sel is not None:
             p1_xyz = self.get_coords()[self.select_atom(p1_sel)]
             p2_xyz = self.get_coords()[self.select_atom(p2_sel)]
@@ -443,10 +477,10 @@ class Pdb:
             raise RuntimeError("In repositioning, please use either p1/p2 selections or specify the vector")
         movable = self.get_atom(atomsel)
         hook_xyz = self.get_coords()[self.select_atom(hooksel)]
-        vec_len = sum([x**2 for x in vec])**0.5
-        scale = bondlength/vec_len
-        movable.set_coords([h + scale*v for h, v in zip(hook_xyz, vec)])
-    
+        vec_len = sum([x ** 2 for x in vec]) ** 0.5
+        scale = bondlength / vec_len
+        movable.set_coords([h + scale * v for h, v in zip(hook_xyz, vec)])
+
     def match_order_by_top_names(self, arange=None):
         """
         Whenever PDB atoms have different ordering than .top ones
@@ -483,7 +517,7 @@ class Pdb:
                         new_atoms.append(self.atoms[list(pdb_loc)[0]])
                     index += 1
         self.atoms = new_atoms
-    
+
     def insert_atom(self, index, base_atom, atomsel=None, hooksel=None, bondlength=None, p1_sel=None, p2_sel=None,
                     vector=None, **kwargs):
         """
@@ -492,6 +526,12 @@ class Pdb:
         e.g. atomname="CA", serial=15, ...
         :param index: int, the new index of the inserted Atom in the Atoms list
         :param base_atom: Atom, instance based on which the new atom will be based
+        :param atomsel: str, unique selection for the new atom (e.g. "name HX and resid 10")
+        :param hooksel: str, unique selection for the atom the new atom will be bound to
+        :param bondlength: float, length of the bond extending from the "hook" atom (in A)
+        :param p1_sel: str, selection for the 1st atom defining the vector to position the new atom
+        :param p2_sel: str, selection for the 2nd atom defining the vector to position the new atom
+        :param vector: iterable, defines the vector direction to position the new atom
         :param kwargs: Atom attributes to be held by the new atom
         :return: None
         """
@@ -501,11 +541,17 @@ class Pdb:
                 raise ValueError("{} is not a valid Atom attribute")
             new_atom.__setattr__(kw, kwargs[kw])
         self.atoms.insert(index, new_atom)
-        if (atomsel is not None and hooksel is not None and bondlength is not None and ((p1_sel is not None and
-                p2_sel is not None) or vector is not None)):
+        if (atomsel is not None and hooksel is not None and bondlength is not None and
+                ((p1_sel is not None and p2_sel is not None) or vector is not None)):
             self.reposition_atom_from_hook(atomsel, hooksel, bondlength, p1_sel, p2_sel, vector)
-    
+
     def delete_atom(self, serial, renumber=False):
+        """
+        Removes an atom from the Pdb object
+        :param serial: int, serial number of the atom to be removed (usually 1-based)
+        :param renumber: bool, whether to renumber atoms after removal
+        :return: None
+        """
         num = [n for n, a in enumerate(self.atoms) if a.serial == serial]
         if len(num) == 0:
             raise ValueError('No atoms with serial number {}'.format(serial))
@@ -565,7 +611,7 @@ class Pdb:
         :return: a list of Atom instances, the selected atoms
         """
         return [self.atoms[i] for i in self.select_atoms(selection_string)]
-    
+
     def same_residue_as(self, query_iter):
         """
         Broadens the query to all atoms contained in residues from which atoms were selected
@@ -578,7 +624,7 @@ class Pdb:
             matching = [n for n, a in enumerate(self.atoms) if a.resname == residue and a.resnum == resid]
             new_list.extend(matching)
         return set(new_list)
-    
+
     def within(self, query_iter, threshold, nopbc=False):
         """
         Returns a set of all atoms contained within the specified radius of a selection
@@ -599,19 +645,19 @@ class Pdb:
 
     @staticmethod
     def _atoms_dist(at1, at2):
-        return ((at2.x - at1.x)**2 + (at2.y - at1.y)**2 + (at2.z - at1.z)**2)**0.5
+        return ((at2.x - at1.x) ** 2 + (at2.y - at1.y) ** 2 + (at2.z - at1.z) ** 2) ** 0.5
 
     def _atoms_dist_pbc(self, at1, at2):
         if not self.box[3] == self.box[4] == self.box[5] == 90.0:
-            a = [self.gbox[0]*10, self.gbox[3]*10, self.gbox[4]*10]
-            b = [self.gbox[5]*10, self.gbox[1]*10, self.gbox[6]*10]
-            c = [self.gbox[7]*10, self.gbox[8]*10, self.gbox[2]*10]
+            a = [self.gbox[0] * 10, self.gbox[3] * 10, self.gbox[4] * 10]
+            b = [self.gbox[5] * 10, self.gbox[1] * 10, self.gbox[6] * 10]
+            c = [self.gbox[7] * 10, self.gbox[8] * 10, self.gbox[2] * 10]
             d = self._atoms_vec(at1, at2)
             mindist = []
             for i in [-1, 0, 1]:
                 for j in [-1, 0, 1]:
                     for k in [-1, 0, 1]:
-                        mindist.append(sum([(d[x] + a[x]*i + b[x]*j + c[x]*k)**2 for x in range(3)])**0.5)
+                        mindist.append(sum([(d[x] + a[x] * i + b[x] * j + c[x] * k) ** 2 for x in range(3)]) ** 0.5)
             return min(mindist)
         else:
             return (min([abs(at2.x - at1.x), self.box[0] - abs(at2.x - at1.x)]) ** 2 +
@@ -620,9 +666,22 @@ class Pdb:
 
     @staticmethod
     def _atoms_vec(at1, at2):
-        # TODO make a PBC version too
         return at2.x - at1.x, at2.y - at1.y, at2.z - at1.z
-        
+
+    def _atoms_vec_pbc(self, at1, at2):
+        a = [self.gbox[0] * 10, self.gbox[3] * 10, self.gbox[4] * 10]
+        b = [self.gbox[5] * 10, self.gbox[1] * 10, self.gbox[6] * 10]
+        c = [self.gbox[7] * 10, self.gbox[8] * 10, self.gbox[2] * 10]
+        d = self._atoms_vec(at1, at2)
+        vecs = []
+        for i in [-1, 0, 1]:
+            for j in [-1, 0, 1]:
+                for k in [-1, 0, 1]:
+                    vecs.append([(d[x] + a[x] * i + b[x] * j + c[x] * k) for x in range(3)])
+        return [min([v[0] for v in vecs], key=lambda x: abs(x)),
+                min([v[1] for v in vecs], key=lambda x: abs(x)),
+                min([v[2] for v in vecs], key=lambda x: abs(x))]
+
     @staticmethod
     def _parse_contents(contents, qt):
         """
@@ -638,15 +697,15 @@ class Pdb:
             if line.startswith('ATOM') or line.startswith('HETATM'):
                 atoms.append(Atom(line, qt))
             elif line.startswith("CRYST1"):
-                box = [float(line[6+9*a:6+9*(a+1)]) for a in range(3)] + \
-                      [float(line[33+7*a:33+7*(a+1)]) for a in range(3)]
+                box = [float(line[6 + 9 * a:6 + 9 * (a + 1)]) for a in range(3)] + \
+                      [float(line[33 + 7 * a:33 + 7 * (a + 1)]) for a in range(3)]
             elif not line.startswith('TER') and not line.startswith('END'):
                 remarks.append(line)
             elif line.startswith('CONECT'):
                 conect[int(line[6:11].strip())] = []
                 for i in [11, 16, 21, 26]:
-                    if line[i:i+5].strip():
-                        conect[int(line[6:11].strip())].append(int(line[i:i+5].strip()))
+                    if line[i:i + 5].strip():
+                        conect[int(line[6:11].strip())].append(int(line[i:i + 5].strip()))
             if line.startswith('END') or line.startswith('ENDMDL'):
                 break
         return atoms, tuple(box), remarks
@@ -708,6 +767,7 @@ class Pdb:
                         break
             hooksel = '{}resid {} and name {}'.format(chstr, resid, hook)
             atomsel = '{}resid {} and name {}'.format(chstr, resid, atom_add)
+            aftnr = None
             if isinstance(aft, tuple):
                 for n, af in enumerate(aft):
                     try:
@@ -717,29 +777,37 @@ class Pdb:
                     else:
                         aftnr = self.select_atom('{}resid {} and name {}'.format(chstr, resid, af))
                         break
+                else:
+                    if aftnr is None:
+                        raise RuntimeError(f"Didn't find any of the atoms: {aft} in residue {resid}")
             else:
                 aftnr = self.select_atom('{}resid {} and name {}'.format(chstr, resid, aft))
             if len(geo_ref) == 2:
                 p1sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[0])
                 p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])
-                self.insert_atom(aftnr+1, self.get_atom(hooksel), atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
+                self.insert_atom(aftnr + 1, self.get_atom(hooksel), atomsel=atomsel, hooksel=hooksel,
+                                 bondlength=bond_length,
                                  p1_sel=p1sel, p2_sel=p2sel, atomname=atom_add)
             else:
                 vec = self._vector(geo_ref, resid, chain)
-                self.insert_atom(aftnr+1, self.get_atom(hooksel), atomsel=atomsel, hooksel=hooksel, bondlength=bond_length,
+                self.insert_atom(aftnr + 1, self.get_atom(hooksel), atomsel=atomsel, hooksel=hooksel,
+                                 bondlength=bond_length,
                                  vector=vec, atomname=atom_add)
 
         for atom in self.get_atoms('{}resid {}'.format(chstr, resid)):
             atom.resname = mutant.target_3l
         self.renumber_atoms()
 
-    def _vector(self, atnames, resid, chain):
+    def _vector(self, atnames, resid, chain, nopbc=False):
         chstr = 'chain {} and '.format(chain) if chain else ''
         atoms = [self.get_atom('{}resid {} and name {}'.format(chstr, resid, at)) for at in atnames]
-        vecs = [self._atoms_vec(atoms[0], at2) for at2 in atoms[1:]]
+        if nopbc:
+            vecs = [self._atoms_vec(atoms[0], at2) for at2 in atoms[1:]]
+        else:
+            vecs = [self._atoms_vec_pbc(atoms[0], at2) for at2 in atoms[1:]]
         nv = len(vecs)
         f = -1 if nv == 3 else 1
-        return f*sum(v[0] for v in vecs)/nv, f*sum(v[1] for v in vecs)/nv, f*sum(v[2] for v in vecs)/nv
+        return f * sum(v[0] for v in vecs) / nv, f * sum(v[1] for v in vecs) / nv, f * sum(v[2] for v in vecs) / nv
 
     def add_vs2(self, resid, name1, name2, vsname='V1', fraction=0.5):
         """
@@ -775,16 +843,21 @@ class Pdb:
                 dists.append(self._atoms_dist_pbc(atom1, atom2))
         return dists
 
-    def check_chiral_aa(self):
-        # TODO vec with PBC treatment
+    def check_chiral_aa(self, nopbc=False):
+        """
+        Checks for correct chirality in amino acids, first in the backbone
+        and then for chiral side chains
+        :param nopbc: bool, whether to ignore PBC information
+        :return: None
+        """
         prot_atoms = self.get_atoms('name CA and not resname GLY')
-        self.check_chiral(prot_atoms, 'N', 'C', 'HA HA1')
+        self.check_chiral(prot_atoms, 'N', 'C', 'HA HA1', nopbc=nopbc)
         ile_atoms = self.get_atoms('name CB and resname ILE')
-        self.check_chiral(ile_atoms, 'CA', 'CG2', 'CG1', 'side chain chirality')
+        self.check_chiral(ile_atoms, 'CA', 'CG2', 'CG1', 'side chain chirality', nopbc=nopbc)
         thr_atoms = self.get_atoms('name CB and resname THR')
-        self.check_chiral(thr_atoms, 'CA', 'CG1 CG2', 'OG1 OG2', 'side chain chirality')
+        self.check_chiral(thr_atoms, 'CA', 'CG1 CG2', 'OG1 OG2', 'side chain chirality', nopbc=nopbc)
 
-    def check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality', printing=True):
+    def check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality', printing=True, nopbc=False):
         """
         Decides on correct or wrong chirality of selected chiral
         centers by calculating selected dihedrals
@@ -793,7 +866,8 @@ class Pdb:
         :param at2: str, name of the 2nd surrounding atom
         :param at3: str, name of the 3rd surrounding atom
         :param label: str, type of chirality (only to display in the warning)
-        :param printing: whether to print warnings (default) or return True if all checks are passed
+        :param printing: bool, whether to print warnings (default) or return True if all checks are passed
+        :param nopbc: bool, whether to ignore PBC when calculating vectors
         :return: None (if printing), bool (if not printing)
         """
         for at in cent_atoms_list:
@@ -802,7 +876,7 @@ class Pdb:
             n = self.get_atom(f'name {at1} and resnum {resnum} and resname {resname} {chn}')
             c = self.get_atom(f'name {at2} and resnum {resnum} and resname {resname} {chn}')
             h = self.get_atom(f'name {at3} and resnum {resnum} and resname {resname} {chn}')
-            chi = self._get_chirality(at, n, c, h)
+            chi = self._get_chirality(at, n, c, h, nopbc)
             if chi < -2.5 or 0 > chi > -1.5:
                 if printing:
                     print(f"Check {label} for residue {resname} num {resnum}, looks a bit off")
@@ -816,16 +890,22 @@ class Pdb:
             if not printing:
                 return True
 
-    def _get_chirality(self, *atoms):
+    def _get_chirality(self, *atoms, nopbc=False):
         """
         Calculates a dihedral defined by 4 atoms that
         constitute a chiral center
         :param atoms: list of len 4, atoms defining the chiral center
+        :param nopbc: bool, whether to ignore PBC when calculating vectors
         :return: float, the dihedral's value
         """
-        v1 = self._atoms_vec(atoms[1], atoms[0])
-        v2 = self._atoms_vec(atoms[0], atoms[2])
-        v3 = self._atoms_vec(atoms[2], atoms[3])
+        if nopbc:
+            v1 = self._atoms_vec(atoms[1], atoms[0])
+            v2 = self._atoms_vec(atoms[0], atoms[2])
+            v3 = self._atoms_vec(atoms[2], atoms[3])
+        else:
+            v1 = self._atoms_vec_pbc(atoms[1], atoms[0])
+            v2 = self._atoms_vec_pbc(atoms[0], atoms[2])
+            v3 = self._atoms_vec_pbc(atoms[2], atoms[3])
         n1 = self._normalize(self._cross_product(v1, v2))
         n2 = self._normalize(self._cross_product(v2, v3))
         m1 = self._cross_product(n1, self._normalize(v2))
@@ -841,7 +921,7 @@ class Pdb:
         :param v2: iterable of floats, len 3
         :return: list, vector of length 3
         """
-        return v1[1]*v2[2] - v1[2]*v2[1], v1[2]*v2[0] - v1[0]*v2[2], v1[0]*v2[1] - v1[1]*v2[0]
+        return v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]
 
     @staticmethod
     def _scalar_product(v1, v2):
@@ -851,7 +931,7 @@ class Pdb:
         :param v2: iterable of floats, len 3
         :return: list, vector of length 3
         """
-        return v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2]
+        return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]
 
     @staticmethod
     def _normalize(v):
@@ -860,8 +940,8 @@ class Pdb:
         :param v: iterable of floats, len 3
         :return: list, vector of length 3
         """
-        norm = (v[0]**2 + v[1]**2 + v[2]**2)**0.5
-        return [a/norm for a in v]
+        norm = (v[0] ** 2 + v[1] ** 2 + v[2] ** 2) ** 0.5
+        return [a / norm for a in v]
 
     @staticmethod
     def _parse_contents_gro(contents):
@@ -876,22 +956,22 @@ class Pdb:
         header = contents[0]
         remarks.append("TITLE     {}".format(header))
         natoms = int(contents[1])
-        for line in contents[2:2+natoms]:
+        for line in contents[2:2 + natoms]:
             atoms.append(Atom.from_gro(line))
         if len(contents[-1].split()) == 3:
-            box = [10*float(x) for x in contents[-1].split()] + [90., 90., 90.]
+            box = [10 * float(x) for x in contents[-1].split()] + [90., 90., 90.]
         elif len(contents[-1].split()) == 9:
             boxline = [float(x) for x in contents[-1].split()]
             assert boxline[3] == boxline[4] == boxline[6] == 0
             box = [0.0] * 6
             box[0] = boxline[0]
-            box[-1] = math.atan(boxline[1]/boxline[5]) if boxline[5] != 0 else 90.0  # TODO check twice
-            box[1] = boxline[1]/math.sin(box[-1])
-            box[2] = math.sqrt(boxline[7]**2 + boxline[8]**2 + boxline[2]**2)
-            box[-2] = math.acos(boxline[7]/box[2])
-            box[-3] = math.acos((boxline[8]*math.sin(box[-1]))/box[2] + math.cos(box[-2]) * math.cos(box[-1]))
-            box[0], box[1], box[2] = box[0]*10, box[1]*10, box[2]*10
-            box[3], box[4], box[5] = box[3]*180/math.pi, box[4]*180/math.pi, box[5]*180/math.pi
+            box[-1] = math.atan(boxline[1] / boxline[5]) if boxline[5] != 0 else 90.0  # TODO check twice
+            box[1] = boxline[1] / math.sin(box[-1])
+            box[2] = math.sqrt(boxline[7] ** 2 + boxline[8] ** 2 + boxline[2] ** 2)
+            box[-2] = math.acos(boxline[7] / box[2])
+            box[-3] = math.acos((boxline[8] * math.sin(box[-1])) / box[2] + math.cos(box[-2]) * math.cos(box[-1]))
+            box[0], box[1], box[2] = box[0] * 10, box[1] * 10, box[2] * 10
+            box[3], box[4], box[5] = box[3] * 180 / math.pi, box[4] * 180 / math.pi, box[5] * 180 / math.pi
         else:
             raise RuntimeError('Can\'t read box properties')
         return atoms, tuple(box), remarks
@@ -903,14 +983,18 @@ class Pdb:
         :param cutoff: float, cut-off to determine atom bonding patterns
         :return: None
         """
-        import numpy as np
-        # TODO implement a numpy-free version
-        coords = np.array(self.get_coords())
-        for n, atom in enumerate(self.atoms):
-            dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
-            selected = list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0]+1)
-            self.conect[n+1] = selected
-        
+        try:
+            import numpy as np
+        except ImportError:
+            # TODO implement a numpy-free version
+            raise RuntimeError("This functionality requires numpy to be present")
+        else:
+            coords = np.array(self.get_coords())
+            for n, atom in enumerate(self.atoms):
+                dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
+                selected = list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0] + 1)
+                self.conect[n + 1] = selected
+
     def fill_beta(self, values, serials=None, smooth=False, ignore_mem=False):
         """
         Enables user to write arbitrary values to the beta field
@@ -950,11 +1034,19 @@ class Pdb:
                 coords = np.array(self.get_coords())[atomnums]
                 for atom in self.atoms:
                     dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
-                    weights = np.exp(-(dists**2/(2*smooth)))
+                    weights = np.exp(-(dists ** 2 / (2 * smooth)))
                     weights /= np.sum(weights)
                     atom.beta = np.sum(values * weights)
 
     def interpolate_struct(self, other, num_inter, write=False):
+        """
+        Generates linearly & equally spaced intermediates between two structures,
+        the current (self) and another PDB with the same number of atoms
+        :param other: Pdb instance, other endpoint to interpolate between
+        :param num_inter: int, number of intermediate structures
+        :param write: bool, whether to save the intermediates as separate .pdb files (True) or just return them (False)
+        :return: None (if write=True) or list of Pdb instances (if write=False)
+        """
         inter = []
         try:
             import numpy as np
@@ -964,8 +1056,8 @@ class Pdb:
         else:
             self_atoms = np.array(self.get_coords())
             other_atoms = np.array(other.get_coords())
-            for i in range(1, num_inter+1):
-                incr = (other_atoms - self_atoms)/(num_inter + 1)
+            for i in range(1, num_inter + 1):
+                incr = (other_atoms - self_atoms) / (num_inter + 1)
                 pdb = deepcopy(self)
                 pdb.set_coords(self_atoms + i * incr)
                 inter.append(pdb)
@@ -977,6 +1069,11 @@ class Pdb:
             return [self] + inter + [other]
 
     def save_pdb(self, outname='out.pdb'):
+        """
+        Saves the structure in the PDB format
+        :param outname: str, name of the file being produced
+        :return: None
+        """
         with open(outname, 'w') as outfile:
             outfile.write(self._cryst_format.format(*self.box))
             for line in self.remarks:
@@ -988,39 +1085,55 @@ class Pdb:
             outfile.write('ENDMDL\n')
 
     def save_gro(self, outname='out.gro'):
+        """
+        Saves the structure in the GRO format
+        :param outname: str, name of the file being produced
+        :return: None
+        """
         with open(outname, 'w') as outfile:
             outfile.write("written by gromologist\n{}\n".format(len(self.atoms)))
             for atom in self.atoms:
                 outfile.write(self._write_atom(atom, pdb=False))
             gbox = self._calc_gro_box()
-            outfile.write((9*"{:10.5f}" + "\n").format(*gbox))
+            outfile.write((9 * "{:10.5f}" + "\n").format(*gbox))
 
     def _calc_gro_box(self):
         if self.box[3] == self.box[4] == self.box[5] == 90.0:
-            return "{:10.5f}{:10.5f}{:10.5f}\n".format(*[x/10 for x in self.box[:3]])
+            return "{:10.5f}{:10.5f}{:10.5f}\n".format(*[x / 10 for x in self.box[:3]])
         else:
             gbox = 9 * [0.0]
             conv = math.pi / 180
-            gbox[0] = self.box[0]/10
-            gbox[1] = self.box[1]/10 * math.sin(self.box[5]*conv)
-            gbox[7] = self.box[2]/10 * math.cos(self.box[4]*conv)
-            gbox[8] = self.box[2]/10 * (math.cos(self.box[3]*conv) - math.cos(self.box[4]*conv)*math.cos(self.box[5]*conv))/math.sin(self.box[5]*conv)
-            gbox[2] = math.sqrt(self.box[2]*self.box[2]/100 - gbox[7]*gbox[7] - gbox[8]*gbox[8])
-            gbox[5] = self.box[1]/10 * math.cos(self.box[5]*conv)
+            gbox[0] = self.box[0] / 10
+            gbox[1] = self.box[1] / 10 * math.sin(self.box[5] * conv)
+            gbox[7] = self.box[2] / 10 * math.cos(self.box[4] * conv)
+            gbox[8] = self.box[2] / 10 * (math.cos(self.box[3] * conv) - math.cos(self.box[4] * conv) * math.cos(
+                self.box[5] * conv)) / math.sin(self.box[5] * conv)
+            gbox[2] = math.sqrt(self.box[2] * self.box[2] / 100 - gbox[7] * gbox[7] - gbox[8] * gbox[8])
+            gbox[5] = self.box[1] / 10 * math.cos(self.box[5] * conv)
             return gbox
 
     def get_coords(self, subset=None):
+        """
+        Returns all atomic coordinates
+        :param subset: list of int, 0-based indices of atoms for which coordinates should be retrieved
+        :return: list of list of float, coordinates of all atoms
+        """
         if subset:
             return [[a.x, a.y, a.z] for a in [self.atoms[q] for q in subset]]
         else:
             return [[a.x, a.y, a.z] for a in self.atoms]
-    
+
     def set_coords(self, new_coords):
+        """
+        Sets all atomic coordinates
+        :param new_coords: list of list of int, new coordinates to be set
+        :return: None
+        """
         assert len(new_coords) == len(self.atoms)
         for atom, coords in zip(self.atoms, new_coords):
             assert len(coords) == 3
             atom.x, atom.y, atom.z = coords
-            
+
 
 class Atom:
     def __init__(self, line, qt=False):
@@ -1049,7 +1162,7 @@ class Atom:
             except ValueError:
                 raise RuntimeError(f"Cannot interpret residue number {line[22:26].strip()} as decimal or hexadecimal")
         self.insert = line[26:27]
-        self.x, self.y, self.z = [float(line[30+8*a:30+8*(a+1)]) for a in range(3)]
+        self.x, self.y, self.z = [float(line[30 + 8 * a:30 + 8 * (a + 1)]) for a in range(3)]
         if not qt:
             self.occ = float(line[54:60].strip())
             self.beta = float(line[60:66].strip())
@@ -1082,7 +1195,7 @@ class Atom:
         resname = line[5:10].strip()
         atomname = line[10:15].strip()
         atomnum = int(line[15:20].strip())
-        x, y, z = [float(line[20+8*i:20+8*(i+1)].strip())*10 for i in range(3)]
+        x, y, z = [float(line[20 + 8 * i:20 + 8 * (i + 1)].strip()) * 10 for i in range(3)]
         return cls(data.format(atomnum, atomname[:4], resname[:4], resnum, x, y, z))
 
     @classmethod
@@ -1108,7 +1221,7 @@ class Atom:
         :return: list of float
         """
         return [self.x, self.y, self.z]
-    
+
     def set_coords(self, coords):
         """
         A setter for Atom coordinates
@@ -1116,7 +1229,7 @@ class Atom:
         :return: None
         """
         self.x, self.y, self.z = coords
-        
+
     def __repr__(self):
         chain = self.chain if self.chain != " " else "unspecified"
         return "Atom {} in residue {}{} of chain {}".format(self.atomname, self.resname, self.resnum, chain)
@@ -1126,6 +1239,7 @@ class Traj(Pdb):
     """
     Still not implemented correctly!
     """
+
     def __init__(self, structfile=None, compressed_traj=None, top=None, array=None, altloc='A', **kwargs):
         super().__init__(structfile, top, altloc, **kwargs)
         self.sfname = structfile
@@ -1173,7 +1287,7 @@ class Traj(Pdb):
         content = [line for line in open(self.sfname)]
         natoms = int(content[1].strip())
         per_frame = natoms + 3
-        term_lines = range(0, len(content)+1, per_frame)
+        term_lines = range(0, len(content) + 1, per_frame)
         for i, j in zip(term_lines[:-1], term_lines[1:]):
             struct = Pdb.from_text('\n'.join(content[i:j]), self)
             coords.append(struct.get_coords())
@@ -1186,7 +1300,7 @@ class Traj(Pdb):
         else:
             raise NotImplementedError("Variable box size not yet implemented")
         for frame in range(len(self.coords)):
-            text = text + 'MODEL     {:>4d}\n'.format(frame+1)
+            text = text + 'MODEL     {:>4d}\n'.format(frame + 1)
             self.set_coords(self.coords[frame])
             for atom in self.atoms:
                 text = text + self._write_atom(atom)

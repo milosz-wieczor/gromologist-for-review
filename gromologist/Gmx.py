@@ -1,4 +1,4 @@
-from subprocess import call, run, PIPE
+from subprocess import run, PIPE
 import os
 
 
@@ -56,7 +56,7 @@ def read_xvg(fname):
     :param fname: str, .xvg file to read
     :return: list of lists, numeric data from the .xvg file
     """
-    content = [[float(x) for x in l.split()[1:]] for l in open(fname) if not l.startswith(('#', '@'))]
+    content = [[float(x) for x in line.split()[1:]] for line in open(fname) if not line.startswith(('#', '@'))]
     return content
 
 
@@ -69,7 +69,8 @@ def get_legend(gmx, fname):
     """
     pp = run([gmx, 'energy', '-f', fname], input=b'0\n', stderr=PIPE, stdout=PIPE)
     output = pp.stderr.decode().split()
-    return {output[i+1].lower(): int(output[i]) for i in range(output.index('1'), len(output), 2) if output[i].isnumeric()}
+    return {output[i+1].lower(): int(output[i]) for i in range(output.index('1'), len(output), 2)
+            if output[i].isnumeric()}
 
 
 def calc_gmx_energy(struct, topfile, gmx='', quiet=False, traj=None, terms='potential', cleanup=True):

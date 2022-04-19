@@ -168,8 +168,9 @@ class EntryBonded(Entry):
                         _ = float(excess_params[n])
                     except ValueError:
                         if not excess_params[n] in self.subsection.section.top.defines.keys():
-                            raise RuntimeError(f'undefined parameter {excess_params[n]} was found, try setting a value by '
-                                               f'specifying define={{"{excess_params[n]}": value}} when initializing Top')
+                            raise RuntimeError(f'undefined parameter {excess_params[n]} was found, try setting a value '
+                                               f'by specifying define={{"{excess_params[n]}": value}} when '
+                                               f'initializing Top')
                 self.fstr_mod = [self.infer_type(x) for x in excess_params]
             types = self._fstr_suff((self.subsection.header, self.interaction_type))
             if len(excess_params) == len(types):

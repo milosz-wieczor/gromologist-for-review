@@ -1,3 +1,4 @@
+import os
 from itertools import product, combinations
 from functools import reduce
 from copy import deepcopy
@@ -69,6 +70,7 @@ class Section:
         Returns the specified subsection; we always need to run merge()
         on SectionParam first to avoid duplicates
         # TODO need special treatment for param sections with different interaction types (mostly dihedraltypes)
+        # TODO should we simply split them whenever intr type changes as we parse them?
         :param section_name:
         :return:
         """
@@ -152,7 +154,7 @@ class SectionMol(Section):
         :return: list, 0-based indices of atoms compatible with the selection
         """
         sel = gml.SelectionParser(self)
-        return sel(selection_string)  # TODO enable getting atoms' properties
+        return sel(selection_string)
 
     def select_atom(self, selection_string):
         """
@@ -553,7 +555,7 @@ class SectionMol(Section):
                     raise RuntimeError("Could not match .top atom {} to a corresponding PDB atom".format(new_position))
                 old_loc = self._match_pdb_to_top(atom_number)[0]
                 new_loc = self._match_pdb_to_top(new_position)
-                atom = self.top.pdb.atoms.pop(old_loc-1)  # TODO check
+                atom = self.top.pdb.atoms.pop(old_loc-1)
                 self.top.pdb.atoms.insert(new_loc + 1, atom)
         subsect_atoms = self.get_subsection('atoms')
         atom_entry_list = [e for e in subsect_atoms.entries]
@@ -716,6 +718,7 @@ class SectionMol(Section):
         new_angles = self._generate_angles(other, atom_own, atom_other)
         new_pairs, new_dihedrals = self._generate_14(other, atom_own, atom_other)
         # TODO remove overlapping pairs between new_bond/new_angles and new_pairs for 4- and 5-membered rings
+        # or do we really need it?
         for sub, entries in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
                                 [new_bond, new_pairs, new_angles, new_dihedrals]):
             subsection = self.get_subsection(sub)
@@ -894,9 +897,20 @@ class SectionMol(Section):
             self.top.print(f"[ position_restraints ] already present in molecule {self.mol_name}, skipping")
 
     def find_rtp(self, rtp):
+        """
+        Looks for aminoacids.rtp or merged.rtp in local files (*ff/*rtp or *rtp)
+        and in the Gromacs directory, then allows to interactively choose which one to use
+        :param rtp: str, path to the .rtp file (if applicable)
+        :return: str, path to the .rtp file found
+        """
         if rtp is None and not self.top.rtp:
+            found = glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp') + glob(os.getcwd() + '/*ff/[am][em]*rtp') + \
+                    glob(os.getcwd() + '/[am][em]*rtp')
+            if not found:
+                raise RuntimeError("No .rtp files found locally or in default Gromacs dirs. Please set "
+                                   "rtp=/path/to/rtp/file")
             print("Found the following .rtp files:\n")
-            for n, i in enumerate(glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')):
+            for n, i in enumerate(found):
                 print('[', n + 1, '] ', i)
             rtpnum = input('\nPlease select one that contains the deserved charges and types:\n')
             try:
@@ -904,13 +918,21 @@ class SectionMol(Section):
             except ValueError:
                 raise RuntimeError('Not an integer: {}'.format(rtpnum))
             else:
-                rtp = glob(self.top.gromacs_dir + '/*ff/[am][em]*rtp')[rtpnum-1]
+                rtp = found[rtpnum-1]
         elif self.top.rtp:
             rtp = ''
         return rtp
 
     def mutate_protein_residue(self, resid, target, rtp=None, mutate_in_pdb=True):
-        # TODO if no RTP found, throw error and ask for explicit path
+        """
+        Mutates an amino acid to a different one, optionally in the topology
+        and structure simultaneously
+        :param resid: int, number of the residue to be mutated
+        :param target: str, a single-letter code of the new residue to be introduced
+        :param rtp: str, path to the .rtp file that will be used to read atom properties
+        :param mutate_in_pdb: bool, whether to attempt modifying the same residue in the associated Pdb
+        :return: None
+        """
         alt_names = {('THR', 'OG'): 'OG1', ('THR', 'HG'): 'HG1', ('LEU', 'CD'): 'CD1', ('LEU', 'HD1'): 'HD11',
                      ('LEU', 'HD2'): 'HD12', ('LEU', 'HD3'): 'HD13', ('VAL', 'CG'): 'CG1', ('VAL', 'HG1'): 'HG11',
                      ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13'}
@@ -921,7 +943,7 @@ class SectionMol(Section):
         self.top.print("\n  Mutating residue {} (resid {}) into {}\n".format(orig.resname, resid, targ))
         atoms_add, hooks, _, _, extra_bonds, afters = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
-        types, charges, impropers, improper_type = self.parse_rtp(rtp)
+        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(rtp)
         # some residue-specific modifications here
         if targ == 'HIS':
             targ = 'HSD' if ('HSD', 'CA') in types.keys() else 'HID'
@@ -1013,6 +1035,7 @@ class SectionMol(Section):
                         rid = resid
                         atx = at
                     numbers.append(atoms_sub.name_to_num[(rid, atx)])
+                # TODO if improper has extra params, add them here
                 new_str = '{:5d} {:5d} {:5d} {:5d} {:>5s}\n'.format(*numbers, improper_type)
                 impr_sub.add_entry(gml.EntryBonded(new_str, impr_sub),
                                    position=1+[n for n, e in enumerate(impr_sub) if isinstance(e, gml.EntryBonded)][-1])
@@ -1040,26 +1063,38 @@ class SectionMol(Section):
             print("No .pdb file bound to the topology, use Top.add_pdb() to add one")
 
     def parse_rtp(self, rtp):
+        """
+        Reads an .rtp file to extract molecule definitions, separating them into
+        dictionaries for: types, charges, impropers, dihedrals, bondedtypes
+        :param rtp: str, path to the .rtp file
+        :return: tuple of dict, each containing atom name : relevant parameter matching
+        (ordered: types, charges, dihedrals, impropers, bondedtypes)
+        """
         # TODO check against amber/ILDN
         if self.top.rtp:
-            return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['impropers'], \
-                   self.top.rtp['bondedtypes']
+            return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['dihedrals'], \
+                   self.top.rtp['impropers'], self.top.rtp['bondedtypes']
         chargedict, typedict = {}, {}
-        impropers = {}
+        impropers, dihedrals = {}, {}
         bondedtypes = 0
-        rtp_cont = [l for l in open(rtp) if not l.strip().startswith(';')]
+        rtp_cont = [line for line in open(rtp) if not line.strip().startswith(';')]
         resname = None
         reading_atoms = False
         reading_impropers = False
+        reading_dihedrals = False
         reading_bondedtypes = False
         for line in rtp_cont:
             if line.strip().startswith('[') and line.strip().split()[1] not in ['bondedtypes', 'atoms', 'bonds',
-                                                                                'impropers']:
+                                                                                'dihedrals', 'impropers']:
                 resname = line.strip().split()[1]
             if line.strip().startswith('[') and line.strip().split()[1] == 'atoms':
                 reading_atoms = True
             if line.strip().startswith('[') and line.strip().split()[1] != 'atoms':
                 reading_atoms = False
+            if line.strip().startswith('[') and line.strip().split()[1] == 'dihedrals':
+                reading_dihedrals = True
+            if line.strip().startswith('[') and line.strip().split()[1] != 'dihedrals':
+                reading_dihedrals = False
             if line.strip().startswith('[') and line.strip().split()[1] == 'impropers':
                 reading_impropers = True
             if line.strip().startswith('[') and line.strip().split()[1] != 'impropers':
@@ -1075,6 +1110,10 @@ class SectionMol(Section):
                 if resname not in impropers.keys():
                     impropers[resname] = []
                 impropers[resname].append(line.strip().split())
+            if len(line.strip().split()) > 3 and resname is not None and reading_dihedrals:
+                if resname not in dihedrals.keys():
+                    impropers[resname] = []
+                impropers[resname].append(line.strip().split())
             if len(line.strip().split()) > 7 and resname is None and reading_bondedtypes:
                 bondedtypes = line.strip().split()[3]
         # substitute CHARMM's HN for AMBER's H
@@ -1087,10 +1126,12 @@ class SectionMol(Section):
                 chargedict[(k[0], 'HG')] = chargedict[k]
         self.top.rtp['typedict'] = typedict
         self.top.rtp['chargedict'] = chargedict
+        self.top.rtp['dihedrals'] = dihedrals
         self.top.rtp['impropers'] = impropers
+        # TODO we need a method for explicitly setting just a single dihedral (should be easy)
         self.top.rtp['bondedtypes'] = bondedtypes
-        return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['impropers'], \
-            self.top.rtp['bondedtypes']
+        return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['dihedrals'], \
+            self.top.rtp['impropers'], self.top.rtp['bondedtypes']
 
     def update_dicts(self):
         self.get_subsection('atoms').get_dicts(force_update=True)
@@ -1246,7 +1287,7 @@ class SectionMol(Section):
         self.mutate_protein_residue(resid, mut_dict[resname])
         atoms = self.get_atoms(f'resid {resid}')
         rtp = self.find_rtp(rtp)
-        types, charges, impropers, improper_type = self.parse_rtp(rtp)
+        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(rtp)
         for atom in atoms:
             try:
                 atom.type_b = types[(resname, atom.atomname)]

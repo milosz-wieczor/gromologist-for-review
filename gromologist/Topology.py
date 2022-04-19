@@ -44,10 +44,13 @@ class Top:
         self.sections = []
         self.header = []
         self._parse_sections()
+
+    @property
+    def system(self):
         if self.top.endswith('top'):
-            self._read_system_properties()
+            return {}
         else:
-            self.system = {}
+            return self.read_system_properties()
 
     def __repr__(self):
         return "Topology with {} atoms and total charge {:.3f}".format(self.natoms, self.charge)
@@ -155,11 +158,11 @@ class Top:
         :param fix_by_analogy: dict, if set, will attempt to use params by analogy, matching key types to value types
         :param fix_B_from_A: bool, will assign params for state B from state A
         :param fix_A_from_B: bool, will assign params for state A from state B
-        :param once: bool, will only print a given missing term once
+        :param once: bool, will only print a given missing term once per molecule
         :return: None
         """
         for mol in self.molecules:
-            mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B)
+            mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B, once=once)
 
     def add_posres(self, keyword='POSRES', value=1000):
         for mol in self.molecules:
@@ -256,7 +259,7 @@ class Top:
                 if line.strip().startswith('[') and counter > 0 and keyword != 'USE_OLD_C36':
                     header = line.strip().strip('[]').strip()
                     raise RuntimeError(f"Found a [ {header} ] section header within a conditional block, this can lead"
-                                       f"to issues if sections are rearranged. Please fix this first.")  # TODO
+                                       f"to issues if sections are rearranged. Please fix this first.")
                 if line.startswith('#define') and len(line.strip().split()) == 2:
                     ifdefs.append(line.strip().split()[1])
                 if line.strip().startswith("#ifdef") or line.strip().startswith("#ifndef"):
@@ -395,7 +398,7 @@ class Top:
         else:
             return gml.Section(content, self)
 
-    def _read_system_properties(self):
+    def read_system_properties(self):
         """
         Reads in system composition based on the [ molecules ] section
         :return: None
@@ -407,12 +410,11 @@ class Top:
             raise RuntimeError("Multiple 'molecules' subsection found in the topology, this is not allowed")
         elif len(system_subsection) == 0:
             self.print("Section 'molecules' not present in the topology, assuming this is an isolated .itp")
-            self.system = None
-            return
+            return None
         for e in system_subsection[0]:
             if e.content:
                 molecules[e.content[0]] = int(e.content[1])
-        self.system = molecules
+        return molecules
 
     @property
     def charge(self):
@@ -421,15 +423,6 @@ class Top:
     @property
     def natoms(self):
         return sum([self.system[mol] * self.get_molecule(mol).natoms for mol in self.system.keys()])
-
-    def recalc_sys_params(self):
-        """
-        Wrapper around read_system_properties that also
-        recalculates relevant molecule properties after changes
-        :return: None
-        """
-        sub_mol = [sub for sect in self.sections for sub in sect.subsections if isinstance(sub, gml.SubsectionAtom)]
-        self._read_system_properties()
 
     def explicit_defines(self):
         """

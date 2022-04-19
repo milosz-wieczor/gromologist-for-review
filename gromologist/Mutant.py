@@ -1,8 +1,4 @@
-import gromologist as gml
-
-
 class ProteinMutant:
-    # TODO mutate between protonation states
     # W > Z -> not working
     map_pro = {'ALA': 'A', 'ASH': 'B', 'ASPP': 'B', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E',
                'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I',
@@ -133,9 +129,9 @@ class ProteinMutant:
                    'SH': ['HB2', 'SG'],
                    'OH': [('HB2', 'CG2'), ('OG', 'OG1')],
                    'CO': ['HB2', 'CG', 'OD1'],
-                   'DO': [('HG2'), 'CD', 'OE1'],
+                   'DO': [('HG2', ), 'CD', 'OE1'],
                    'CP': ['HB2', 'CG', 'OD1', 'OD2'],
-                   'DP': [('HG2'), 'CD', 'OE1', 'OE2'],
+                   'DP': [('HG2', ), 'CD', 'OE1', 'OE2'],
                    'AM': ['HB2', 'CG', 'OD1', 'ND2', 'HD21'],
                    'AN': ['HG2', 'CD', 'OE1', 'NE2', 'HE21'],
                    'GG': [('HB2', 'HG23'), 'CG1', 'HG11'],

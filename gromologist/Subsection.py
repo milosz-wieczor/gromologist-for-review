@@ -1,5 +1,4 @@
 import gromologist as gml
-from copy import deepcopy
 
 
 class Subsection:
@@ -146,7 +145,6 @@ class SubsectionBonded(Subsection):
         super().__init__(content, section)
         self.bkp_entries = None
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
-        # TODO rethink if we need self.prmtype (only used for __repr__ + inserting new entries)
         self.prmtype = self._check_parm_type()
         self.label = '{}-{}'.format(self.header, self.prmtype)
         self.fstring = "{:5} " * (SubsectionBonded.n_atoms[self.header] + 1) + '\n'
@@ -199,7 +197,8 @@ class SubsectionBonded(Subsection):
         """
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes'}
-        subsect_params = [sub for sub in self.section.top.parameters.subsections if sub.header == matchings[self.header]]
+        subsect_params = [sub for sub in self.section.top.parameters.subsections
+                          if sub.header == matchings[self.header]]
         self.bkp_entries = self.entries[:]  # we can't change what we're iterating over, so we modify the copy
         for entry in self.entries_bonded:
             # let's omit the ones that already have params assigned:
@@ -347,7 +346,8 @@ class SubsectionBonded(Subsection):
                             from_wildtype = False
                         new_params.append(parm_entry.params)
                         print(f'Fixing by analogy, using entry {str(parm_entry).strip()}')
-                    elif (from_wildtype and 'X' in parm_entry.types) or (not from_wildtype and 'X' not in parm_entry.types):
+                    elif (from_wildtype and 'X' in parm_entry.types) or (not from_wildtype
+                                                                         and 'X' not in parm_entry.types):
                         new_params.append(parm_entry.params)
                         print(f'Fixing by analogy, using entry {str(parm_entry).strip()}')
                     if len(typelist) < 4:
@@ -527,8 +527,8 @@ class SubsectionParam(Subsection):
         used_atomtypes_b = {a.type_b for mol in self.section.top.molecules for a in mol.atoms if a.type_b is not None}
         used_atomtypes = used_atomtypes_a.union(used_atomtypes_b)
         for entry in self.entries_param:
-                if all(tp in used_atomtypes for tp in entry.types):
-                    used_parm_entries.append(entry.identifier)
+            if all(tp in used_atomtypes for tp in entry.types):
+                used_parm_entries.append(entry.identifier)
         return used_parm_entries
 
     def _sorting_fn(self, entry):

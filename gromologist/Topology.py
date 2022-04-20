@@ -47,7 +47,7 @@ class Top:
 
     @property
     def system(self):
-        if self.top.endswith('top'):
+        if not self.top.endswith('top'):
             return {}
         else:
             return self.read_system_properties()

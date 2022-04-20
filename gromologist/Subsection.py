@@ -674,3 +674,11 @@ class SubsectionHeader(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.molname = [a.content[0] for a in self.entries if a.content][0]
+
+    @property
+    def entries_bonded(self):
+        return []
+
+    @property
+    def entries_atom(self):
+        return []

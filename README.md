@@ -434,16 +434,17 @@ Let's start by reading a PDB file:
 
 ##### Adding atoms along a vector specified by other atoms, and deleting them
 
-To add e.g. a hydrogen atom to an existing atom CB, with a bond length of 1 A in the direction
+To add e.g. a hydrogen atom "hooked" to an existing atom CB in residue 2, with a bond length of 1 A in the direction
 specified by a vector from atom C to atom CA, one can use:
 
 ```
->>> p.insert_atom(len(p.atoms), base_atom=p.atoms[11], atomname='HX')
->>> p.reposition_atom_from_hook('name HX', 'name CB', 1.0, p1_sel='name C', p2_sel='name CA')
+>>> p.insert_atom(serial=11, name='HX', hooksel='name CB and resid 2', 1.0, p1_sel='name C and resid 2', p2_sel='name CA and resid 2')
 ```
 
+The new atom will have its residue name, residue number and chain copied from the "hook" atom.
+
 All the selections should be unique (corresponding to a single atom), and combinations can be
-used like in VMD, e.g. `name CB and resid 10 and chain A`. This way you can e.g. automate
+used like in VMD when necessary, e.g. `name CB and resid 2 and chain A`. This way you can e.g. automate
 the addition of dummy atoms, DNA/RNA conversions etc.
 
 For advanced users, it is possible to directly specify the `vector=...` parameter instead of

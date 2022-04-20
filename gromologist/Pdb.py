@@ -72,7 +72,7 @@ class Pdb:
         :return: Pdb, a subset of the original structure
         """
         # TODO what to do in case of a bound Top object? implement Top.slice()?
-        selected_indices = pdb.select_atoms(selection)
+        selected_indices = pdb.get_atom_indices(selection)
         new_pdb = Pdb()
         new_pdb.atoms = [atom for n, atom in enumerate(pdb.atoms) if n in selected_indices]
         new_pdb.box = pdb.box
@@ -117,7 +117,7 @@ class Pdb:
             print("No chains in the molecule, run Pdb.add_chains() first")
             return
         for ch in sorted(chains):
-            cas = set(self.select_atoms(f'name CA and chain {ch}'))
+            cas = set(self.get_atom_indices(f'name CA and chain {ch}'))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas and a.altloc in [' ', self.altloc]]
             if not gaps:
                 sequences.append(''.join([Pdb.prot_map[i.resname] if i.resname in Pdb.prot_map.keys() else 'X'
@@ -150,7 +150,7 @@ class Pdb:
             print("No chains in the molecule, run Pdb.add_chains() first")
             return
         for ch in sorted(chains):
-            cas = set(self.select_atoms(f"name O4' and chain {ch}"))
+            cas = set(self.get_atom_indices(f"name O4' and chain {ch}"))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
             sequences.append(''.join([mapping[i.resname] if i.resname in mapping.keys() else 'X' for i in atoms]))
         return sequences
@@ -432,7 +432,7 @@ class Pdb:
         :param selection: str, will only renumber atoms matching the selection
         :return: None
         """
-        ats = self.atoms if selection is None else self.select_atoms(selection)
+        ats = self.atoms if selection is None else self.get_atoms(selection)
         for n, atom in enumerate(ats, offset):
             atom.serial = n
 
@@ -444,7 +444,7 @@ class Pdb:
         :return: None
         """
         count = offset
-        ats = self.atoms if selection is None else self.select_atoms(selection)
+        ats = self.atoms if selection is None else self.get_atom_indices(selection)
         for n in ats:
             temp = count
             try:
@@ -467,16 +467,17 @@ class Pdb:
         :param vector: iterable, defines the vector direction to position the new atom
         :return: None
         """
+        coords = self.get_coords()
         if p1_sel is not None and p2_sel is not None:
-            p1_xyz = self.get_coords()[self.select_atom(p1_sel)]
-            p2_xyz = self.get_coords()[self.select_atom(p2_sel)]
+            p1_xyz = coords[self.get_atom_index(p1_sel)]
+            p2_xyz = coords[self.get_atom_index(p2_sel)]
             vec = [x2 - x1 for x1, x2 in zip(p1_xyz, p2_xyz)]
         elif vector is not None:
             vec = vector
         else:
             raise RuntimeError("In repositioning, please use either p1/p2 selections or specify the vector")
         movable = self.get_atom(atomsel)
-        hook_xyz = self.get_coords()[self.select_atom(hooksel)]
+        hook_xyz = coords[self.get_atom_index(hooksel)]
         vec_len = sum([x ** 2 for x in vec]) ** 0.5
         scale = bondlength / vec_len
         movable.set_coords([h + scale * v for h, v in zip(hook_xyz, vec)])
@@ -505,8 +506,8 @@ class Pdb:
             for _ in arange(n_mols):
                 for a in atom_entries:
                     if not arange or arange[0] <= index < arange[1]:
-                        pdb_loc = self.select_atoms("resname {} and resid {} and name {}".format(a.resname, a.resid,
-                                                                                                 a.atomname))
+                        pdb_loc = self.get_atom_indices("resname {} and resid {} and name {}".format(a.resname, a.resid,
+                                                                                                     a.atomname))
                         pdb_loc = [loc for loc in pdb_loc if not arange or arange[0] <= index < arange[1]]
                         if len(pdb_loc) != 1:
                             raise ValueError("Could not proceed; for match-based renumbering, residue numberings "
@@ -518,29 +519,33 @@ class Pdb:
                     index += 1
         self.atoms = new_atoms
 
-    def insert_atom(self, index, base_atom, atomsel=None, hooksel=None, bondlength=None, p1_sel=None, p2_sel=None,
-                    vector=None, **kwargs):
+    def insert_atom(self, serial, name="HX", hooksel=None, bondlength=None, p1_sel=None, p2_sel=None,
+                    vector=None, renumber=True, **kwargs):
         """
         Inserts an atom into the atomlist. The atom is defined by
         providing a base Atom instance and a number of keyworded modifiers,
         e.g. atomname="CA", serial=15, ...
-        :param index: int, the new index of the inserted Atom in the Atoms list
-        :param base_atom: Atom, instance based on which the new atom will be based
-        :param atomsel: str, unique selection for the new atom (e.g. "name HX and resid 10")
+        :param serial: int, the new serial (1-based) of the inserted Atom in the Atoms list
+        :param name: str, name of the new atom
         :param hooksel: str, unique selection for the atom the new atom will be bound to
         :param bondlength: float, length of the bond extending from the "hook" atom (in A)
         :param p1_sel: str, selection for the 1st atom defining the vector to position the new atom
         :param p2_sel: str, selection for the 2nd atom defining the vector to position the new atom
         :param vector: iterable, defines the vector direction to position the new atom
+        :param renumber: bool, whether to renumber atoms after inserting
         :param kwargs: Atom attributes to be held by the new atom
         :return: None
         """
+        base_atom = self.get_atom(hooksel)
         new_atom = Atom(self._write_atom(base_atom))
         for kw in kwargs.keys():
             if kw not in {"serial", "atomname", "resname", "chain", "resnum", "x", "y", "z", "occ", "beta", "element"}:
                 raise ValueError("{} is not a valid Atom attribute")
             new_atom.__setattr__(kw, kwargs[kw])
-        self.atoms.insert(index, new_atom)
+        self.atoms.insert(serial-1, new_atom)
+        if renumber:
+            self.renumber_atoms()
+        atomsel = f'name {name} and resid {base_atom.resnum} and resname {base_atom.resname}'
         if (atomsel is not None and hooksel is not None and bondlength is not None and
                 ((p1_sel is not None and p2_sel is not None) or vector is not None)):
             self.reposition_atom_from_hook(atomsel, hooksel, bondlength, p1_sel, p2_sel, vector)
@@ -572,7 +577,7 @@ class Pdb:
             if not a.element:
                 a.element = [x for x in a.atomname if not x.isdigit()][0]
 
-    def select_atoms(self, selection_string):
+    def get_atom_indices(self, selection_string):
         """
         Applies a selection to the structure and returns the 0-based indices of selected atoms
         :param selection_string: str, consistent with the selection language syntax (see README)
@@ -581,7 +586,7 @@ class Pdb:
         sel = gml.SelectionParser(self)
         return sel(selection_string)
 
-    def select_atom(self, selection_string):
+    def get_atom_index(self, selection_string):
         """
         Applies a selection to the structure and returns the 0-based index of the selected atom,
         assuming the selection corresponds to a single unique atom (will throw an error otherwise)
@@ -598,19 +603,19 @@ class Pdb:
 
     def get_atom(self, selection_string):
         """
-        Works as select_atom, but returns an atom instead of a list of indices
+        Works as get_atom_index, but returns an atom instead of a list of indices
         :param selection_string: str, consistent with the selection language syntax (see README)
         :return: an Atom instance, the selected atom
         """
-        return self.atoms[self.select_atom(selection_string)]
+        return self.atoms[self.get_atom_index(selection_string)]
 
     def get_atoms(self, selection_string):
         """
-        Works as select_atoms, but returns a list of atoms instead of a list of indices
+        Works as get_atom_indices, but returns a list of atoms instead of a list of indices
         :param selection_string: str, consistent with the selection language syntax (see README)
         :return: a list of Atom instances, the selected atoms
         """
-        return [self.atoms[i] for i in self.select_atoms(selection_string)]
+        return [self.atoms[i] for i in self.get_atom_indices(selection_string)]
 
     def same_residue_as(self, query_iter):
         """
@@ -740,9 +745,9 @@ class Pdb:
                            'CD': 'CD1', 'HD': 'HD1', 'HD1': 'HD11', 'HD2': 'HD12', 'HD3': 'HD13'}
             print("Removing atom {} from resid {} in structure".format(at, resid))
             try:
-                atnum = self.select_atom('{}resid {} and name {}'.format(chstr, resid, at))
+                atnum = self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, at))
             except RuntimeError:
-                atnum = self.select_atom('{}resid {} and name {}'.format(chstr, resid, equivalents[at]))
+                atnum = self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, equivalents[at]))
             _ = self.atoms.pop(atnum)
         for atom_add, hook, geo_ref, bond_length, aft in zip(atoms_add, hooks, geo_refs, bond_lengths, afters):
             print("Adding atom {} to resid {} in structure".format(atom_add, resid))
@@ -750,7 +755,7 @@ class Pdb:
                 if isinstance(geo_ref[n], tuple):
                     for i in geo_ref[n]:
                         try:
-                            self.select_atom('{}resid {} and name {}'.format(chstr, resid, i))
+                            self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, i))
                         except RuntimeError:
                             continue
                         else:
@@ -759,7 +764,7 @@ class Pdb:
             if isinstance(hook, tuple):
                 for hk in hook:
                     try:
-                        _ = self.select_atom('{}resid {} and name {}'.format(chstr, resid, hk))
+                        _ = self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, hk))
                     except RuntimeError:
                         continue
                     else:
@@ -771,26 +776,26 @@ class Pdb:
             if isinstance(aft, tuple):
                 for n, af in enumerate(aft):
                     try:
-                        _ = self.select_atom('{}resid {} and name {}'.format(chstr, resid, af))
+                        _ = self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, af))
                     except RuntimeError:
                         continue
                     else:
-                        aftnr = self.select_atom('{}resid {} and name {}'.format(chstr, resid, af))
+                        aftnr = self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, af))
                         break
                 else:
                     if aftnr is None:
                         raise RuntimeError(f"Didn't find any of the atoms: {aft} in residue {resid}")
             else:
-                aftnr = self.select_atom('{}resid {} and name {}'.format(chstr, resid, aft))
+                aftnr = self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, aft))
             if len(geo_ref) == 2:
                 p1sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[0])
                 p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])
-                self.insert_atom(aftnr + 1, self.get_atom(hooksel), atomsel=atomsel, hooksel=hooksel,
+                self.insert_atom(aftnr, name=atom_add, hooksel=hooksel,
                                  bondlength=bond_length,
                                  p1_sel=p1sel, p2_sel=p2sel, atomname=atom_add)
             else:
                 vec = self._vector(geo_ref, resid, chain)
-                self.insert_atom(aftnr + 1, self.get_atom(hooksel), atomsel=atomsel, hooksel=hooksel,
+                self.insert_atom(aftnr, name=atom_add, hooksel=hooksel,
                                  bondlength=bond_length,
                                  vector=vec, atomname=atom_add)
 
@@ -820,13 +825,11 @@ class Pdb:
         :param fraction: float, where to put the VS (0 = on atom 1, 1 = on atom 2, can be interpolated or extrapolated)
         :return: None
         """
-        indx = self.get_atoms(f"resid {resid}")[-1].serial + 1
+        serial = self.get_atoms(f"resid {resid}")[-1].serial + 2
         a1 = self.get_atom(f"resid {resid} and name {name1}")
         a2 = self.get_atom(f"resid {resid} and name {name2}")
         dist = self._atoms_dist_pbc(a1, a2)
-        self.insert_atom(indx, self.get_atom(f"resid {resid} and name {name1}"),
-                         atomsel=f"resid {resid} and name {vsname}",
-                         hooksel=f"resid {resid} and name {name1}",
+        self.insert_atom(serial, name=vsname, hooksel=f"resid {resid} and name {name1}",
                          bondlength=dist * fraction, p1_sel=f"resid {resid} and name {name1}",
                          p2_sel=f"resid {resid} and name {name2}", atomname=vsname)
 

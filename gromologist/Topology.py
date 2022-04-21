@@ -514,6 +514,10 @@ class Top:
                         replace('DC', 'Cx').replace('DS', 'Sx')
 
     def recalculate_qtot(self):
+        """
+        Inserts the "qtot" cumulative-charge counter in atoms' comments
+        :return: None
+        """
         for mol in self.molecules:
             mol.recalc_qtot()
 

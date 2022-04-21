@@ -38,6 +38,20 @@ class BasicTopTest(unittest.TestCase):
         nat = len(self.top.atoms)
         self.assertEqual(nat, 86)
 
+    def test_add_atom(self):
+        # checks if adding atoms works
+        pentapeptide = self.top.molecules[0]
+        pentapeptide.add_atom(20, 'DUM', 'NA', charge=-1.0, resid=4, resname='CHK', mass=2.5)
+        nat = len(self.top.atoms)
+        self.assertEqual(nat, 88)
+
+    def test_add_atom_charge(self):
+        # checks if adding atoms updates total charge
+        pentapeptide = self.top.molecules[0]
+        orig_charge = self.top.charge
+        pentapeptide.add_atom(20, 'DUM', 'NA', charge=-1.0, resid=4, resname='CHK', mass=2.5)
+        self.assertAlmostEqual(self.top.charge, orig_charge-1)
+
     def test_add_params_bond(self):
         # checks if explicit adding of FF parameters for bonds works
         self.top.add_ff_params()

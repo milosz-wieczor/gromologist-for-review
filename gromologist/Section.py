@@ -510,7 +510,6 @@ class SectionMol(Section):
         else:
             self.offset_numbering(1, atom_number)
             atoms.insert(position, new_entry)
-        self.top.recalc_sys_params()
         self.update_dicts()
     
     def del_atom(self, atom_number, del_in_pdb=True):

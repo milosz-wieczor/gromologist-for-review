@@ -92,13 +92,18 @@ To check if all protein residues assume correct chirality, run:
 
 (By analogy to `Pdb.check_chiral_aa`, one can devise their own tests with `Pdb.check_chiral`.)
 
-With `Pdb.select_atoms()`, selections can be made in a VMD-like manner (see full syntax
-description at the bottom):
+With `Pdb.get_atom_indices()`, selections can be made in a VMD-like manner (see full syntax
+description at the bottom) to retrieve 0-based atom indices:
 
 ```
->>> t.pdb.select_atoms('name CA and (resname ASP or chain B)')
+>>> t.pdb.get_atom_indices('name CA and (resname ASP or chain B)')
 [5, 60, 72, 88]
+
 ```
+
+while `Pdb.get_atoms()` returns a list of `Atom` instances instead of indices. Correspondingly,
+`Pdb.get_atom_index()` and `Pdb.get_atom()` return a single object (int or Atom), raising an error
+if the selection is compatible with more than one atom.
 
 Several 'convenience' functions exist to list relevant properties of the topology:
 
@@ -115,6 +120,8 @@ Other                        1
 # lists bonds, labeling bonded atoms by atom type
 >>> protein.list_bonds(by_params=True)
 # lists bonds, adding FF parameter values alongside
+>>> protein.residues
+# returns a list of residue_name-residue_id strings
 ```
 
 By analogy, the `.list_bonds()` method can be used to `list_angles`, `list_dihedrals`
@@ -473,7 +480,7 @@ This will create a total of 52 structures (1 starting + 50 intermediate + 1 fina
 To use the PDB's beta column for color-mapping of observables e.g. in VMD, use the following:
 
 ```
->>> ca_atom_indices = p.select_atoms('name CA')
+>>> ca_atom_indices = p.get_atom_indices('name CA')
 >>> p.fill_beta(per_residue_data, serials=[x+1 for x in ca_atom_indices])
 >>> p.save_pdb('with_betas.pdb')
 ```

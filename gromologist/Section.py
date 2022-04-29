@@ -1135,6 +1135,10 @@ class SectionMol(Section):
     def update_dicts(self):
         self.get_subsection('atoms').get_dicts(force_update=True)
 
+    def list_atoms(self):
+        for atom in self.atoms:
+            print(str(atom).strip())
+
     def list_bonds(self, by_types=False, by_params=False, returning=False):
         return self._list_bonded('bonds', by_types, by_params, returning)
 

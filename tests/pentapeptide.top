@@ -1,3 +1,4 @@
+#define _FF_CHARMM
 
 [ defaults ]
 ; nbfunc	comb-rule	gen-pairs	fudgeLJ	fudgeQQ

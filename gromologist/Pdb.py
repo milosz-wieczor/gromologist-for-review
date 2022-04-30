@@ -735,7 +735,6 @@ class Pdb:
         :param chain: str, optional name of the chain
         :return: None
         """
-        # TODO check not to modify other residues' names
         self.renumber_atoms()
         chstr = 'chain {} and '.format(chain) if chain else ''
         orig = self.get_atom('{}resid {} and name CA'.format(chstr, resid))
@@ -774,9 +773,8 @@ class Pdb:
                         hook = hk
                         break
             hooksel = '{}resid {} and name {}'.format(chstr, resid, hook)
-            atomsel = '{}resid {} and name {}'.format(chstr, resid, atom_add)
             aftnr = None
-            # TODO check we're inserting correctly + add unittest
+            # TODO add unittest to check we're inserting correctly
             if isinstance(aft, tuple):
                 for n, af in enumerate(aft):
                     try:
@@ -796,15 +794,12 @@ class Pdb:
                 p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])
                 self.insert_atom(aftnr+2, name=atom_add, hooksel=hooksel,
                                  bondlength=bond_length,
-                                 p1_sel=p1sel, p2_sel=p2sel, atomname=atom_add)
+                                 p1_sel=p1sel, p2_sel=p2sel, atomname=atom_add, resname=mutant.target_3l)
             else:
                 vec = self._vector(geo_ref, resid, chain)
                 self.insert_atom(aftnr+2, name=atom_add, hooksel=hooksel,
                                  bondlength=bond_length,
-                                 vector=vec, atomname=atom_add)
-
-        for atom in self.get_atoms('{}resid {}'.format(chstr, resid)):
-            atom.resname = mutant.target_3l
+                                 vector=vec, atomname=atom_add, resname=mutant.target_3l)
         self.renumber_atoms()
 
     def _vector(self, atnames, resid, chain, nopbc=False):

@@ -794,12 +794,12 @@ class Pdb:
             if len(geo_ref) == 2:
                 p1sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[0])
                 p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])
-                self.insert_atom(aftnr, name=atom_add, hooksel=hooksel,
+                self.insert_atom(aftnr+2, name=atom_add, hooksel=hooksel,
                                  bondlength=bond_length,
                                  p1_sel=p1sel, p2_sel=p2sel, atomname=atom_add)
             else:
                 vec = self._vector(geo_ref, resid, chain)
-                self.insert_atom(aftnr, name=atom_add, hooksel=hooksel,
+                self.insert_atom(aftnr+2, name=atom_add, hooksel=hooksel,
                                  bondlength=bond_length,
                                  vector=vec, atomname=atom_add)
 
@@ -1104,11 +1104,14 @@ class Pdb:
             for atom in self.atoms:
                 outfile.write(self._write_atom(atom, pdb=False))
             gbox = self._calc_gro_box()
-            outfile.write((9 * "{:10.5f}" + "\n").format(*gbox))
+            if sum([x**2 for x in gbox[3:]]) > 0:
+                outfile.write((9 * "{:10.5f}" + "\n").format(*gbox))
+            else:
+                outfile.write((3 * "{:10.5f}" + "\n").format(*gbox[:3]))
 
     def _calc_gro_box(self):
         if self.box[3] == self.box[4] == self.box[5] == 90.0:
-            return "{:10.5f}{:10.5f}{:10.5f}\n".format(*[x / 10 for x in self.box[:3]])
+            return [x / 10 for x in self.box[:3]] + 6 * [0.0]
         else:
             gbox = 9 * [0.0]
             conv = math.pi / 180

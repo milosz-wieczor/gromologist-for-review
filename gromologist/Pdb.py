@@ -158,7 +158,7 @@ class Pdb:
     def find_missing(self):
         """
         Assuming standard naming conventions, finds atoms that are missing
-        in protein structures and prints them
+        in protein structures and prints them (heavy atoms only!)
         :return: None
         """
         pro_bb = ['N', 'O', 'C', 'CA']
@@ -231,9 +231,10 @@ class Pdb:
                     curr_resid = atom.resnum
                 if atom.resnum != curr_resid:
                     if nopbc:
-                        dist = self._atoms_dist_pbc(atom, prev_atom)
-                    else:
                         dist = self._atoms_dist(atom, prev_atom)
+                    else:
+                        # TODO fix
+                        dist = self._atoms_dist_pbc(atom, prev_atom)
                     prev_atom = atom
                     curr_resid = atom.resnum
                     if dist > cutoff:
@@ -316,6 +317,7 @@ class Pdb:
         Identifies and lists molecules contained in the structure, chain by chain
         :return: None
         """
+        # TODO fix
         chains = list({a.chain.strip() for a in self.atoms})
         if not chains:
             print("No chains in the molecule, run Pdb.add_chains() first")
@@ -733,6 +735,7 @@ class Pdb:
         :param chain: str, optional name of the chain
         :return: None
         """
+        # TODO check not to modify other residues' names
         self.renumber_atoms()
         chstr = 'chain {} and '.format(chain) if chain else ''
         orig = self.get_atom('{}resid {} and name CA'.format(chstr, resid))
@@ -773,6 +776,7 @@ class Pdb:
             hooksel = '{}resid {} and name {}'.format(chstr, resid, hook)
             atomsel = '{}resid {} and name {}'.format(chstr, resid, atom_add)
             aftnr = None
+            # TODO check we're inserting correctly + add unittest
             if isinstance(aft, tuple):
                 for n, af in enumerate(aft):
                     try:
@@ -968,13 +972,14 @@ class Pdb:
             assert boxline[3] == boxline[4] == boxline[6] == 0
             box = [0.0] * 6
             box[0] = boxline[0]
-            box[-1] = math.atan(boxline[1] / boxline[5]) if boxline[5] != 0 else 90.0  # TODO check twice
-            box[1] = boxline[1] / math.sin(box[-1])
+            box[-1] = math.atan(boxline[1] / boxline[5]) if boxline[5] != 0 else 90
+            box[1] = boxline[1] / math.sin(box[-1] * math.pi/180)
             box[2] = math.sqrt(boxline[7] ** 2 + boxline[8] ** 2 + boxline[2] ** 2)
             box[-2] = math.acos(boxline[7] / box[2])
-            box[-3] = math.acos((boxline[8] * math.sin(box[-1])) / box[2] + math.cos(box[-2]) * math.cos(box[-1]))
+            box[-3] = math.acos((boxline[8] * math.sin(box[-1] * math.pi/180)) / box[2]
+                                + math.cos(box[-2]) * math.cos(box[-1] * math.pi/180))
             box[0], box[1], box[2] = box[0] * 10, box[1] * 10, box[2] * 10
-            box[3], box[4], box[5] = box[3] * 180 / math.pi, box[4] * 180 / math.pi, box[5] * 180 / math.pi
+            box[3], box[4], box[5] = round(box[3] * 180/math.pi, 4), round(box[4] * 180/math.pi, 4), round(box[5], 4)
         else:
             raise RuntimeError('Can\'t read box properties')
         return atoms, tuple(box), remarks
@@ -1093,6 +1098,7 @@ class Pdb:
         :param outname: str, name of the file being produced
         :return: None
         """
+        # TODO vectors can be misaligned when converting gro to pdb
         with open(outname, 'w') as outfile:
             outfile.write("written by gromologist\n{}\n".format(len(self.atoms)))
             for atom in self.atoms:

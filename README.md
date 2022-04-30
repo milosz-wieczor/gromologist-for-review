@@ -459,7 +459,8 @@ For advanced users, it is possible to directly specify the `vector=...` paramete
 (in fact, this is how the mutation module is implemented).
 
 Atoms can be easily deleted with `Pdb.delete_atom()` using the serial number, with the optional
-`renumber=True` parameter to renumber the remaining atoms from 1.
+`renumber=True` parameter to renumber the remaining atoms from 1. The `Pdb.remove_hydrogens()` function
+automatically removes all hydrogen atoms from the structure.
 
 ##### Interpolating between two pre-aligned structures
 

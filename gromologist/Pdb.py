@@ -324,7 +324,7 @@ class Pdb:
 
         def identify(atom):
             first = atom.resname
-            if first in Pdb.prot_map.keys() or (first[1:] in Pdb.prot_map.keys() and first[0] in 'NC'):
+            if first in Pdb.prot_map.keys() or (first[1:] in Pdb.prot_map.keys() and first[0] in 'NC') or first == 'ACE':
                 return 'Protein'
             elif first in Pdb.nucl_map.keys():
                 return 'Nucleic'
@@ -338,19 +338,19 @@ class Pdb:
         for a in self.atoms:
             if mol in ['Protein', 'Nucleic']:
                 if a.chain != chain:
-                    mol_list.append([mol, 1])
+                    mol_list.append([mol + f'_chain_{chain}', 1])
                     chain = a.chain
                     mol = identify(a)
             else:
                 if a.resnum != res:
-                    if len(mol) > 1 and mol == mol_list[-1][0]:
+                    if len(mol) >= 1 and mol == mol_list[-1][0]:
                         mol_list[-1][1] += 1
                     else:
                         mol_list.append([mol, 1])
                     mol = identify(a)
                     chain = a.chain
             res = a.resnum
-        if len(mol) > 1 and mol == mol_list[-1][0] and mol not in ['Protein', 'Nucleic']:
+        if len(mol) >= 1 and mol == mol_list[-1][0]:
             mol_list[-1][1] += 1
         else:
             mol_list.append([mol, 1])

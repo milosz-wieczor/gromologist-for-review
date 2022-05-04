@@ -445,8 +445,9 @@ class Pdb:
         :param selection: str, will only renumber residues matching the selection
         :return: None
         """
+        # TODO do not use 0 as resnum
         count = offset
-        ats = self.atoms if selection is None else self.get_atom_indices(selection)
+        ats = range(len(self.atoms)) if selection is None else self.get_atom_indices(selection)
         for n in ats:
             temp = count
             try:

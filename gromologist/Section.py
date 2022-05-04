@@ -1180,6 +1180,19 @@ class SectionMol(Section):
 
     def alch_h_to_ch3(self, resid, orig_name, basename, ctype=None, htype=None, ccharge=None, hcharge=0.09,
                       dummy_type='DH', add_in_pdb=True):
+        """
+        A generic routine to change a hydrogen atom into a methyl group
+        :param resid: int, ID of the residue in which the change is to be made
+        :param orig_name: str, name of the hydrogen to be modified
+        :param basename: str, an atom name for the extra atoms that will be modified with indices
+        :param ctype: str, atomtype for the methyl carbon
+        :param htype: str, atomtype for the methyl hydrogens
+        :param ccharge: float, charge for the methyl carbon
+        :param hcharge: float, charge for the methyl hydrogens
+        :param dummy_type: str, atomtype for the dummies
+        :param add_in_pdb: bool, whether to modify the associated Pdb object
+        :return: None
+        """
         if ctype is None or htype is None:
             print("Which atomtypes should be used for the methyl group:\n")
             print("[ 1 ] CT/HC (Amber methyl)")
@@ -1236,6 +1249,13 @@ class SectionMol(Section):
         self.gen_state_b(atomname=orig_name, resid=resid, new_type=dummy_type, new_charge=0, new_mass=1.008)
 
     def solute_tempering(self, temperatures, selection=None):
+        """
+        Prepares a modified topology for REST2 simulations
+        and writes the respective .top files
+        :param temperatures: list of float, solute temperatures for replica exchange
+        :param selection: str or None, can specify the selection to which the modification should be restricted
+        :return: None
+        """
         self.top.explicit_defines()
         for n, t in enumerate(temperatures):
             self.top.print(f'generating topology for effective temperature of {t} K...')
@@ -1245,6 +1265,12 @@ class SectionMol(Section):
             mod.save_top(self.top.fname.replace('.top', f'-rest{temperatures[0]/t:.3f}.top'))
 
     def scale_rest2_bonded(self, gamma, selection=None):
+        """
+        Modifies bonded terms for the REST2 protocol
+        :param gamma: float, the scaling parameter from REST2
+        :param selection: str or None, can specify the selection to which the scaling should be restricted
+        :return: None
+        """
         # get a list of atomtypes to clone
         sel = self.get_atoms(selection) if selection is not None else self.atoms
         types = {at.type for at in sel}
@@ -1266,6 +1292,12 @@ class SectionMol(Section):
             pass
 
     def scale_rest2_charges(self, gamma, selection=None):
+        """
+        Modifies charges for the REST2 protocol
+        :param gamma: float, the scaling parameter from REST2
+        :param selection: str or None, can specify the selection to which the scaling should be restricted
+        :return: None
+        """
         sel = self.get_atoms(selection) if selection is not None else self.atoms
         # scaling charges
         for a in self.atoms:
@@ -1308,6 +1340,11 @@ class SectionMol(Section):
         self.add_ff_params()
 
     def recalc_qtot(self):
+        """
+        Puts the qtot (cumulative charge of the molecule) in the comment
+        of an atom entry in the topology (done by pdb2gmx by default)
+        :return: None
+        """
         charge = 0
         for atom in self.atoms:
             charge += atom.charge
@@ -1363,9 +1400,15 @@ class SectionParam(Section):
                 sub.sort()  # TODO if two have same periodicity & atoms, remove one with 0-s (PMX)
 
     def find_used_ff_params(self, section='all'):
+        """
+        Finds FF parameters that are used by the system
+        :param section: str, for which section should the search be performed ('all' or 'atomtypes', '...')
+        :return: list of EntryParams that are used by the system's topology
+        """
         used_params = []
         if section == 'all':
             subsections_to_add = ['atomtypes', 'pairtypes', 'nonbonded_params', 'constrainttypes']
+            # TODO check what with other sections?
         else:
             subsections_to_add = [section]
         for sub in subsections_to_add:
@@ -1377,6 +1420,20 @@ class SectionParam(Section):
                 for ssub in subsections:
                     used_params.extend(ssub.find_used_ff_params())
         return used_params
+
+    def fix_zero_periodicity(self):
+        """
+        Recent versions of OpenMM require non-zero dihedral periodicities,
+        so this function changes 0s to 1s (assuming the force constant is 0 too)
+        :return: None
+        """
+        subsections = self.get_subsections('dihedraltypes')
+        for sub in subsections:
+            if str(sub.prmtype) in '149':
+                for entry in sub.entries_param:
+                    if entry.params[-1] == 0:
+                        assert entry.params[-2] == 0
+                        entry.params[-1] = 1
 
     def clone_type(self, atomtype, prefix='y', new_type=None):
         """
@@ -1403,6 +1460,12 @@ class SectionParam(Section):
         self._remove_symm_dupl(new_atomtype)
 
     def clean_unused(self, used_params, section='all'):
+        """
+        Cleans up FF parameters that are not used by the given system
+        :param used_params: list of str, identifiers of parameters we already know are being used
+        :param section: str, which sections to clean up ('all' for all of them or 'bonds', 'angles', 'dihedrals', etc.)
+        :return: None
+        """
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes', 'atomtypes': 'atomtypes', 'pairtypes': 'pairtypes',
                      'nonbonded_params': 'nonbonded_params', 'constrainttypes': 'constrainttypes'}
@@ -1448,6 +1511,16 @@ class SectionParam(Section):
         ss.set_opt_dih(values)
 
     def add_nbfix(self, type1, type2, mod_sigma=0.0, mod_epsilon=0.0, action_default='x'):
+        """
+        Generates NBFIX entries for the chosen pair of atomtypes by modifying the current
+        Lorentz-Berthelot rules, or an existing NBFIX
+        :param type1: str, name of the 1st atomtype in the pair
+        :param type2: str, name of the 2nd atomtype in the pair
+        :param mod_sigma: float, by how much to increase the LJ sigma (in nm)
+        :param mod_epsilon: float, by how much to increase the LJ epsilon (in kJ/mol)
+        :param action_default: str, what to do if an NBFIX already exists (check prompt if that happens)
+        :return: None
+        """
         atp = self.get_subsection('atomtypes')
         sigma1, eps1, sigma2, eps2 = [None] * 4
         for entry in atp:
@@ -1487,6 +1560,15 @@ class SectionParam(Section):
 
     @staticmethod
     def gen_clones(entry, atomtype, new_atomtype):
+        """
+        Copies entry that contains an atomtype to be cloned, taking into
+        account possible multiple occurences of that type and generating
+        all possible combinations/permutations of the changes
+        :param entry: an EntryParam instance, the entry to be copied
+        :param atomtype: str, the atomtype that is being cloned
+        :param new_atomtype: str, the new atomtype being created
+        :return: list of str, new lines to be added
+        """
         lines = []
         nchanges = entry.types.count(atomtype)
         changes = []
@@ -1502,6 +1584,15 @@ class SectionParam(Section):
 
     @staticmethod
     def mod_types(entry, mods, new_atomtype, atomtype):
+        """
+        Modifies an EntryParam to include the new atomtype instead of the old one
+        in places specified by the directive in mods
+        :param entry: an EntryParam instance, the entry to be copied
+        :param mods: list of lists, specifies where to put the modification
+        :param new_atomtype: str, the new atomtype being created
+        :param atomtype: str, the atomtype that is being cloned
+        :return: str, the cloned line
+        """
         line = str(entry)
         lentype = len(atomtype)
         for num in mods[::-1]:

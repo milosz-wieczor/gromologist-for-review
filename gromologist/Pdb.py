@@ -999,12 +999,12 @@ class Pdb:
                 selected = list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0] + 1)
                 self.conect[n + 1] = selected
 
-    def fill_beta(self, values, serials=None, smooth=False, ignore_mem=False):
+    def set_beta(self, values, selection=None, smooth=False, ignore_mem=False):
         """
         Enables user to write arbitrary values to the beta field
         of the PDB entry
         :param values: iterable; values to fill
-        :param serials: iterable, optional; can be used to specify a subset of atoms
+        :param selection: str, optional; can be used to specify a subset of atoms
         :param smooth: if float, defines sigma (in Angstrom) for beta-value smoothing
         :param ignore_mem: bool, allows to ignore memory warnings
         :return: None
@@ -1012,21 +1012,17 @@ class Pdb:
         if any([v > 999 for v in values]):
             print("At least one value is too large to fit into the `beta` field, consider division "
                   "to make values smaller")
-        if not serials:
-            serials = [a.serial for a in self.atoms]
-        if not all([i == j for i, j in zip(serials, sorted(serials))]):
-            raise ValueError("Atoms' serial numbers are not sorted, consider running .renumber_atoms() first")
-        if len(values) != len(serials):
+        atoms = self.atoms if selection is None else self.get_atoms(selection)
+        if len(values) != len(atoms):
             raise ValueError("Lists 'value' and 'serials' have inconsistent sizes: {} and {}".format(len(values),
-                                                                                                     len(serials)))
+                                                                                                     len(atoms)))
         index = 0
         if not smooth:
-            for atom in self.atoms:
-                if atom.serial in serials:
-                    atom.beta = values[index]
-                    index += 1
+            for atom in atoms:
+                atom.beta = values[index]
+                index += 1
         else:
-            if len(serials) > 10000 and not ignore_mem:
+            if len(atoms) > 10000 and not ignore_mem:
                 raise RuntimeError("Try to restrict the number of atoms (e.g. selecting CA only), or you're risking "
                                    "running out of memory. To proceed anyway, run again with ignore_mem=True")
             try:
@@ -1034,7 +1030,7 @@ class Pdb:
             except ImportError:
                 print("Needs numpy for smoothing, try installing it")
             else:
-                atomnums = [n for n, atom in enumerate(self.atoms) if atom.serial in serials]
+                atomnums = [n for n, atom in enumerate(self.atoms) if atom in atoms]
                 coords = np.array(self.get_coords())[atomnums]
                 for atom in self.atoms:
                     dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)

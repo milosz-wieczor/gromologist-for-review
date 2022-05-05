@@ -481,12 +481,11 @@ This will create a total of 52 structures (1 starting + 50 intermediate + 1 fina
 To use the PDB's beta column for color-mapping of observables e.g. in VMD, use the following:
 
 ```
->>> ca_atom_indices = p.get_atom_indices('name CA')
->>> p.fill_beta(per_residue_data, serials=[x+1 for x in ca_atom_indices])
+>>> p.set_beta(per_residue_data, selection='name CA')
 >>> p.save_pdb('with_betas.pdb')
 ```
 
-By adding the `smooth=...` parameter to `Pdb.fill_beta`, data can be spatially smoothed
+By adding the `smooth=...` parameter to `Pdb.set_beta`, data can be spatially smoothed
 using a Gaussian kernel with a specified standard deviation (in A).
 
 ##### Creating new PDB as a subset of existing one

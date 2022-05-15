@@ -846,21 +846,25 @@ class Pdb:
                 dists.append(self._atoms_dist_pbc(atom1, atom2))
         return dists
 
-    def check_chiral_aa(self, nopbc=False):
+    def check_chiral_aa(self, nopbc=False, fix=False):
         """
         Checks for correct chirality in amino acids, first in the backbone
-        and then for chiral side chains
+        and then for chiral side chains; to work with "fix", the last one has to be
+        a hydrogen
         :param nopbc: bool, whether to ignore PBC information
+        :param fix: bool, whether to try fixing chirality by switching the position of the hydrogen
         :return: None
         """
+        # TODO check for GLY (consistent between HA1 and HA2)?
         prot_atoms = self.get_atoms('name CA and not resname GLY')
-        self.check_chiral(prot_atoms, 'N', 'C', 'HA HA1', nopbc=nopbc)
+        self.check_chiral(prot_atoms, 'N', 'C', 'HA HA1', nopbc=nopbc, fix=fix)
         ile_atoms = self.get_atoms('name CB and resname ILE')
-        self.check_chiral(ile_atoms, 'CA', 'CG2', 'CG1', 'side chain chirality', nopbc=nopbc)
+        self.check_chiral(ile_atoms, 'CG2', 'CA', 'HB', 'side chain chirality', nopbc=nopbc, fix=fix)
         thr_atoms = self.get_atoms('name CB and resname THR')
-        self.check_chiral(thr_atoms, 'CA', 'CG1 CG2', 'OG1 OG2', 'side chain chirality', nopbc=nopbc)
+        self.check_chiral(thr_atoms, 'CG1 CG2', 'CA', 'HB', 'side chain chirality', nopbc=nopbc, fix=fix)
 
-    def check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality', printing=True, nopbc=False):
+    def check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality', printing=True, nopbc=False,
+                     fix=False):
         """
         Decides on correct or wrong chirality of selected chiral
         centers by calculating selected dihedrals
@@ -871,6 +875,7 @@ class Pdb:
         :param label: str, type of chirality (only to display in the warning)
         :param printing: bool, whether to print warnings (default) or return True if all checks are passed
         :param nopbc: bool, whether to ignore PBC when calculating vectors
+        :param fix: bool, whether to try fixing chirality by switching the position of the hydrogen
         :return: None (if printing), bool (if not printing)
         """
         for at in cent_atoms_list:
@@ -886,12 +891,27 @@ class Pdb:
                 else:
                     return False
             elif chi > 0:
-                if printing:
+                if fix:
+                    self.fix_chirality(h_sel=f'name {at3} and resnum {resnum} and resname {resname} {chn}',
+                                       c_sel=f'name {at.atomname} and resnum {resnum} and resname {resname} {chn}')
+                    print(f"Trying to fix chirality for residue {resname} num {resnum} by moving {at3} to the opposite "
+                          f"side of {at.atomname}, run a minimization and check again")
+                if printing and not fix:
                     print(f"Check {label} for residue {resname} num {resnum}, looks like a D-form")
-                else:
+                if not printing:
                     return False
             if not printing:
                 return True
+
+    def fix_chirality(self, h_sel, c_sel):
+        """
+        A quick-and-dirty chirality fix that moves the hydrogen to the
+        opposite side of the carbon atom (needs minimization afterwards)
+        :param h_sel: str, selection that returns the hydrogen atom to be moved
+        :param c_sel: str, selection that returns the carbon atom bound to that hydrogen
+        :return: None
+        """
+        self.reposition_atom_from_hook(h_sel, c_sel, 1.09, h_sel, c_sel)
 
     def _get_chirality(self, *atoms, nopbc=False):
         """

@@ -262,6 +262,21 @@ to numbering in .itp files).
 To add a bond within a single e.g. Protein molecule, one can use `protein.merge_two(protein, anchor_own=2, anchor_other=3)`
 or, more simply, `protein.add_bond(5,3)`.
 
+##### Adding disulfide bonds>>> protein_a = t.get_molecule("Protein_chain_A")
+
+To fix issues with Gromacs' specbonds directives, Gromologist can automatically add disulfide
+bonds between two cysteine residues. An .rtp file is required (either selected interactively
+or passed as an argument) to make sure that charges and types are assigned properly:
+
+```
+>>> protein_a = t.get_molecule("Protein_chain_A")
+>>> protein_b = t.get_molecule("Protein_chain_B")
+# the following line adds an intramolecular disulfide between residues 15 and 30 of chain A:
+>>> protein_a.add_disulfide(15, 30)
+# the following line adds an intermolecular disulfide between residues 15 of chain A and 30 of chain B:
+>>> protein_a.add_disulfide(15, 30, other=protein_b)
+```
+
 ##### Adding and removing atoms while maintaining ordered numbering
 
 When an atom is removed, other atom numbers are modified accordingly, something that has to be

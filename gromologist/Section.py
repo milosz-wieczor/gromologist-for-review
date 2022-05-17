@@ -293,6 +293,40 @@ class SectionMol(Section):
             for entry in subsection.entries_bonded:
                 entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
 
+    def add_disulfide(self, resid1, resid2, other=None, rtp=None):
+        """
+        Adds a bond between the SG atoms of a selected residue pair (either within
+        or between molecules), removes the extra hydrogens, and adjusts atom types
+        or charges according to the .rtp file chosen
+        :param resid1: int, the resid of 1st residue to be linked
+        :param resid2: int, the resid of 2st residue to be linked (can be from a different molecule)
+        :param other: SectionMol (molecule), optional; if specified, the disulfide will be intermolecular
+        :param rtp: str, optional; if specified, the given .rtp will be used (otherwise interactive)
+        :return: None
+        """
+        other = self if other is None else other
+        s1 = self.get_atom(f'resid {resid1} and name SG')
+        h1 = self.get_atom(f'resid {resid1} and name HG HG1')
+        s2 = other.get_atom(f'resid {resid2} and name SG')
+        h2 = other.get_atom(f'resid {resid2} and name HG HG1')
+        assert s1.resname == s2.resname == 'CYS'
+        self.del_atom(h1.num)
+        other.del_atom(h2.num)
+        found = self.find_rtp(rtp)
+        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(found)
+        disulf_names = {'CYX', 'CYS2'}
+        disulf = set([x[0] for x in types.keys()]).intersection(disulf_names)
+        if len(disulf) == 0:
+            self.top.rtp = {}
+            raise RuntimeError(f"None of the residues {disulf_names} found in the .rtp file {found}")
+        disulf_resname = disulf.pop()
+        for mol, res in zip([self, other], [resid1, resid2]):
+            for atom in mol.get_atoms(f'resid {res}'):
+                atom.type = types[(disulf_resname, atom.atomname)]
+                atom.charge = charges[(disulf_resname, atom.atomname)]
+                atom.resname = disulf_resname
+        self.merge_two(other, s1.num, s2.num)
+
     def gen_state_b(self, atomname=None, resname=None, resid=None, atomtype=None, new_type=None, new_charge=None,
                     new_mass=None):
         """
@@ -1061,16 +1095,18 @@ class SectionMol(Section):
         elif mutate_in_pdb and not self.top.pdb:
             print("No .pdb file bound to the topology, use Top.add_pdb() to add one")
 
-    def parse_rtp(self, rtp):
+    def parse_rtp(self, rtp, remember=False):
         """
         Reads an .rtp file to extract molecule definitions, separating them into
         dictionaries for: types, charges, impropers, dihedrals, bondedtypes
         :param rtp: str, path to the .rtp file
+        :param remember: bool, whether to reuse .rtps selected before
         :return: tuple of dict, each containing atom name : relevant parameter matching
         (ordered: types, charges, dihedrals, impropers, bondedtypes)
         """
         # TODO check against amber/ILDN
-        if self.top.rtp:
+        if self.top.rtp and remember:
+            print("Using previously selected .rtp file")
             return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['dihedrals'], \
                    self.top.rtp['impropers'], self.top.rtp['bondedtypes']
         chargedict, typedict = {}, {}

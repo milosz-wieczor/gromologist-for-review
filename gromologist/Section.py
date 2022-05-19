@@ -327,6 +327,55 @@ class SectionMol(Section):
                 atom.resname = disulf_resname
         self.merge_two(other, s1.num, s2.num)
 
+    def add_coordinated_ion(self, resid1, resid2, other=None, rtp=None):
+        """
+        Adds a bond between the cysteine sulfur or histidine nitrogen and (usually)
+        a transition metal ion like Zn or Fe, and adjusts atom types
+        or charges according to the .rtp file chosen
+        :param resid1: int, the resid of 1st residue to be linked (amino acid)
+        :param resid2: int, the resid of 2st residue to be linked (ion/heme; can be from a different molecule)
+        :param other: SectionMol (molecule), optional; if specified, the bond will be intermolecular
+        :param rtp: str, optional; if specified, the given .rtp will be used (otherwise interactive)
+        :return: None
+        """
+        other = self if other is None else other
+        c1 = self.get_atom(f'resid {resid1} and name CA')
+        if c1.resname not in {'CYS', 'HIS', 'HID', 'HIE', 'HSD', 'HSE'}:
+            raise RuntimeError(f"Residue 1 has to be cysteine or histidine, not {c1.resname}")
+        x2 = other.get_atom(f'resid {resid2} and name ZN ZN2 FE')
+        if x2.resname not in {'ZN', 'ZN2', 'FE', 'HEM', 'HEME'}:
+            raise RuntimeError(f"Residue 2 has to be a zinc or iron/heme, not {x2.resname}")
+        if c1.resname == 'CYS':
+            found = self.find_rtp(rtp)
+            types, charges, dihedrals, impropers, improper_type = self.parse_rtp(found)
+            h1 = self.get_atom(f'resid {resid1} and name HG HG1')
+            x1 = self.get_atom(f'resid {resid1} and name SG')
+            self.del_atom(h1.num)
+            sulf_names = {'CYM'}
+            sulf = set([x[0] for x in types.keys()]).intersection(sulf_names)
+            if len(sulf) == 0:
+                self.top.rtp = {}
+                raise RuntimeError(f"None of the residues {sulf_names} found in the .rtp file {found}")
+            sulf_resname = sulf.pop()
+            for atom in self.get_atoms(f'resid {resid1}'):
+                atom.type = types[(sulf_resname, atom.atomname)]
+                atom.charge = charges[(sulf_resname, atom.atomname)]
+                atom.resname = sulf_resname
+        else:
+            try:
+                self.get_atom(f'resid {resid1} and name HE2')
+            except RuntimeError:
+                try:
+                    self.get_atom(f'resid {resid1} and name HD1')
+                except RuntimeError:
+                    raise RuntimeError(f"In residue {c1.resname} {resid1}, neither HE2 nor HD1 were found, can't "
+                                       f"identify histidine protonation state")
+                else:
+                    x1 = self.get_atom(f'resid {resid1} and name NE2')
+            else:
+                x1 = self.get_atom(f'resid {resid1} and name ND1')
+        self.merge_two(other, x1.num, x2.num)
+
     def gen_state_b(self, atomname=None, resname=None, resid=None, atomtype=None, new_type=None, new_charge=None,
                     new_mass=None):
         """
@@ -720,7 +769,6 @@ class SectionMol(Section):
             # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
             system_setup = self.top.sections[-1].get_subsection('molecules')
             system_setup.entries = [e for e in system_setup if other.mol_name not in e]
-            self.top.recalc_sys_params()
 
     def merge_molecules(self, other):
         other.offset_numbering(self.natoms)
@@ -729,7 +777,6 @@ class SectionMol(Section):
         # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
         system_setup = self.top.sections[-1].get_subsection('molecules')
         system_setup.entries = [e for e in system_setup if other.mol_name not in e]
-        self.top.recalc_sys_params()
 
     def _merge_fields(self, other):
         self.top.print('WARNING watch out for #ifdef POSRES keywords that might get misplaced')
@@ -746,7 +793,11 @@ class SectionMol(Section):
     
     def _make_bond(self, atom_own, atom_other, other):
         self._get_bonds()
-        other._get_bonds()
+        try:
+            other._get_bonds()
+        except KeyError:
+            other.subsections.append(self._yield_sub([f"[ bonds ]\n"]))
+            other._get_bonds()
         new_bond = [tuple(sorted([int(atom_own), int(atom_other)]))]
         new_angles = self._generate_angles(other, atom_own, atom_other)
         new_pairs, new_dihedrals = self._generate_14(other, atom_own, atom_other)
@@ -757,6 +808,10 @@ class SectionMol(Section):
             subsection = self.get_subsection(sub)
             subsection.add_entries([gml.EntryBonded(subsection.fstring.format(*entry, subsection.prmtype), subsection)
                                     for entry in entries])
+            try:
+                other.get_subsection(sub)
+            except KeyError:
+                other.subsections.append(self._yield_sub([f"[ {sub} ]\n"]))
 
     def _remove_bond(self, at1, at2):
         self._get_bonds()

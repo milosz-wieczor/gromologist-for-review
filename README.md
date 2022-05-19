@@ -262,7 +262,7 @@ to numbering in .itp files).
 To add a bond within a single e.g. Protein molecule, one can use `protein.merge_two(protein, anchor_own=2, anchor_other=3)`
 or, more simply, `protein.add_bond(5,3)`.
 
-##### Adding disulfide bonds>>> protein_a = t.get_molecule("Protein_chain_A")
+##### Adding disulfide bonds and coordination bonds with transition metals
 
 To fix issues with Gromacs' specbonds directives, Gromologist can automatically add disulfide
 bonds between two cysteine residues. An .rtp file is required (either selected interactively
@@ -276,6 +276,23 @@ or passed as an argument) to make sure that charges and types are assigned prope
 # the following line adds an intermolecular disulfide between residues 15 of chain A and 30 of chain B:
 >>> protein_a.add_disulfide(15, 30, other=protein_b)
 ```
+
+The same can be done with coordination bonds involving Cys/His and Zn/Fe:
+
+```
+>>> protein = t.get_molecule("Protein_chain_A")
+>>> ion = t.get_molecule("Zn")
+>>> protein.add_coordinated_ion(15, 1, other=ion)
+```
+
+When the amino acid is Cys, an .rtp file is required (either path specified as `rtp=...` or selected 
+interactively), as Cys has to deprotonate and types/charges change. In case of His, the proper protonation
+state is recognized and the bond is added between the metal ion and the nitrogen with a lone pair, but 
+no changes are made to types/charges.
+
+Note that even though excess atoms (e.g. HG of cysteine) are automatically removed from the accompanying structure file,
+the resulting bonds can be very long and generate high energies/forces when simulated or minimized. Make sure you know
+what you are doing!
 
 ##### Adding and removing atoms while maintaining ordered numbering
 

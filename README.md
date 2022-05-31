@@ -46,8 +46,10 @@ then install the package into Python by typing `pip install .` in the main Gromo
 If you're using Anaconda, the same will work with `/path/to/anaconda/bin/pip`.
 
 ## Usage
+<a name="usage"/>
 
 ##### Reading and writing files
+<a name="reading-and-writing-files"/>
 
 `Top` and `Pdb` are the core classes of the library, and are supposed to provide representation
 for topology and structure objects, respectively. To initialize them, a path to the file
@@ -89,6 +91,7 @@ After changes have been made, modified files can be saved:
 ```
 
 ##### File inspection, checks and printing
+<a name="file-inspection--checks-and-printing"/>
 
 If `Pdb` is bound to `Top`, a number of diagnostic and fixing options are available,
 including name consistency checks:
@@ -186,6 +189,7 @@ To list all molecules in the Pdb instance (assigned from chains), use:
 ```
 
 ##### Producing lightweight files
+<a name="producing-lightweight-files"/>
 
 If the topology contains too many parts irrelevant to the system at hand,
 a leaner version can be produced that lacks unused molecule definitions:
@@ -209,6 +213,7 @@ use the `split` parameter of `Top.save_top`:
 ```
 
 ##### Dealing with unspecified 'define' keywords in topologies
+<a name="dealing-with-unspecified--define--keywords-in-topologies"/>
 
 If some FF terms are assumed to be defined elsewhere, e.g. in .mdp files, their values
 can be explicitly specified at construction:
@@ -231,6 +236,7 @@ values (like `0.0 0.8158800 1`) in the topology at hand, use:
 ```
 
 ### Editing topologies
+<a name="editing-topologies"/>
 
 Let's start with a generic topology file:
 
@@ -239,6 +245,7 @@ Let's start with a generic topology file:
 ```
 
 ##### Adding mutations to proteins
+<a name="adding-mutations-to-proteins"/>
 
 For certain complex systems, having to pass through pdb2gmx or CHARMM-GUI 
 for every mutant is a major drawback. To avoid this, Gromologist allows to insert
@@ -274,6 +281,7 @@ dynamics (note the double precision version of Gromacs, `gmx_d`, works better fo
 that almost overlap in space).
 
 ##### Adding bonds within or between molecules
+<a name="adding-bonds-within-or-between-molecules"/>
 
 One useful application of Gromologist is adding bonds (and, automatically, other bonded terms)
 either within a molecule or between them:
@@ -297,6 +305,7 @@ To add a bond within a single e.g. Protein molecule, one can use `protein.merge_
 or, more simply, `protein.add_bond(5,3)`.
 
 ##### Adding disulfide bonds and coordination bonds with transition metals
+<a name="adding-disulfide-bonds-and-coordination-bonds-with-transition-metals"/>
 
 To fix issues with Gromacs' specbonds directives, Gromologist can automatically add disulfide
 bonds between two cysteine residues. An .rtp file is required (either selected interactively
@@ -329,6 +338,7 @@ the resulting bonds can be very long and generate high energies/forces when simu
 what you are doing!
 
 ##### Adding and removing atoms while maintaining ordered numbering
+<a name="adding-and-removing-atoms-while-maintaining-ordered-numbering"/>
 
 When an atom is removed, other atom numbers are modified accordingly, something that has to be
 considered when removing multiple atoms. For instance, one can remove the first three atoms
@@ -356,6 +366,7 @@ If residue data is not specified, Gromologist will attempt to guess the residue 
 neighboring atoms.
 
 ##### Adding alchemical B-states
+<a name="adding-alchemical-b-states"/>
 
 To generate alchemical states for a subset of atoms, one can use `gen_state_b`:
 
@@ -375,6 +386,7 @@ all will be modified as specified. In turn, if a given setter is not specified, 
 value will be identical to that for state A.
 
 ##### Removing or swapping alchemical states
+<a name="removing-or-swapping-alchemical-states"/>
 
 To make an alchemical topology non-alchemical again, one has two options:
 
@@ -397,6 +409,7 @@ If you want to invert the direction of the alchemical change by swapping states 
 ```
 
 ##### Duplicating and reassigning types
+<a name="duplicating-and-reassigning-types"/>
 
 Often it's useful to duplicate an atomtype exactly, i.e., assign it a different name while
 retaining all bonded and nonbonded parameters of the original. This can be done easily with:
@@ -419,6 +432,7 @@ To then set e.g. all CA atoms in the 1st molecule to the new type, run the follo
 ```
 
 ##### Adding NBFIX terms
+<a name="adding-nbfix-terms"/>
 
 To generate an NBFIX (custom combination rule) entry, use the following snippet:
 
@@ -429,7 +443,8 @@ To generate an NBFIX (custom combination rule) entry, use the following snippet:
 This will introduce a term modifying the CT-HA Lennard-Jones interaction, increasing the default 
 (Lorenz-Berthelot) sigma by 0.01 nm, and decreasing the default epsilon by 0.1 kJ/mol.
 
-##### Explicitly listing parameters in topology & finding missing parameters 
+##### Explicitly listing parameters in topology & finding missing parameters
+<a name="explicitly-listing-parameters-in-topology-&-finding-missing-parameters"/>
 
 To explicitly include all parameters in sections `[ bonds ]`, `[ angles ]` and `[ dihedrals ]`,
 one can use:
@@ -449,6 +464,7 @@ Note that both `add_ff_params()` and `find_missing_ff_params()` have an optional
 that can specify you only want to look at `bonds`, `angles`, `dihedrals` or `impropers`.
 
 ##### Preparing REST2 topologies
+<a name="preparing-rest2-topologies"/>
 
 To prepare a molecule for replica exchange/solute tempering simulations, one can use the 
 top-level Top object:
@@ -465,6 +481,7 @@ instead, and specify a selection for the "hot" subsystem:
 ```
 
 ### Dihedral optimization
+<a name="dihedral-optimization"/>
 
 With a completed Gaussian dihedral scan results at hand (.log file), we can use Gromologist
 to run dihedral fitting. To select dihedral terms for refinement, add the `DIHOPT` keyword
@@ -498,6 +515,7 @@ the structural aspects of the optimization (actively optimized dihedrals are hig
 along with a plot of the energy values.
 
 ### Editing structures
+<a name="editing-structures"/>
 
 Let's start by reading a PDB file:
 
@@ -506,6 +524,7 @@ Let's start by reading a PDB file:
 ```
 
 ##### Adding atoms along a vector specified by other atoms, and deleting them
+<a name="adding-atoms-along-a-vector-specified-by-other-atoms--and-deleting-them"/>
 
 To add e.g. a hydrogen atom "hooked" to an existing atom CB in residue 2, with a bond length of 1 A in the direction
 specified by a vector from atom C to atom CA, one can use:
@@ -529,6 +548,7 @@ Atoms can be easily deleted with `Pdb.delete_atom()` using the serial number, wi
 automatically removes all hydrogen atoms from the structure.
 
 ##### Interpolating between two pre-aligned structures
+<a name="interpolating-between-two-pre-aligned-structures"/>
 
 To generate intermediate structures emulating a continuous conformational transition,
 try the following snippet:
@@ -543,6 +563,7 @@ This will create a total of 52 structures (1 starting + 50 intermediate + 1 fina
 `interpolated_structure_{0..51}.pdb` that sample the transition through linear interpolation.
 
 ##### Filling beta-values with custom data (for visualization)
+<a name="filling-beta-values-with-custom-data--for-visualization-"/>
 
 To use the PDB's beta column for color-mapping of observables e.g. in VMD, use the following:
 
@@ -555,6 +576,7 @@ By adding the `smooth=...` parameter to `Pdb.set_beta`, data can be spatially sm
 using a Gaussian kernel with a specified standard deviation (in A).
 
 ##### Creating new PDB as a subset of existing one
+<a name="creating-new-pdb-as-a-subset-of-existing-one"/>
 
 To choose and save e.g. only the DNA atoms from a protein-DNA complex, use:
 
@@ -564,6 +586,7 @@ To choose and save e.g. only the DNA atoms from a protein-DNA complex, use:
 ```
 
 ##### Renumbering atoms or residues in a structure
+<a name="renumbering-atoms-or-residues-in-a-structure"/>
 
 `Pdb.renumber_atoms()` and `Pdb.renumber_residues()` serve to easily reset the numbering
 of atoms or residues, respectively. The renumbering can be modified with the `offset` 
@@ -575,6 +598,7 @@ and `selection` parameters:
 ```
 
 ##### Adding chain, CONECT or element information
+<a name="adding-chain--conect-or-element-information"/>
 
 When chain information goes missing (common issue with conversion between .pdb and .gro),
 this information can be easily recovered with `Pdb.add_chains()`. Note: if the `Pdb` instance
@@ -609,6 +633,7 @@ with a default distance cut-off of 1.55 A to define a chemical bond. Note that t
 feature depends on `numpy` for speed!
 
 ##### Converting a 3-point water model to a 4-point one
+<a name="converting-a-3-point-water-model-to-a-4-point-one"/>
 
 If your system was prepared e.g. with TIP3P water and you want to change it to OPC (or other 4-point)
 without rerunning `gmx pdb2gmx`, the following function will do the job:
@@ -621,6 +646,7 @@ The default `offset` parameter is set to 0.147722363, typical for OPC; for TIP4P
 `offset=0.128012065`, and in general check the `[ virtual_sites3 ]` section in the solvent's .itp file.
 
 ### Selection language syntax
+<a name="selection-language-syntax"/>
 
 The custom selection language was meant to be as similar as possible to that 
 available in VMD: 
@@ -636,6 +662,7 @@ Examples:
 + "chain A B D and not solvent"
 
 ### Access to Gromacs utilities
+<a name="access-to-gromacs-utilities"/>
 
 To perform energy decomposition using the Gromacs rerun module, use the
 `calc_gmx_energy()` utility function:

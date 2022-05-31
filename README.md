@@ -3,6 +3,40 @@
 Gromologist is a package designed to facilitate handling, editing and manipulating GROMACS topology files 
 (.top and .itp), as well as compatible structures (.pdb and .gro).
 
+- [Gromologist](#gromologist)
+  * [Installation](#installation)
+  * [Usage](#usage)
+    + [Basic features](#basic-features)
+        * [Reading and writing files](#reading-and-writing-files)
+        * [File inspection, checks and printing](#file-inspection--checks-and-printing)
+        * [Producing lightweight files](#producing-lightweight-files)
+        * [Dealing with unspecified 'define' keywords in topologies](#dealing-with-unspecified--define--keywords-in-topologies)
+    + [Editing topologies](#editing-topologies)
+        * [Adding mutations to proteins](#adding-mutations-to-proteins)
+        * [Adding bonds within or between molecules](#adding-bonds-within-or-between-molecules)
+        * [Adding disulfide bonds and coordination bonds with transition metals](#adding-disulfide-bonds-and-coordination-bonds-with-transition-metals)
+        * [Adding and removing atoms while maintaining ordered numbering](#adding-and-removing-atoms-while-maintaining-ordered-numbering)
+        * [Adding alchemical B-states](#adding-alchemical-b-states)
+        * [Removing or swapping alchemical states](#removing-or-swapping-alchemical-states)
+        * [Duplicating and reassigning types](#duplicating-and-reassigning-types)
+        * [Adding NBFIX terms](#adding-nbfix-terms)
+        * [Explicitly listing parameters in topology & finding missing parameters](#explicitly-listing-parameters-in-topology---finding-missing-parameters)
+        * [Preparing REST2 topologies](#preparing-rest2-topologies)
+    + [Dihedral optimization](#dihedral-optimization)
+    + [Editing structures](#editing-structures)
+        * [Adding atoms along a vector specified by other atoms, and deleting them](#adding-atoms-along-a-vector-specified-by-other-atoms--and-deleting-them)
+        * [Interpolating between two pre-aligned structures](#interpolating-between-two-pre-aligned-structures)
+        * [Filling beta-values with custom data (for visualization)](#filling-beta-values-with-custom-data--for-visualization-)
+        * [Creating new PDB as a subset of existing one](#creating-new-pdb-as-a-subset-of-existing-one)
+        * [Renumbering atoms or residues in a structure](#renumbering-atoms-or-residues-in-a-structure)
+        * [Adding chain, CONECT or element information](#adding-chain--conect-or-element-information)
+        * [Converting a 3-point water model to a 4-point one](#converting-a-3-point-water-model-to-a-4-point-one)
+    + [Selection language syntax](#selection-language-syntax)
+    + [Access to Gromacs utilities](#access-to-gromacs-utilities)
+
+<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+
+<a name="installation"/>
 ## Installation
 
 The latest "official" release can be obtained directly through `pip` by typing `pip install gromologist`.

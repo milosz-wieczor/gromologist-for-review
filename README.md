@@ -36,8 +36,8 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
-<a name="installation"/>
 ## Installation
+<a name="installation"/>
 
 The latest "official" release can be obtained directly through `pip` by typing `pip install gromologist`.
 

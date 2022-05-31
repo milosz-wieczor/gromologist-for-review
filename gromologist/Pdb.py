@@ -7,7 +7,7 @@ class Pdb:
     prot_map = {'ALA': 'A', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E', 'PHE': 'F', 'GLY': 'G',
                 'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I', 'LYS': 'K', 'LEU': 'L',
                 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V',
-                'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "ASPP": "D"}
+                'TRP': 'W', 'TYR': 'Y', "GLUP": "E", "GLH": "E", "ASPP": "D", "ASH": "D", 'LYN': 'K'}
 
     nucl_map = {'DA': "A", 'DG': "G", 'DC': "C", 'DT': "T", 'DA5': "A", 'DG5': "G", 'DC5': "C", 'DT5': "T",
                 'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
@@ -233,7 +233,6 @@ class Pdb:
                     if nopbc:
                         dist = self._atoms_dist(atom, prev_atom)
                     else:
-                        # TODO fix
                         dist = self._atoms_dist_pbc(atom, prev_atom)
                     prev_atom = atom
                     curr_resid = atom.resnum
@@ -445,14 +444,14 @@ class Pdb:
         :param selection: str, will only renumber residues matching the selection
         :return: None
         """
-        # TODO do not use 0 as resnum
         count = offset
         ats = range(len(self.atoms)) if selection is None else self.get_atom_indices(selection)
         for n in ats:
             temp = count
             try:
                 if self.atoms[n].resnum != self.atoms[n + 1].resnum or self.atoms[n].chain != self.atoms[n + 1].chain:
-                    temp = count + 1
+                    # avoid resnum==10000 as it gets written as 0 and causes problems:
+                    temp = count + 1 if not (count + 1 % 10000 == 0) else count + 2
             except IndexError:
                 pass
             self.atoms[n].resnum = count
@@ -1110,7 +1109,6 @@ class Pdb:
         :param outname: str, name of the file being produced
         :return: None
         """
-        # TODO vectors can be misaligned when converting gro to pdb
         with open(outname, 'w') as outfile:
             outfile.write("written by gromologist\n{}\n".format(len(self.atoms)))
             for atom in self.atoms:

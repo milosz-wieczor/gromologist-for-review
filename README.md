@@ -5,6 +5,7 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
 
 - [Gromologist](#gromologist)
   * [Installation](#installation)
+  * [How to cite](#how-to-cite)
   * [Usage](#usage)
     + [Basic features](#basic-features)
         * [Reading and writing files](#reading-and-writing-files)
@@ -44,6 +45,15 @@ The latest "official" release can be obtained directly through `pip` by typing `
 To get the latest development version, first locally clone the git repo (`git clone https://gitlab.com/KomBioMol/gromologist.git`),
 then install the package into Python by typing `pip install .` in the main Gromologist directory.
 If you're using Anaconda, the same will work with `/path/to/anaconda/bin/pip`.
+
+Note that Gromologist has no explicit dependencies, although a few specific functionalities will require 
+basic scientific libraries such as `numpy` or `sklearn`.
+
+## How to cite
+<a name="how-to-cite"/>
+
+If you found Gromologist useful, cite our preprint! [Gromologist: a Gromacs-Oriented Utility Library for Structure and Topology Manipulation
+](https://chemrxiv.org/engage/chemrxiv/article-details/628bf40843d1f07e2e36c6e1)
 
 ## Usage
 <a name="usage"/>
@@ -444,7 +454,7 @@ This will introduce a term modifying the CT-HA Lennard-Jones interaction, increa
 (Lorenz-Berthelot) sigma by 0.01 nm, and decreasing the default epsilon by 0.1 kJ/mol.
 
 ##### Explicitly listing parameters in topology & finding missing parameters
-<a name="explicitly-listing-parameters-in-topology-&-finding-missing-parameters"/>
+<a name="explicitly-listing-parameters-in-topology---finding-missing-parameters"/>
 
 To explicitly include all parameters in sections `[ bonds ]`, `[ angles ]` and `[ dihedrals ]`,
 one can use:

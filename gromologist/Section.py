@@ -1453,7 +1453,7 @@ class SectionParam(Section):
         super().__init__(content_list, top)
         self.name = 'Parameters'
         self.defines = {}
-        self._merge()
+        # self._merge() ## TODO skip this until a general solution for block-ifs found
         self._get_defines()
     
     def _merge(self):

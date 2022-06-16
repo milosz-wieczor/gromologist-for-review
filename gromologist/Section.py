@@ -17,8 +17,23 @@ class Section:
     def __init__(self, content, top):
         self.name = 'System'
         self.top = top
+        self.conditional = 0
         self.dih_processed = False
-        self.subsections = [self._yield_sub(content) for content in self._split_content(content)]
+        self.subsections = []
+        content_split = self._split_content(content)
+        excess_if = 0
+        for cont in range(len(content_split)):
+            self.subsections.append(self._yield_sub(content_split[cont]))
+            if cont == 0:
+                self.subsections[-1].conditional = self.conditional
+            else:
+                excess_if += self.count_ifs(content_split[cont-1]) - self.count_ifs(content_split[cont-1], endif=True)
+                self.subsections[-1].conditional = self.conditional + excess_if
+            if self.subsections[-1].conditional > 0:
+                if isinstance(self.subsections[-1], gml.SubsectionParam):
+                    print(f"Subection {str(self.subsections[-1])} recognized as conditional, will not be merged")
+                else:
+                    print(f"Subection {str(self.subsections[-1])} recognized as conditional")
     
     def __repr__(self):
         return "{} section with {} subsections".format(self.name, len(self.subsections))
@@ -64,7 +79,16 @@ class Section:
             return gml.SubsectionParam(content, self)
         else:
             return gml.Subsection(content, self)
-        
+
+
+    @staticmethod
+    def count_ifs(content, endif=False):
+        if endif:
+            return len([ln for ln in content if ln.strip().startswith("#endif")])
+        else:
+            return len([ln for ln in content if ln.strip().startswith("#ifdef") or ln.strip().startswith("#ifndef")])
+
+
     def get_subsection(self, section_name):
         """
         Returns the specified subsection; we always need to run merge()
@@ -1453,7 +1477,7 @@ class SectionParam(Section):
         super().__init__(content_list, top)
         self.name = 'Parameters'
         self.defines = {}
-        # self._merge() ## TODO skip this until a general solution for block-ifs found
+        self._merge()
         self._get_defines()
     
     def _merge(self):
@@ -1462,13 +1486,13 @@ class SectionParam(Section):
         this fn merges them into single sections to avoid searching in all instances
         :return: None
         """
-        # TODO check for complete ifdef/endif entries, otherwise crash
         subsection_labels = [sub.label for sub in self.subsections]
         duplicated_subsections = list({label for label in subsection_labels if subsection_labels.count(label) > 1})
-        if duplicated_subsections:
-            self.top.print(f"Merging sections {', '.join(duplicated_subsections)} together")
         for sub in duplicated_subsections:
-            subsections_to_merge = [s for s in self.subsections if s.label == sub]
+            subsections_to_merge = [s for s in self.subsections if s.label == sub and not s.conditional]
+            if not subsections_to_merge:
+                continue
+            self.top.print(f"Merging sections {subsections_to_merge} together")
             merged_subsection = reduce(lambda x, y: x+y, subsections_to_merge)
             position = self.subsections.index(subsections_to_merge[0])
             self.subsections.insert(position, merged_subsection)

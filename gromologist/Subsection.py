@@ -15,6 +15,7 @@ class Subsection:
         :param section: a Section instance that contains this Subsection
         """
         self.section = section
+        self.conditional = False
         self.header = content[0].strip().strip('[]').strip()
         if ';' in self.header:
             pos = self.header.index(';')
@@ -81,7 +82,7 @@ class Subsection:
             return self.entries[n]
         except IndexError:
             raise StopIteration
-    
+
     def add_entry(self, new_entry, position=None):
         """
         Adds a single entry to the subsection, either at the end

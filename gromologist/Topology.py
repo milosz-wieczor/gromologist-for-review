@@ -378,6 +378,8 @@ class Top:
         special_lines.append(len(self._contents))
         for beg, end in zip(special_lines[:-1], special_lines[1:]):
             self.sections.append(self._yield_sec(self._contents[beg:end]))
+            excess_if = self.count_ifs(beg) - self.count_ifs(beg, endif=True)
+            self.sections[-1].conditional = excess_if
         # in case there are #defines at the very beginning (e.g. CHARMM36):
         for lnum in range(0, special_lines[0]):
             if not self._contents[lnum].lstrip().startswith(';') and self._contents[lnum].strip():
@@ -397,6 +399,19 @@ class Top:
             return gml.SectionMol(content, self)
         else:
             return gml.Section(content, self)
+
+    def count_ifs(self, linenum, endif=False):
+        """
+        Counts #if or #endif directives up to line linenum
+        :param linenum: int, line number
+        :param endif: bool, if True we're looking for #endif instead of #if
+        :return: int, number of directives found
+        """
+        if not endif:
+            return len([ln for ln in self._contents[:linenum] if
+                        ln.strip().startswith("#ifdef") or ln.strip().startswith("#ifndef")])
+        else:
+            return len([ln for ln in self._contents[:linenum] if ln.strip().startswith("#endif")])
 
     def read_system_properties(self):
         """

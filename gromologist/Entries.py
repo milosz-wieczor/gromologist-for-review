@@ -303,7 +303,7 @@ class EntryParam(Entry):
             try:
                 return self.format().format(*self.types, self.interaction_type, *self.modifiers, *self.params) +\
                        ' ' + self.comment + '\n'
-            except IndexError:
+            except:
                 print((*self.types, self.interaction_type, *self.modifiers, *self.params))
         else:
             return super().__str__()

@@ -627,10 +627,14 @@ class SectionMol(Section):
         :param del_in_pdb: bool, whether to also remove in the bound PDB file
         :return: None
         """
+        if atom_number > self.natoms:
+            raise RuntimeError(f"Can't remove atom {atom_number}, molecule only has {self.natoms} atoms")
         self._del_atom(atom_number)
         self._del_params(atom_number)
         self.offset_numbering(-1, atom_number)
         self.update_dicts()
+        # checking correct numbers, can add more checks in the future
+        self._check_correct()
         if del_in_pdb:
             if self.top.pdb:
                 for to_remove in self._match_pdb_to_top(atom_number):
@@ -748,6 +752,13 @@ class SectionMol(Section):
                         to_del.append(entry)
                 for entry in to_del:
                     subsection.entries.remove(entry)
+            except KeyError:
+                pass
+
+    def _check_correct(self):
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
+            try:
+                subsection = self.get_subsection(subs)
                 for entry in subsection.entries_bonded:
                     if any([e > self.natoms for e in entry.atom_numbers]):
                         raise RuntimeError(f"Entry {entry} is invalid, only {self.natoms} atoms in the system")

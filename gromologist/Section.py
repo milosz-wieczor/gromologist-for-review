@@ -807,6 +807,7 @@ class SectionMol(Section):
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap', 'position_restraints']:
             # TODO merge all subsections
             # TODO need a more consistent treatment of impropers
+            # TODO check for a "conditional" attribute of a section
             try:
                 subsection_other = other.get_subsection(subs)
                 subsection_own = self.get_subsection(subs)
@@ -837,7 +838,7 @@ class SectionMol(Section):
             except KeyError:
                 other.subsections.append(self._yield_sub([f"[ {sub} ]\n"]))
 
-    def _remove_bond(self, at1, at2):
+    def remove_bond(self, at1, at2):
         self._get_bonds()
         bond_to_remove = [(at1, at2)]
         if not (bond_to_remove[0] in self.bonds or tuple(x for x in bond_to_remove[0][::-1]) in self.bonds):
@@ -920,6 +921,11 @@ class SectionMol(Section):
                           if (a, b) in self.bonds or (b, a) in self.bonds]
         new_dihedrals += [(atom_own, atom_other, c, d) for d in neigh_atoms_21 for c in neigh_atoms_2
                           if (c, d) in self.bonds or (d, c) in self.bonds]
+        # cleanup same-1-4 cases for 3-membered rings etc
+        # TODO also remove pairs for 4- and 5-membered rings
+        # TODO make sure there are no replicates wrt existing terms
+        new_pairs = [pair for pair in new_pairs if pair[0] != pair[-1]]
+        new_dihedrals = [dih for dih in new_dihedrals if dih[0] != dih[-1]]
         return new_pairs, new_dihedrals
     
     def add_ff_params(self, add_section='all', force_all=False):
@@ -1463,7 +1469,7 @@ class SectionMol(Section):
         charge = 0
         for atom in self.atoms:
             charge += atom.charge
-            atom.comment = f'qtot {charge:.3:f}'
+            atom.comment = f'qtot {charge:.3f}'
 
 
 class SectionParam(Section):

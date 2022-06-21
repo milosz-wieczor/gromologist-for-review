@@ -743,12 +743,14 @@ class SectionMol(Section):
             try:
                 subsection = self.get_subsection(subs)
                 to_del = []
-                for entry in subsection:
-                    if isinstance(entry, gml.EntryBonded):
-                        if atom_number in entry.atom_numbers:
-                            to_del.append(entry)
+                for entry in subsection.entries_bonded:
+                    if atom_number in entry.atom_numbers:
+                        to_del.append(entry)
                 for entry in to_del:
                     subsection.entries.remove(entry)
+                for entry in subsection.entries_bonded:
+                    if any([e > self.natoms for e in entry.atom_numbers]):
+                        raise RuntimeError(f"Entry {entry} is invalid, only {self.natoms} atoms in the system")
             except KeyError:
                 pass
     

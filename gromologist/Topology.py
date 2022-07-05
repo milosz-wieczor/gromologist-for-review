@@ -537,6 +537,12 @@ class Top:
             mol.recalc_qtot()
 
     def solute_tempering(self, temperatures, molecules):
+        """
+        Prepares .top files for REST2
+        :param temperatures: list of float, set of "fake" temperatures for REST2 (lowest should be first)
+        :param molecules: list of int, indices of molecules that will have their parameters modified
+        :return: None
+        """
         self.explicit_defines()
         for n, t in enumerate(temperatures):
             self.print(f'generating topology for effective temperature of {t} K...')

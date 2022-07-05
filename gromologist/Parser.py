@@ -22,6 +22,9 @@ class SelectionParser:
             return True
     
     def __call__(self, selection_string):
+        while "  " in selection_string:
+            selection_string = selection_string.replace("  ", " ")
+        selection_string = selection_string.strip()
         protein_selection = "resname ALA ACE CYS ASP ASPP GLU GLUP PHE GLY HIS HID HIE HSD HSE ILE LYS LEU MET " \
                             "NME NMA ASN PRO GLN ARG SER THR VAL TRP"
         dna_selection = "resname DA DG DC DT DA5 DG5 DC5 DT5 DA3 DG3 DC3 DT3"
@@ -35,10 +38,11 @@ class SelectionParser:
         selection_string = selection_string.replace('rna', rna_selection)
         return sorted(list(self._select_set_atoms(selection_string)))
     
-    def _select_set_atoms(self, selection_string, ):
+    def _select_set_atoms(self, selection_string):
         """
-        :param selection_string: str
-        :return:
+        Main recursive fn taking care of stratifying the input
+        :param selection_string: str, selection string
+        :return: list of int, output atom indices
         """
         assert isinstance(selection_string, str)
         parenth_ranges, operators = self._parse_sel_string(selection_string)
@@ -61,9 +65,18 @@ class SelectionParser:
             elif first_op == "or":
                 return self._select_set_atoms(selection_string[:operators[0][0]]) \
                     .union(self._select_set_atoms(selection_string[operators[0][1]:]))
+            elif first_op.startswith("same"):
+                return self.master.same_residue_as(self._select_set_atoms(selection_string[operators[0][1]:]))
+            elif first_op.startswith("within") or first_op.startswith("pbwithin"):
+                if not self.ispdb(self.master):
+                    raise ValueError("the within keyword only works for structural data, not topology")
+                nopbc = False if first_op == "pbwithin" else True
+                within = float([x for x in first_op.split() if x.isnumeric()][0])
+                return self.master.within(self._select_set_atoms(selection_string[operators[0][1]:]), within, nopbc=nopbc)
     
     @staticmethod
     def _parse_sel_string(selection_string):
+        # TODO add same residue as, within ... of, pbwithin ... of as operators
         parenth_ranges = []
         operators = []
         opened_parenth = 0
@@ -85,23 +98,17 @@ class SelectionParser:
                 operators.append((nc, nc + 5))
             if selection_string[nc:nc + 4] == " or " and opened_parenth == 0:
                 operators.append((nc, nc + 4))
+            if (selection_string[nc:nc + 7] == "within " or selection_string[nc:nc + 9] == "pbwithin ") and opened_parenth == 0:
+                ending = selection_string.find(" of")
+                operators.append((nc, ending + 4))
+            if selection_string[nc:nc+16] == "same residue as ":
+                operators.append((nc, nc + 16))
         if opened_parenth != 0:
             raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
         return parenth_ranges, operators
     
     def _find_atoms(self, sel_string, rev=False):
         chosen = []
-        same = False
-        within = False
-        if ' '.join(sel_string.split()[:3]) == "same residue as":
-            sel_string = ' '.join(sel_string.split()[3:])
-            same = True
-        if sel_string.split()[0] == 'within' and sel_string.split()[2] == 'of':
-            within = (float(sel_string.split()[1]), False)
-            sel_string = ' '.join(sel_string.split()[3:])
-        elif sel_string.split()[0] == 'pbwithin' and sel_string.split()[2] == 'of':
-            within = (float(sel_string.split()[1]), True)
-            sel_string = ' '.join(sel_string.split()[3:])
         keyw = sel_string.split()[0]
         if self.ispdb(self.master):
             matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
@@ -129,14 +136,4 @@ class SelectionParser:
             else:
                 if a.__getattribute__(matchings[keyw]) not in vals:
                     chosen.append(n)
-        
-        if same:
-            chosen = self.master.same_residue_as(chosen)  # TODO implement for SectMol
-        if within and self.ispdb(self.master):
-            if within[1]:
-                chosen = self.master.within(chosen, within, nopbc=False)
-            else:
-                chosen = self.master.within(chosen, within, nopbc=True)
-        if within and not self.ispdb(self.master):
-            raise ValueError("the within keyword only works for structural data, not topology")
         return set(chosen)

@@ -62,6 +62,10 @@ class Pdb:
         if self.top and not self.top.pdb:
             self.top.pdb = self
 
+    @property
+    def natoms(self):
+        return len(self.atoms)
+
     @classmethod
     def from_selection(cls, pdb, selection):
         """
@@ -114,7 +118,7 @@ class Pdb:
         chains = list({a.chain.strip() for a in self.atoms if a.atomname == 'CA'})
         sequences = []
         if not chains:
-            print("No chains in the molecule, run Pdb.add_chains() first")
+            print("No protein chains in the molecule, run Pdb.add_chains() first")
             return
         for ch in sorted(chains):
             cas = set(self.get_atom_indices(f'name CA and chain {ch}'))
@@ -147,7 +151,7 @@ class Pdb:
         mapping.update(Pdb.nucl_map)
         chains = list({a.chain.strip() for a in self.atoms if a.atomname == "O4'"})
         if not chains:
-            print("No chains in the molecule, run Pdb.add_chains() first")
+            print("No nucleic acid chains in the molecule, run Pdb.add_chains() first")
             return
         for ch in sorted(chains):
             cas = set(self.get_atom_indices(f"name O4' and chain {ch}"))
@@ -261,6 +265,17 @@ class Pdb:
                         if base_char > 90:
                             return
 
+    def list_atoms(self, selection=None):
+        """
+        Prints atoms in the structure, optionally
+        only the subset corresponding to the selection
+        :param selection: str, selection to be printed, default is None
+        :return: None
+        """
+        atoms = self.atoms if selection is None else self.get_atoms(selection)
+        for a in atoms:
+            print(self._write_atom(a).strip())
+
     def check_top(self, maxwarn=20, fix_pdb=False, fix_top=False):
         """
         Checks the structure against the associated topology to identify
@@ -277,7 +292,6 @@ class Pdb:
         index, err = 0, 0
         self._remove_altloc()
         for atom_top, atom_pdb in zip(self.top.atoms, self.atoms):
-            index += 1
             try:
                 rtrn = self._check_mismatch(atom_top, atom_pdb, atom_top.molname)
             except IndexError:
@@ -342,14 +356,14 @@ class Pdb:
                     mol = identify(a)
             else:
                 if a.resnum != res:
-                    if len(mol) >= 1 and mol == mol_list[-1][0]:
+                    if len(mol) >= 1 and mol_list and mol == mol_list[-1][0]:
                         mol_list[-1][1] += 1
                     else:
                         mol_list.append([mol, 1])
                     mol = identify(a)
                     chain = a.chain
             res = a.resnum
-        if len(mol) >= 1 and mol == mol_list[-1][0]:
+        if len(mol) >= 1 and mol_list and mol == mol_list[-1][0]:
             mol_list[-1][1] += 1
         else:
             mol_list.append([mol, 1])
@@ -437,21 +451,25 @@ class Pdb:
         for n, atom in enumerate(ats, offset):
             atom.serial = n
 
-    def renumber_residues(self, offset=1, selection=None):
+    def renumber_residues(self, offset=1, selection=None, per_chain=False):
         """
         Consecutively renumbers all residues in the structure
         :param offset: int, number of the first residue to be set
         :param selection: str, will only renumber residues matching the selection
+        :param per_chain: bool, whether numbering of each chain should start from `offset`
         :return: None
         """
         count = offset
         ats = range(len(self.atoms)) if selection is None else self.get_atom_indices(selection)
         for n in ats:
+            if per_chain and n > 1 and self.atoms[n].chain != self.atoms[n-1].chain:
+                count = offset
             temp = count
             try:
                 if self.atoms[n].resnum != self.atoms[n + 1].resnum or self.atoms[n].chain != self.atoms[n + 1].chain:
                     # avoid resnum==10000 as it gets written as 0 and causes problems:
                     temp = count + 1 if not (count + 1 % 10000 == 0) else count + 2
+                    # TODO fix the above to work with residue numbers like -1, -2 etc.
             except IndexError:
                 pass
             self.atoms[n].resnum = count
@@ -500,14 +518,15 @@ class Pdb:
             raise ValueError("a Top object has not been assigned; molecule info missing")
         new_atoms = []
         index = 0
+        # TODO is arange here working at all?
         for mol_name in self.top.system.keys():
             mol = self.top.get_molecule(mol_name)
             n_mols = self.top.system[mol_name]
             atom_subsection = mol.get_subsection('atoms')
             atom_entries = [e for e in atom_subsection if isinstance(e, gml.EntryAtom)]
-            for _ in arange(n_mols):
+            for _ in range(n_mols):
                 for a in atom_entries:
-                    if not arange or arange[0] <= index < arange[1]:
+                    if arange is None or arange[0] <= index < arange[1]:
                         pdb_loc = self.get_atom_indices("resname {} and resid {} and name {}".format(a.resname, a.resid,
                                                                                                      a.atomname))
                         pdb_loc = [loc for loc in pdb_loc if not arange or arange[0] <= index < arange[1]]
@@ -540,6 +559,7 @@ class Pdb:
         """
         base_atom = self.get_atom(hooksel)
         new_atom = Atom(self._write_atom(base_atom))
+        kwargs.update({"atomname": name})
         for kw in kwargs.keys():
             if kw not in {"serial", "atomname", "resname", "chain", "resnum", "x", "y", "z", "occ", "beta", "element"}:
                 raise ValueError("{} is not a valid Atom attribute")
@@ -547,7 +567,8 @@ class Pdb:
         self.atoms.insert(serial-1, new_atom)
         if renumber:
             self.renumber_atoms()
-        atomsel = f'name {name} and resid {base_atom.resnum} and resname {base_atom.resname}'
+        rname = base_atom.resname if "resname" not in kwargs.keys() else kwargs["resname"]
+        atomsel = f'name {name} and resid {base_atom.resnum} and resname {rname}'
         if (atomsel is not None and hooksel is not None and bondlength is not None and
                 ((p1_sel is not None and p2_sel is not None) or vector is not None)):
             self.reposition_atom_from_hook(atomsel, hooksel, bondlength, p1_sel, p2_sel, vector)
@@ -652,6 +673,12 @@ class Pdb:
 
     @staticmethod
     def _atoms_dist(at1, at2):
+        """
+        Calculates the (non-PBC-corrected) distance between atoms at1 and at2
+        :param at1: Atom, 1st atom defining the distance
+        :param at2: Atom, 2nd atom defining the distance
+        :return: float, distance
+        """
         return ((at2.x - at1.x) ** 2 + (at2.y - at1.y) ** 2 + (at2.z - at1.z) ** 2) ** 0.5
 
     def _atoms_dist_pbc(self, at1, at2):
@@ -1009,14 +1036,16 @@ class Pdb:
         try:
             import numpy as np
         except ImportError:
-            # TODO implement a numpy-free version
-            raise RuntimeError("This functionality requires numpy to be present")
+            for n, atom in enumerate(self.atoms):
+                dists = [self._atoms_dist(atom, at) for at in self.atoms]
+                selected = [self.atoms[m].serial for m, a in enumerate(dists) if 0.1 < a < cutoff]
+                self.conect[atom.serial] = selected
         else:
             coords = np.array(self.get_coords())
             for n, atom in enumerate(self.atoms):
                 dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
-                selected = list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0] + 1)
-                self.conect[n + 1] = selected
+                selected = [self.atoms[i].serial for i in list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0])]
+                self.conect[atom.serial] = selected
 
     def set_beta(self, values, selection=None, smooth=False, ignore_mem=False):
         """

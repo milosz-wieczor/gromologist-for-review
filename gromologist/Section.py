@@ -32,6 +32,10 @@ class Section:
             if self.subsections[-1].conditional > 0:
                 if isinstance(self.subsections[-1], gml.SubsectionParam):
                     print(f"Subection {str(self.subsections[-1])} recognized as conditional, will not be merged")
+                elif isinstance(self.subsections[-1], gml.SubsectionBonded) \
+                        or isinstance(self.subsections[-1], gml.SubsectionAtom):
+                    print(f"Subection {str(self.subsections[-1])} "
+                          f"in molecule {str(self.subsections[-1].section.subsections[0].entries[1]).split()[0]} recognized as conditional")
                 else:
                     print(f"Subection {str(self.subsections[-1])} recognized as conditional")
     
@@ -1009,7 +1013,13 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
-    def add_posres(self, keyword, value):
+    def add_posres(self, keyword='POSRES', value=500):
+        """
+        Adds a position restraint section to the topology
+        :param keyword: conditional keyword that will be used in the #ifdef directive, default is POSRES
+        :param value: value of the force constant, default is 500
+        :return: None
+        """
         try:
             _ = self.get_subsection('position_restraints')
         except KeyError:
@@ -1288,6 +1298,7 @@ class SectionMol(Section):
     def _list_bonded(self, term, by_types, by_params, returning):
         self.update_dicts()
         subsection = self.get_subsection(term)
+        tried_adding = False
         returnable = []
         formatstring = {'bonds': "{:>5s} {:>5s}", 'angles': "{:>5s} {:>5s} {:>5s}",
                         'dihedrals': '{:>5s} {:>5s} {:>5s} {:>5s}', 'impropers': '{:>5s} {:>5s} {:>5s} {:>5s}'}
@@ -1298,6 +1309,9 @@ class SectionMol(Section):
                     extra = ''
                     params = []
                 else:
+                    if not entry.params_state_a and not tried_adding:
+                        self.top.add_ff_params()
+                        tried_adding = True
                     extra = '{:>12.5f} ' * len(entry.params_state_a)
                     params = entry.params_state_a
                 if not returning:

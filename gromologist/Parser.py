@@ -122,7 +122,23 @@ class SelectionParser:
             if " to " in sel_string:
                 beg = int(sel_string.split()[1])
                 end = int(sel_string.split()[3])
-                vals = set(range(beg, end + 1))
+                vals = range(beg, end + 1)
+            elif "<=" in sel_string:
+                beg = 0
+                end = int(sel_string.split('<=')[1].strip())
+                vals = range(beg, end + 1)
+            elif ">=" in sel_string:
+                beg = int(sel_string.split('>=')[1].strip())
+                end = 10**7
+                vals = range(beg, end)
+            elif "<" in sel_string:
+                beg = 0
+                end = int(sel_string.split('<')[1].strip())
+                vals = range(beg, end)
+            elif ">" in sel_string:
+                beg = int(sel_string.split('>')[1].strip())
+                end = 10**7
+                vals = range(beg+1, end)
             else:
                 vals = set(sel_string.split()[1:])
         try:

@@ -66,6 +66,10 @@ class Pdb:
     def natoms(self):
         return len(self.atoms)
 
+    @property
+    def chains(self):
+        return sorted({a.chain for a in self.atoms})
+
     @classmethod
     def from_selection(cls, pdb, selection):
         """
@@ -662,13 +666,27 @@ class Pdb:
         :return: set, a broadened list of atom indices
         """
         new_list = []
+        use_numpy = False
+        dist_array = None
+        try:
+            import numpy as np
+        except ImportError:
+            pass
+        else:
+            use_numpy = True
+            dist_array = np.array(self.get_coords())
         for n, atom in enumerate(self.atoms):
             if nopbc:
-                if any([self._atoms_dist(atom, self.atoms[query]) <= threshold for query in query_iter]):
-                    new_list.append(n)
+                if not use_numpy:
+                    if any([self._atoms_dist(atom, self.atoms[query]) <= threshold for query in query_iter]):
+                        new_list.append(n)
             else:
                 if any([self._atoms_dist_pbc(atom, self.atoms[query]) <= threshold for query in query_iter]):
                     new_list.append(n)
+        if nopbc and use_numpy:
+            for n in query_iter:
+                vecs = np.linalg.norm(dist_array - dist_array[n, :], axis=1)
+                new_list.extend(list(np.where(vecs <= threshold)[0]))
         return set(new_list)
 
     @staticmethod

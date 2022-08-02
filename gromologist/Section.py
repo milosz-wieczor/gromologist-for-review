@@ -162,7 +162,7 @@ class SectionMol(Section):
                 reslist.append(f'{at.resname}-{at.resid}')
         return reslist
 
-    def set_type(self, type_to_set, atomname, resname=None):
+    def set_type(self, type_to_set, atomname, resname=None, resid=None, prefix=None):
         if resname is None:
             resnames = list({a.resname for a in self.atoms})
         else:
@@ -170,10 +170,19 @@ class SectionMol(Section):
                 resnames = resname
             else:
                 resnames = [resname]
+        if resid is None:
+            resids = list({a.resid for a in self.atoms})
+        else:
+            if isinstance(list, resid) or isinstance(tuple, resid):
+                resids = resid
+            else:
+                resids = [resid]
         for a in self.atoms:
-            for rname in resnames:
-                if a.resname == rname and a.atomname == atomname:
+            if a.resname in resnames and a.atomname == atomname and a.resid in resids:
+                if prefix is None:
                     a.type = type_to_set
+                else:
+                    a.type = prefix + a.type
 
     def select_atoms(self, selection_string):
         """
@@ -829,6 +838,7 @@ class SectionMol(Section):
                 subsection_other = other.get_subsection(subs)
                 subsection_own = self.get_subsection(subs)
                 subsection_own.add_entries([entry for entry in subsection_other if entry])
+                subsection_other.section = subsection_own.section
                 self.top.print(f"Merging sections {subs} from two molecules")
             except KeyError:
                 pass
@@ -983,7 +993,7 @@ class SectionMol(Section):
         return used_params
 
     def find_missing_ff_params(self, add_section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False,
-                               once=False):
+                               fix_dummy=False, once=False):
         if add_section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
@@ -997,7 +1007,7 @@ class SectionMol(Section):
             else:
                 for ssub in subsections:
                     print(f"Searching in molecule {self.mol_name}, section {ssub}...")
-                    ssub.find_missing_ff_params(fix_by_analogy, fix_B_from_A, fix_A_from_B, once)
+                    ssub.find_missing_ff_params(fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy, once)
         del self.printed
 
     def label_types(self, add_section='all'):

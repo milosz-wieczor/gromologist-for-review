@@ -265,13 +265,15 @@ class SubsectionBonded(Subsection):
                                 pass
         return entries
 
-    def find_missing_ff_params(self, fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False, once=False):
+    def find_missing_ff_params(self, fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False, fix_dummy=False,
+                               once=False):
         """
         Identifies FF parameters that cannot by matched to the existing set of
         bonded interactions, allowing to find & target these for fixing
         :param fix_by_analogy: dict, tells how to choose new parameters from existing equivalent types
         :param fix_B_from_A: bool, chooses missing parameters assuming B-state should have similar types to A-state
         :param fix_A_from_B: bool, chooses missing parameters assuming A-state should have similar types to B-state
+        :param fix_dummy: bool, adds dummy (all-0) parameters
         :param once: bool, only shows the missing parameter once if repeated
         :return: None
         """
@@ -280,9 +282,11 @@ class SubsectionBonded(Subsection):
         subsect_params = [sub for sub in self.section.top.parameters.subsections if
                           sub.header == matchings[self.header]]
         for entry in self.entries_bonded:
-            self._find_missing_ff_params(entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B, once)
+            self._find_missing_ff_params(entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy,
+                                         once)
 
-    def _find_missing_ff_params(self, entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B, once):
+    def _find_missing_ff_params(self, entry, subsect_params, fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy,
+                                once):
         if (entry.params_state_a and entry.params_state_b) or (entry.params_state_a and not entry.types_state_b):
             return
         int_type = entry.interaction_type
@@ -302,6 +306,9 @@ class SubsectionBonded(Subsection):
                 candid = self._fix_by_analogy(fix_by_analogy, entry.types_state_a, subsect_params, int_type)
                 if candid:
                     entry.params_state_a = candid
+            if fix_dummy:
+                entry.params_state_a = [0.0 for _ in gml.EntryBonded.fstr_suff[(self.header, self.prmtype)]]
+                print("setting dummy parameters: " + str(entry))
         if entry.types_state_b and not entry.params_state_b:
             for subsections in subsect_params:
                 for parm_entry in subsections.entries_param:

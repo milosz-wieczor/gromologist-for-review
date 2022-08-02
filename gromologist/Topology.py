@@ -149,7 +149,7 @@ class Top:
             mol.add_ff_params(add_section=section)
 
     def find_missing_ff_params(self, section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False,
-                               once=False):
+                               fix_dummy=False, once=False):
         """
         Identifies FF parameters that are not defined in sections
         'bondtypes', angletypes', ...; if required, will attempt to
@@ -158,11 +158,12 @@ class Top:
         :param fix_by_analogy: dict, if set, will attempt to use params by analogy, matching key types to value types
         :param fix_B_from_A: bool, will assign params for state B from state A
         :param fix_A_from_B: bool, will assign params for state A from state B
+        :param fix_dummy: bool, will assign zeros as parameters
         :param once: bool, will only print a given missing term once per molecule
         :return: None
         """
         for mol in self.molecules:
-            mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B, once=once)
+            mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy, once=once)
 
     def add_posres(self, keyword='POSRES', value=1000):
         for mol in self.molecules:

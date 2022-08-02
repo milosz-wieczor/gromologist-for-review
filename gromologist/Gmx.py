@@ -1,8 +1,11 @@
 from subprocess import run, PIPE
 import os
+import gromologist as gml
+from typing import Optional, Iterable
 
 
-def gmx_command(gmx_exe, command='grompp', answer=False, pass_values=None, quiet=False, **params):
+def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pass_values: Optional[Iterable] = None,
+                quiet: bool = False, **params) -> str:
     """
     Runs the specified gmx command, optionally passing keyworded or stdin arguments
     :param gmx_exe: str, a gmx executable
@@ -25,7 +28,7 @@ def gmx_command(gmx_exe, command='grompp', answer=False, pass_values=None, quiet
         return result.stdout.decode() + result.stderr.decode()
 
 
-def gen_mdp(fname, runtype='md', **extra_args):
+def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
     """
     Produces a default .mdp file for the rerun
     :param fname: str, name of the output file
@@ -50,7 +53,7 @@ def gen_mdp(fname, runtype='md', **extra_args):
         outfile.write(mdp)
 
 
-def read_xvg(fname):
+def read_xvg(fname: str) -> list:
     """
     Reads an .xvg file into a 2D list
     :param fname: str, .xvg file to read
@@ -60,7 +63,7 @@ def read_xvg(fname):
     return content
 
 
-def get_legend(gmx, fname):
+def get_legend(gmx: str, fname: str) -> dict:
     """
     Performs a dummy run of gmx energy to read the matching between terms and numbers
     :param gmx: str, path to the gmx executable
@@ -69,11 +72,37 @@ def get_legend(gmx, fname):
     """
     pp = run([gmx, 'energy', '-f', fname], input=b'0\n', stderr=PIPE, stdout=PIPE)
     output = pp.stderr.decode().split()
-    return {output[i+1].lower(): int(output[i]) for i in range(output.index('1'), len(output), 2)
+    return {output[i + 1].lower(): int(output[i]) for i in range(output.index('1'), len(output), 2)
             if output[i].isnumeric()}
 
 
-def calc_gmx_energy(struct, topfile, gmx='', quiet=False, traj=None, terms='potential', cleanup=True):
+def ndx(struct: gml.Pdb, selections: list, fname: str = 'gml.ndx') -> list:
+    """
+    Writes a .ndx file with groups g1, g2, ... defined by the
+    list of selections passed as input
+    :param struct: gml.Pdb, a structure file
+    :param selections: list of str, selections compatible with `struct`
+    :param fname: str, name of the resulting .ndx file
+    :return: list of str, names of the group
+    """
+    groups = []
+    group_names = []
+    for n, sel in enumerate(selections, 1):
+        groups.append([x + 1 for x in struct.get_atom_indices(sel)])
+        group_names.append(f'g{n}')
+    with open(fname, 'w') as out:
+        for gname, gat in zip(group_names, groups):
+            out.write(f'{gname}\n')
+            for n, at in enumerate(gat):
+                out.write(f'{at:8d}')
+                if n % 15 == 14:
+                    out.write('\n')
+    return group_names
+
+
+def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = False, traj: Optional[str] = None,
+                    terms: str = 'potential', cleanup: bool = True, group_a: Optional[str] = None,
+                    group_b: Optional[str] = None) -> dict:
     """
     Calculates selected energy terms given a structure/topology pair or structure/topology/trajectory set.
     :param struct: str, path to the structure file
@@ -83,6 +112,8 @@ def calc_gmx_energy(struct, topfile, gmx='', quiet=False, traj=None, terms='pote
     :param traj: str, path to the trajectory (optional)
     :param terms: str or list, terms which will be calculated according to gmx energy naming (can also be "all")
     :param cleanup: bool, whether to remove intermediate files (useful for debugging)
+    :param group_a: str, selection defining group A to calculate interactions between group A and B
+    :param group_b: str, selection defining group B to calculate interactions between group A and B
     :return: dict of lists, one list of per-frame values per each selected term
     """
     if not gmx:
@@ -91,8 +122,13 @@ def calc_gmx_energy(struct, topfile, gmx='', quiet=False, traj=None, terms='pote
         gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
     if not gmx:
         gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
-    gen_mdp('rerun.mdp')
-    gmx_command(gmx, 'grompp', quiet=quiet,  f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5)
+    if group_a and group_b:
+        group_names = ndx(gml.Pdb(struct), [group_a, group_b])
+        gen_mdp('rerun.mdp', energygrps=f"{group_names[0]} {group_names[1]} ")
+        gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5, n='gml.ndx')
+    else:
+        gen_mdp('rerun.mdp')
+        gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5)
     gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj)
     legend = get_legend(gmx, 'rerun.edr')
     if terms == 'all':
@@ -106,6 +142,25 @@ def calc_gmx_energy(struct, topfile, gmx='', quiet=False, traj=None, terms='pote
     gmx_command(gmx, 'energy', quiet=quiet, pass_values=passv, f='rerun')
     out = read_xvg('energy.xvg')
     if cleanup:
-        for filename in ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log', 'energy.xvg']:
+        to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log', 'energy.xvg']
+        if group_a and group_b:
+            to_remove.append('gml.ndx')
+        for filename in to_remove:
             os.remove(filename)
     return {term: [o[onum] for o in out] for term, onum in zip(terms, range(len(out[0])))}
+
+
+def diff(tops: list, trajs: list, modfile: str):
+    """
+
+    :param tops:
+    :param trajs:
+    :param modfile:
+    :return:
+    """
+    mods = gml.Mod.read_modfile(modfile)
+    for mod in mods:
+        mod.goto_mydir()
+        mod.save_mod('x', 'y')
+
+

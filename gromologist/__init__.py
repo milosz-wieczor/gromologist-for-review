@@ -7,3 +7,4 @@ from gromologist.DihOpt import DihOpt
 from gromologist.Gmx import *
 from gromologist.Parser import SelectionParser
 from gromologist.Mutant import ProteinMutant
+from gromologist.ThDiff import *

@@ -33,7 +33,7 @@ def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
     Produces a default .mdp file for the rerun
     :param fname: str, name of the output file
     :param runtype: str, "mini" for minimization or anything else for dynamics
-    :param extra_args: dict, optional extra parameter: value pairs (will overwrite defaults)
+    :param extra_args: dict, optional extra parameter: value pairs (will overwrite defaults); use __ for -
     :return: None
     """
     mdp_defaults = {"integrator": "sd", "nstcomm": 100, "nstenergy": 5000, "nstlog": 5000, "nstcalcenergy": 100,
@@ -47,19 +47,29 @@ def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
     mini_defaults = {"integrator": "steep", "nsteps": 1000, "emtol": 200, "emstep": 0.001, "nstlist": 10,
                      "pbc": "xyz", "coulombtype": "PME", "vdw-type": "Cut-off"}
     mdp_defaults.update(extra_args)
+    for key in list(mdp_defaults.keys()):
+        if '__' in key:
+            mdp_defaults[key.replace('__', '-')] = mdp_defaults[key]
+            del mdp_defaults[key]
     default = mini_defaults if runtype == 'mini' else mdp_defaults
     mdp = '\n'.join([f"{param} = {value}" for param, value in default.items()])
     with open(fname, 'w') as outfile:
         outfile.write(mdp)
 
 
-def read_xvg(fname: str) -> list:
+def read_xvg(fname: str, cols: Optional[list] = None) -> list:
     """
     Reads an .xvg file into a 2D list
     :param fname: str, .xvg file to read
+    :param cols: list of int, columns to select
     :return: list of lists, numeric data from the .xvg file
     """
     content = [[float(x) for x in line.split()[1:]] for line in open(fname) if not line.startswith(('#', '@'))]
+    if cols is not None:
+        if len(cols) == 1:
+            content = [line[cols[0]] for line in content]
+        else:
+            content = [[line[x] for x in cols] for line in content]
     return content
 
 
@@ -148,6 +158,36 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
         for filename in to_remove:
             os.remove(filename)
     return {term: [o[onum] for o in out] for term, onum in zip(terms, range(len(out[0])))}
+
+
+def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bool = False,
+                  cleanup: bool = True) -> list:
+    """
+    Calculates selected energy terms given a structure/topology pair or structure/topology/trajectory set.
+    :param struct: str, path to the structure file
+    :param topfile: str, path to the topology file
+    :param gmx: str, path to the gmx executable (if not found in the $PATH)
+    :param quiet: bool, whether to print gmx output to the screen
+    :param traj: str, path to the trajectory (optional)
+    :param cleanup: bool, whether to remove intermediate files (useful for debugging)
+    :return: dict of lists, one list of per-frame values per each selected term
+    """
+    if not gmx:
+        gmx = os.popen('which gmx 2> /dev/null').read().strip()
+    if not gmx:
+        gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
+    if not gmx:
+        gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
+    gen_mdp('rerun.mdp', free__energy="yes", fep__lambdas="0 1", nstdhdl="1", separate__dhdl__file="yes",
+            dhdl__derivatives="yes", init__lambda__state="0")
+    gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5)
+    gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj)
+    out = read_xvg('rerun.xvg', cols=[0])
+    if cleanup:
+        to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log']
+        for filename in to_remove:
+            os.remove(filename)
+    return out
 
 
 def diff(tops: list, trajs: list, modfile: str):

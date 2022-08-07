@@ -340,7 +340,6 @@ class ModParam(Mod):
 
 
 class ThermoDiff:
-    # TODO implement scaling by dpar
     def __init__(self, temperature=300):
         self.mods = []
         self.temperature = temperature
@@ -604,13 +603,13 @@ class ThermoDiff:
                         mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n]
                         mean_data[state_index] += deriv_data[n]
             if free_energy:
-                self.discrete_free_energy_derivatives[(str(mod), dataset)] = mean_derivatives
+                self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar for x in mean_derivatives.keys()]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
                     mean_obs[key] = (1/0.008314*self.temperature) * (
                             mean_data[key] * mean_derivatives[key] - mean_product[key])
-                self.discrete_observable_derivatives[(str(mod), dataset)] = mean_obs
+                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / mod.dpar for x in mean_obs.keys()]
 
     def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50,
                                  cv_dataset: Optional[str] = None):
@@ -638,10 +637,10 @@ class ThermoDiff:
                             mean_product[0.5*(x+y)] += deriv_data[n] * weights[n] * derivs[n]
                             mean_data[0.5*(x+y)] += deriv_data[n]
             if free_energy:
-                self.profile_free_energy_derivatives[(str(mod), dataset)] = mean_derivatives
+                self.profile_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar for x in mean_derivatives.keys()]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
                     mean_obs[key] = (1 / 0.008314 * self.temperature) * (
                                 mean_data[key] * mean_derivatives[key] - mean_product[key])
-                self.profile_observable_derivatives[(str(mod), dataset)] = mean_obs
+                self.profile_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / mod.dpar for x in mean_obs.keys()]

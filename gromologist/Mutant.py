@@ -1,3 +1,5 @@
+from typing import Tuple
+
 class ProteinMutant:
     # W > Z -> not working
     map_pro = {'ALA': 'A', 'ASH': 'B', 'ASPP': 'B', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E',
@@ -8,7 +10,7 @@ class ProteinMutant:
                'I': 'ILE', 'J': 'GLH', 'K': 'LYS', 'L': 'LEU', 'M': 'MET', 'N': 'ASN', 'P': 'PRO', 'Q': 'GLN',
                'R': 'ARG', 'S': 'SER', 'T': 'THR', 'V': 'VAL', 'W': 'TRP', 'Y': 'TYR'}
 
-    def __init__(self, orig, target):
+    def __init__(self, orig: str, target: str):
         try:
             target_1l = target if len(target) == 1 else ProteinMutant.map_pro[target]
         except KeyError:
@@ -38,7 +40,12 @@ class ProteinMutant:
         if self.name[0] == 'P':
             self.add_to_target.append('PH')
 
-    def atoms_to_add(self):
+    def atoms_to_add(self) -> Tuple[list, list, list, list, list, list]:
+        """
+        For each atom group, identifies a set of atoms, bonds, anchors etc.
+        that have to be included when implementing the mutation
+        :return: tuple of lists, the required changes
+        """
         # TODO make sure HA1/HA2 are properly assigned in GLY
         atoms = []
         hooks = []
@@ -60,7 +67,12 @@ class ProteinMutant:
                 afters.append(gafters[n])
         return atoms, hooks, geo_refs, bond_lengths, topo_bonds, afters
 
-    def atoms_to_remove(self):
+    def atoms_to_remove(self) -> list:
+        """
+        For each atom group, identifies a set of atoms
+        that have to be removed when implementing the mutation
+        :return:
+        """
         atoms = []
         for i in self.remove_from_orig:
             gatoms = self.groups(i)
@@ -69,6 +81,12 @@ class ProteinMutant:
         return atoms
 
     def check_chiral(self, struct, ca):
+        """
+        Makes sure the correct HA is removed in case of glycine
+        :param struct: gml.Pdb instance
+        :param ca: gml.Atom instance
+        :return: None
+        """
         if 'HA' in self.remove_from_orig:
             if not struct.check_chiral([ca], 'N', 'C', 'HA1', printing=False):
                 resnum, resname, chain = ca.resnum, ca.resname, ca.chain
@@ -79,7 +97,13 @@ class ProteinMutant:
                 ha1.atomname = 'HA2'
 
     @staticmethod
-    def groups(key):
+    def groups(key: str) -> list:
+        """
+        Defines atoms constituting each atomic group
+        (akin e.g. to a methyl or methylene group) in side chains
+        :param key: str, name of the group
+        :return: list of atoms in the group
+        """
         gdict = {'CB': ['CB', 'HB1', 'HB2'],
                  'CG': ['CG', 'HG1', 'HG2'],
                  'CD': ['CD', 'HD1', 'HD2'],
@@ -115,7 +139,14 @@ class ProteinMutant:
         return gdict[key]
 
     @staticmethod
-    def afters(key):
+    def afters(key: str) -> list:
+        """
+        For each atomic group, identifies by name atoms immediately
+        preceding the ones to be introduced (allowing for variation)
+        :param key: str, name of the group
+        :return: list of atoms preceding the corresponding atom in self.groups[key] (or tuples if multiple names
+        are accepted)
+        """
         aftdict = {'CB': [('HA', 'HA2', 'HA1'), 'CB', 'HB1'],
                    'PB': [('HA', 'HA2', 'HA1'), 'CB', 'HB1'],
                    'CG': [('HB2', 'HB'), ('CG', 'CG1'), ('HG1', 'HG11')],
@@ -150,7 +181,13 @@ class ProteinMutant:
         return aftdict[key]
 
     @staticmethod
-    def bonds(key):
+    def bonds(key: str) -> list:
+        """
+        For each atomic group, identifies chemical bonds that connect atoms
+        of that group, as well as the group to the previous one
+        :param key: str, name of the group
+        :return: list of lists, each containing a pair of atoms to be bonded (or tuples for ambiguous names)
+        """
         bonds = {'CB': [['CA', 'CB'], ['CB', 'HB1'], ['CB', 'HB2']],
                  'PB': [['CA', 'CB'], ['CB', 'HB1'], ['CB', 'HB2']],
                  'CG': [['CB', 'CG'], [('CG', 'CG1'), 'HG1'], [('CG', 'CG1'), 'HG2']],
@@ -191,7 +228,14 @@ class ProteinMutant:
         return bonds[key]
 
     @staticmethod
-    def anchors(key):
+    def anchors(key: str) -> list:
+        """
+        For each atomic group, identifies sequences of atoms that define
+        the geometry of the newly built group (through routines defined
+        in gml.Pdb._vector)
+        :param key: str, name of the group
+        :return: list of lists
+        """
         # obligatorily same order as in groups
         anchors = {'CB': [['CA', ('HA1', 'HA'), 'C', 'N'], ['N', 'CA'], [('HA1', 'HA'), 'CA']],
                    'PB': [['CA', ('HA1', 'HA'), 'C', 'N'], ['N', ('HA1', 'HA')],
@@ -257,13 +301,24 @@ class ProteinMutant:
         return anchors[key]
 
     @staticmethod
-    def ring_closing_bonds(key):
+    def ring_closing_bonds(key: str) -> list:
+        """
+        If a residue contains a ring, this fn defines an extra bond
+        that closes the ring (might require special treatment)
+        :param key: str, name of the group
+        :return: list of tuples, each defines a ring-closing bond
+        """
         bonds = {'AR': [('CE1', 'CZ')], 'HR': [('CE1', 'NE2')], 'PD': [('CD', 'N')],
                  'WR': [('CZ2', 'CE2'), ('CG', 'CD2')]}
         return bonds[key] if key in bonds.keys() else []
 
     @staticmethod
-    def aminoacids(key):
+    def aminoacids(key: str) -> list:
+        """
+        Lists groups that make up individual amino acids
+        :param key: str, 1-letter code of the amino acid
+        :return: list, groups that define the side chain
+        """
         aa = {'A': ['CB', 'HB'],
               'B': ['CB', 'CP'],  # protonated ASP
               'C': ['CB', 'SH'],
@@ -289,7 +344,12 @@ class ProteinMutant:
         return aa[key]
 
     @staticmethod
-    def bond_lengths(bonded_pair):
+    def bond_lengths(bonded_pair: list) -> float:
+        """
+        Defines bond lengths of pairs of atoms
+        :param bonded_pair: list of str, names of the elements that create the bond
+        :return: float, length of the bond
+        """
         e1 = bonded_pair[0][0] if not isinstance(bonded_pair[0], tuple) else bonded_pair[0][0][0]
         e2 = bonded_pair[1][0]
         if e1 in 'C' and e2 in 'C':

@@ -1,8 +1,9 @@
 import os
 import gromologist as gml
-from typing import Union, Optional, Type, Sequence, TypeVar, Tuple
+from typing import Union, Optional, Sequence, TypeVar, Tuple
 
 gmlMod = TypeVar("gmlMod", bound="Mod")
+
 
 class Mod:
     counter = 0  # only used for naming with unique numbers
@@ -379,7 +380,8 @@ class ThermoDiff:
         :param top: str or gml.Top, the topology compatible with the trajectory
         :param traj: str, path to the trajectory
         :param datasets: dict, named datasets in the format alias: list of [float/int/str]
-        :param weights: list of float, per-frame weights (e.g. from Umbrella Sampling, Metadynamics or other reweighing schemes)
+        :param weights: list of float, per-frame weights (e.g. from Umbrella Sampling, Metadynamics or other reweighing
+        schemes)
         :return: None
         """
         if isinstance(top, str):
@@ -412,7 +414,8 @@ class ThermoDiff:
         If not specified in self.add_traj, weights can be added to the trajectory
         in a separate step
         :param trajid: int, ID of the trajectory
-        :param weights: list of float, per-frame weights (e.g. from Umbrella Sampling, Metadynamics or other reweighing schemes)
+        :param weights: list of float, per-frame weights (e.g. from Umbrella Sampling, Metadynamics or other reweighing
+        schemes)
         :return: None
         """
         traj = self.get_traj(trajid)
@@ -565,7 +568,8 @@ class ThermoDiff:
         :param dataset: str, alias for the dataset
         :param free_energy: bool, whether the derivative should be of free energy or of observable/CV
         :param threshold: list, for continues dataset specifies 2N boundaries used to define N discrete states
-        :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be performed based on 'cv_dataset'
+        :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be
+        performed based on 'cv_dataset'
         :return: None
         """
         if dataset is None:
@@ -603,13 +607,15 @@ class ThermoDiff:
                         mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n]
                         mean_data[state_index] += deriv_data[n]
             if free_energy:
-                self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar for x in mean_derivatives.keys()]
+                self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar
+                                                                              for x in mean_derivatives.keys()]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
                     mean_obs[key] = (1/0.008314*self.temperature) * (
                             mean_data[key] * mean_derivatives[key] - mean_product[key])
-                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / mod.dpar for x in mean_obs.keys()]
+                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / mod.dpar
+                                                                             for x in mean_obs.keys()]
 
     def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50,
                                  cv_dataset: Optional[str] = None):
@@ -618,7 +624,8 @@ class ThermoDiff:
         :param dataset: str, alias for the dataset
         :param free_energy: bool, whether the derivative should be of free energy or of observable/CV
         :param nbins: int, number of bins that will be used to calculate the profile
-        :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be performed based on 'cv_dataset'
+        :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be
+        performed based on 'cv_dataset'
         :return: None
         """
         binning_dset, deriv_dset = (dataset, dataset) if cv_dataset is None else (cv_dataset, dataset)
@@ -637,10 +644,12 @@ class ThermoDiff:
                             mean_product[0.5*(x+y)] += deriv_data[n] * weights[n] * derivs[n]
                             mean_data[0.5*(x+y)] += deriv_data[n]
             if free_energy:
-                self.profile_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar for x in mean_derivatives.keys()]
+                self.profile_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar
+                                                                             for x in mean_derivatives.keys()]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
                     mean_obs[key] = (1 / 0.008314 * self.temperature) * (
                                 mean_data[key] * mean_derivatives[key] - mean_product[key])
-                self.profile_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / mod.dpar for x in mean_obs.keys()]
+                self.profile_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / mod.dpar
+                                                                            for x in mean_obs.keys()]

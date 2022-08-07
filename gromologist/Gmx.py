@@ -188,19 +188,3 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
         for filename in to_remove:
             os.remove(filename)
     return out
-
-
-def diff(tops: list, trajs: list, modfile: str):
-    """
-
-    :param tops:
-    :param trajs:
-    :param modfile:
-    :return:
-    """
-    mods = gml.Mod.read_modfile(modfile)
-    for mod in mods:
-        mod.goto_mydir()
-        mod.save_mod('x', 'y')
-
-

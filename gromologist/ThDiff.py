@@ -113,12 +113,13 @@ class ModAtom(Mod):
             if not self.chg:
                 self.top.parameters.clone_type(atomtype=self.type, prefix='Y')
             self.mod_sigma_eps()
-            self.mod_chg()
+            for molname in self.molname:
+                self.mod_chg(molname)
         else:
             self.names = ['orig']
             self.res = []
 
-    def mod_chg(self):
+    def mod_chg(self, molname):
         """
         looks for a line in topology section 'atoms'
         and modifies it as needed
@@ -128,7 +129,7 @@ class ModAtom(Mod):
             name = self.names[x]
             resname = self.resnames[x]
             resnum = self.res[x]
-            subsection = self.top.get_molecule(self.molname).get_subsection('atoms')
+            subsection = self.top.get_molecule(molname).get_subsection('atoms')
             for e in subsection.entries_atom:
                 if e.atomname == name and e.resid == resnum and e.resname == resname:
                     e.mass_b = e.mass
@@ -386,7 +387,7 @@ class ThermoDiff:
             top = gml.Top(top)
         datasets = datasets if datasets is not None else {}
         weights = weights if weights is not None else []
-        self.trajs.append({'path': traj, 'top': top, 'id': len(self.trajs), 'dataset': datasets, 'weights': weights})
+        self.trajs.append({'path': traj, 'top': top, 'id': len(self.trajs), 'datasets': datasets, 'weights': weights})
 
     def get_traj(self, trajid: int) -> dict:
         """
@@ -405,7 +406,7 @@ class ThermoDiff:
         :return: None
         """
         traj = self.get_traj(trajid)
-        traj['dataset'].update(datasets)
+        traj['datasets'].update(datasets)
 
     def add_weights_to_traj(self, trajid: int, weights: list):
         """
@@ -441,14 +442,13 @@ class ThermoDiff:
         except FileExistsError:
             print("The 'working' directory already exists, will overwrite its contents; clean incomplete 'rerun.xvg' "
                   "files to avoid problems")
-        else:
-            self.path = os.getcwd()
-            for mod in self.mods:
-                try:
-                    os.mkdir(f'working/{str(mod)}')
-                except FileExistsError:
-                    pass
-                mod.save_mod(f'{self.path}/working/{str(mod)}', str(mod))
+        self.path = os.getcwd()
+        for mod in self.mods:
+            try:
+                os.mkdir(f'working/{str(mod)}')
+            except FileExistsError:
+                pass
+            mod.save_mod(f'{self.path}/working/{str(mod)}', str(mod))
 
     def launch_reruns(self):
         """
@@ -459,9 +459,10 @@ class ThermoDiff:
             mod.goto_mydir()
             for traj in self.trajs:
                 if self.equal_tops(mod.top, traj['top']):
+                    print(f"Calculating rerun for {str(mod)}, traj {traj['path']}")
                     self.launch_rerun(mod, traj)
 
-    def launch_rerun(self, mod: gml.Mod, traj):
+    def launch_rerun(self, mod, traj: dict):
         """
         Launches an individual alchemical rerun and reads the data
         (skips the calculation if already performed)
@@ -502,7 +503,7 @@ class ThermoDiff:
         self.launch_reruns()
         self.calc_weights()
 
-    def get_mod(self, counter: int) -> gml.Mod:
+    def get_mod(self, counter: int):
         """
         Gets the desired gml.Mod subclass instance by counter (ID)
         :param counter: int, ID of the modified topology
@@ -536,28 +537,36 @@ class ThermoDiff:
         else:
             raise RuntimeError(f"Dataset {dataset} contains mixed numeric and non-numeric entries")
 
-    def get_flat_data(self, dataset: str) -> Tuple[list, list, list]:
+    def get_flat_data(self, binning_dataset: str, deriv_dataset: str, mod) -> Tuple[list, list, list, list]:
         """
         Selects all numeric datasets that correspond to a given alias
         and provides flat (1-D) lists for data, weights, and derivatives
-        :param dataset: str, alias of the dataset
+        :param binning_dataset: str, alias of the dataset used for binning/thresholding
+        :param deriv_dataset: str, alias of the dataset used for derivative calculation (can be same as binning_dataset)
+        :param mod: gml.Mod
         :return: tuple of lists: data, weights, and derivatives
         """
         counters_trajids = list(self.derivatives.keys())
-        active_dataset_trajids = [traj['id'] for traj in self.trajs if dataset in traj['datasets'].keys()]
-        active_counters_trajids = [ct for ct in counters_trajids if ct[1] in active_dataset_trajids]
-        flat_data = [data for ct in active_counters_trajids for data in self.get_traj(ct[1])['datasets'][dataset]]
-        flat_weights = [wght for ct in active_counters_trajids for wght in self.get_traj(ct[1])['datasets'][dataset]]
+        active_dataset_trajids = [traj['id'] for traj in self.trajs if binning_dataset in traj['datasets'].keys()
+                                  and deriv_dataset in traj['datasets'].keys()]
+        active_counters_trajids = [ct for ct in counters_trajids if ct[1] in active_dataset_trajids
+                                   and ct[0] == mod.counter]
+        flat_bin_data = [data for ct in active_counters_trajids for data in
+                         self.get_traj(ct[1])['datasets'][binning_dataset]]
+        flat_deriv_data = [data for ct in active_counters_trajids for data in
+                           self.get_traj(ct[1])['datasets'][deriv_dataset]]
+        flat_weights = [wght for ct in active_counters_trajids for wght in self.get_traj(ct[1])['weights']]
         flat_derivs = [der for ct in active_counters_trajids for der in self.derivatives[ct]]
-        return flat_data, flat_weights, flat_derivs
+        return flat_bin_data, flat_deriv_data, flat_weights, flat_derivs
 
     def calc_discrete_derivatives(self, dataset: Optional[str] = None, free_energy: Optional[bool] = True,
-                                  threshold: Optional[list] = None):
+                                  threshold: Optional[list] = None, cv_dataset: Optional[str] = None):
         """
         Calculates selected derivatives for a number of discrete states
         :param dataset: str, alias for the dataset
         :param free_energy: bool, whether the derivative should be of free energy or of observable/CV
         :param threshold: list, for continues dataset specifies 2N boundaries used to define N discrete states
+        :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be performed based on 'cv_dataset'
         :return: None
         """
         if dataset is None:
@@ -574,59 +583,65 @@ class ThermoDiff:
                                    "and ending point of each state")
         states = [(x, y) for x, y in zip(threshold[::2], threshold[1::2])] if threshold is not None else \
             {data for traj in self.trajs for data in traj['datasets'][dataset]}
-        data, weights, derivs = self.get_flat_data(dataset)
-        mean_derivatives = {st: 0 for st in states}
-        mean_product = {st: 0 for st in states}
-        mean_data = {st: 0 for st in states}
-        for n in range(len(data)):
-            state_index = None
-            if threshold is not None:
-                for x, y in zip(threshold[::2], threshold[1::2]):
-                    if x <= data[n] < y:
-                        state_index = (x, y)
-                        break
-            else:
-                state_index = data[n]
-            mean_derivatives[state_index] += weights[n] * derivs[n]
-            if not free_energy:
+        binning_dset, deriv_dset = (dataset, dataset) if cv_dataset is None else (cv_dataset, dataset)
+        for mod in self.mods:
+            binning_data, deriv_data, weights, derivs = self.get_flat_data(binning_dset, deriv_dset, mod)
+            mean_derivatives = {st: 0 for st in states}
+            mean_product = {st: 0 for st in states}
+            mean_data = {st: 0 for st in states}
+            for n in range(len(binning_data)):
+                state_index = None
+                if threshold is not None:
+                    for x, y in zip(threshold[::2], threshold[1::2]):
+                        if x <= binning_data[n] < y:
+                            state_index = (x, y)
+                            break
+                else:
+                    state_index = binning_data[n]
+                mean_derivatives[state_index] += weights[n] * derivs[n]
                 if not free_energy:
-                    mean_product[state_index] += data[n] * weights[n] * derivs[n]
-                    mean_data[state_index] += data[n]
-        if free_energy:
-            self.discrete_free_energy_derivatives[dataset] = mean_derivatives
-        else:
-            mean_obs = {key: 0 for key in mean_derivatives.keys()}
-            for key in mean_derivatives.keys():
-                mean_obs[key] = (1/0.008314*self.temperature) * (
-                        mean_data[key] * mean_derivatives[key] - mean_product[key])
-            self.discrete_observable_derivatives[dataset] = mean_obs
+                    if not free_energy:
+                        mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n]
+                        mean_data[state_index] += deriv_data[n]
+            if free_energy:
+                self.discrete_free_energy_derivatives[(str(mod), dataset)] = mean_derivatives
+            else:
+                mean_obs = {key: 0 for key in mean_derivatives.keys()}
+                for key in mean_derivatives.keys():
+                    mean_obs[key] = (1/0.008314*self.temperature) * (
+                            mean_data[key] * mean_derivatives[key] - mean_product[key])
+                self.discrete_observable_derivatives[(str(mod), dataset)] = mean_obs
 
-    def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50):
+    def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50,
+                                 cv_dataset: Optional[str] = None):
         """
         Calculates selected derivatives of a profile
         :param dataset: str, alias for the dataset
         :param free_energy: bool, whether the derivative should be of free energy or of observable/CV
         :param nbins: int, number of bins that will be used to calculate the profile
+        :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be performed based on 'cv_dataset'
         :return: None
         """
-        data, weights, derivs = self.get_flat_data(dataset)
-        dmin, dmax = min(data), max(data)
-        thresh = [dmin + n * (dmax-dmin)/(nbins+1) for n in range(nbins+1)]
-        mean_derivatives = {0.5 * (x + y): 0 for x, y in zip(thresh[:-1], thresh[1:])}
-        mean_product = {0.5 * (x + y): 0 for x, y in zip(thresh[:-1], thresh[1:])}
-        mean_data = {0.5 * (x + y): 0 for x, y in zip(thresh[:-1], thresh[1:])}
-        for n in range(len(data)):
-            for x, y in zip(thresh[:-1], thresh[1:]):
-                if x <= data[n] < y:
-                    mean_derivatives[0.5*(x+y)] += weights[n] * derivs[n]
-                    if not free_energy:
-                        mean_product[0.5*(x+y)] += data[n] * weights[n] * derivs[n]
-                        mean_data[0.5*(x+y)] += data[n]
-        if free_energy:
-            self.profile_free_energy_derivatives[dataset] = mean_derivatives
-        else:
-            mean_obs = {key: 0 for key in mean_derivatives.keys()}
-            for key in mean_derivatives.keys():
-                mean_obs[key] = (1 / 0.008314 * self.temperature) * (
-                            mean_data[key] * mean_derivatives[key] - mean_product[key])
-            self.profile_observable_derivatives[dataset] = mean_obs
+        binning_dset, deriv_dset = (dataset, dataset) if cv_dataset is None else (cv_dataset, dataset)
+        for mod in self.mods:
+            binning_data, deriv_data, weights, derivs = self.get_flat_data(binning_dset, deriv_dset, mod)
+            dmin, dmax = min(binning_data), max(binning_data)
+            thresh = [dmin + n * (dmax-dmin)/(nbins+1) for n in range(nbins+1)]
+            mean_derivatives = {0.5 * (x + y): 0 for x, y in zip(thresh[:-1], thresh[1:])}
+            mean_product = {0.5 * (x + y): 0 for x, y in zip(thresh[:-1], thresh[1:])}
+            mean_data = {0.5 * (x + y): 0 for x, y in zip(thresh[:-1], thresh[1:])}
+            for n in range(len(binning_data)):
+                for x, y in zip(thresh[:-1], thresh[1:]):
+                    if x <= binning_data[n] < y:
+                        mean_derivatives[0.5*(x+y)] += weights[n] * derivs[n]
+                        if not free_energy:
+                            mean_product[0.5*(x+y)] += deriv_data[n] * weights[n] * derivs[n]
+                            mean_data[0.5*(x+y)] += deriv_data[n]
+            if free_energy:
+                self.profile_free_energy_derivatives[(str(mod), dataset)] = mean_derivatives
+            else:
+                mean_obs = {key: 0 for key in mean_derivatives.keys()}
+                for key in mean_derivatives.keys():
+                    mean_obs[key] = (1 / 0.008314 * self.temperature) * (
+                                mean_data[key] * mean_derivatives[key] - mean_product[key])
+                self.profile_observable_derivatives[(str(mod), dataset)] = mean_obs

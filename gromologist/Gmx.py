@@ -2,6 +2,7 @@ from subprocess import run, PIPE
 import os
 import gromologist as gml
 from typing import Optional, Iterable
+from glob import glob
 
 
 def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pass_values: Optional[Iterable] = None,
@@ -13,7 +14,8 @@ def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pas
     :param answer: bool, whether to read & return the stderr + stdout of the command
     :param pass_values: iterable, optional values to pass to the command (like group selections in gmx trjconv)
     :param quiet: bool, whether to show gmx output
-    :param params: dict, for any "-key value" option to be included pass entry formatted as {"key": value}
+    :param params: dict, for any "-key value" option to be included pass entry formatted as {"key": value}; to simply
+    pass a flag, value has to be True
     :return: str, stdout/stderr output from the command (if answer=True)
     """
     if pass_values is not None:
@@ -21,7 +23,8 @@ def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pas
     else:
         pv = None
     qui = ' &> /dev/null' if quiet else ''
-    call_command = f'{gmx_exe} {command} ' + ' '.join([f'-{k} {v}' for k, v in params.items()]) + qui
+    call_command = f'{gmx_exe} {command} ' + ' '.join([f'-{k} {v}' for k, v in params.items() if not isinstance(v, bool)])\
+                   + ' ' + ' '.join([f'-{k} ' for k, v in params.items() if isinstance(v, bool) and v]) + qui
     result = run(call_command.split(), input=pv, stderr=PIPE, stdout=PIPE)
     # result = call(call_command, shell=True)
     if answer:
@@ -55,6 +58,28 @@ def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
     mdp = '\n'.join([f"{param} = {value}" for param, value in default.items()])
     with open(fname, 'w') as outfile:
         outfile.write(mdp)
+
+
+def find_gmx_dir():
+    """
+    Attempts to find Gromacs internal files to fall back to
+    when default .itp files are included using the
+    #include statement
+    :return: str, path to share/gromacs/top directory
+    """
+    gmx = os.popen('which gmx 2> /dev/null').read().strip()
+    if not gmx:
+        gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
+    if not gmx:
+        gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
+    if gmx:
+        gmx_dir = '/'.join(gmx.split('/')[:-2]) + '/share/gromacs/top'
+        print('Gromacs files found in directory {}'.format(gmx_dir))
+        return gmx_dir, gmx
+    else:
+        print('No working Gromacs compilation found, assuming all file dependencies are referred to locally; '
+              'to change this, make the gmx executable visible in $PATH or specify gmx_dir for the Topology')
+        return False, False
 
 
 def read_xvg(fname: str, cols: Optional[list] = None) -> list:
@@ -188,3 +213,43 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
         for filename in to_remove:
             os.remove(filename)
     return out
+
+
+def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] = 'tip3p',
+                   box: Optional[str] = 'dodecahedron', box_margin: Optional[float] = 1.5, cation: Optional[str] = 'K',
+                   anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15):
+    gmx = gml.find_gmx_dir()
+    found = [f'{i} (local)' for i in glob(f'*ff')] + glob(f'{gmx[0]}/*ff')
+    if ff is None:
+        for n, i in enumerate(found):
+            print('[', n + 1, '] ', i.split('/')[-1])
+        rtpnum = input('\nPlease select the force field:\n')
+        try:
+            rtpnum = int(rtpnum)
+        except ValueError:
+            raise RuntimeError('Not an integer: {}'.format(rtpnum))
+        else:
+            ff = found[rtpnum - 1].replace(' (local)', '').split('/')[-1]
+    if ff not in [i.split('/')[-1] for i in found]:
+        raise RuntimeError(f"Force field {ff.split('/')[-1]} not found in the list: {[i.split('/')[-1] for i in found]}")
+    ff = ff.replace('.ff', '')
+    print(gmx_command(gmx[1], 'pdb2gmx', quiet=False, f=struct, ff=ff, water=water, answer=True))
+    print(gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box, answer=True))
+    print(gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', answer=True))
+    gen_mdp('minimize.mdp', runtype='mini')
+    print(gmx_command(gmx[1], 'grompp', f='minimize.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1, answer=True))
+    answer = gmx_command(gmx[1], 'genion', pass_values=['a'], s='ions', pname=cation, nname=anion, conc=ion_conc,
+                         neutral=True , p="topol", o='test', answer=True)
+    sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
+    print(gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
+                      neutral=True, p="topol", o='ions', answer=True))
+    print(gmx_command(gmx[1], 'grompp', f='minimize.mdp', p='topol.top', c='ions.gro', o='mini', answer=True))
+    print(gmx_command(gmx[1], 'mdrun', deffnm='mini', v=True, answer=True))
+    print(gmx_command(gmx[1], 'trjconv', s='mini.tpr', f='mini.gro', o='whole.gro', pbc='whole'))
+    t = gml.Top('topol.top')
+    t.clear_sections()
+    t.save_top('merged_topology.top')
+    p = gml.Pdb('whole.gro', top=t)
+    p.add_chains()
+    p.save_pdb('minimized_structure.pdb')
+

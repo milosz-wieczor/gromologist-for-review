@@ -6,7 +6,7 @@ from glob import glob
 
 
 def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pass_values: Optional[Iterable] = None,
-                quiet: bool = False, **params) -> str:
+                quiet: bool = False, fail_on_error: bool = False, **params) -> str:
     """
     Runs the specified gmx command, optionally passing keyworded or stdin arguments
     :param gmx_exe: str, a gmx executable
@@ -14,6 +14,7 @@ def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pas
     :param answer: bool, whether to read & return the stderr + stdout of the command
     :param pass_values: iterable, optional values to pass to the command (like group selections in gmx trjconv)
     :param quiet: bool, whether to show gmx output
+    :param fail_on_error: bool, whether to raise an error when the command crashes
     :param params: dict, for any "-key value" option to be included pass entry formatted as {"key": value}; to simply
     pass a flag, value has to be True
     :return: str, stdout/stderr output from the command (if answer=True)
@@ -25,7 +26,7 @@ def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pas
     qui = ' &> /dev/null' if quiet else ''
     call_command = f'{gmx_exe} {command} ' + ' '.join([f'-{k} {v}' for k, v in params.items() if not isinstance(v, bool)])\
                    + ' ' + ' '.join([f'-{k} ' for k, v in params.items() if isinstance(v, bool) and v]) + qui
-    result = run(call_command.split(), input=pv, stderr=PIPE, stdout=PIPE)
+    result = run(call_command.split(), input=pv, stderr=PIPE, stdout=PIPE, check=True if fail_on_error else False)
     # result = call(call_command, shell=True)
     if answer:
         return result.stdout.decode() + result.stderr.decode()
@@ -233,19 +234,26 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     if ff not in [i.split('/')[-1] for i in found]:
         raise RuntimeError(f"Force field {ff.split('/')[-1]} not found in the list: {[i.split('/')[-1] for i in found]}")
     ff = ff.replace('.ff', '')
-    print(gmx_command(gmx[1], 'pdb2gmx', quiet=False, f=struct, ff=ff, water=water, answer=True))
-    print(gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box, answer=True))
-    print(gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', answer=True))
+    print(gmx_command(gmx[1], 'pdb2gmx', quiet=False, f=struct, ff=ff, water=water,
+                      answer=True, fail_on_error=True))
+    print(gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box,
+                      answer=True, fail_on_error=True))
+    print(gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro',
+                      answer=True, fail_on_error=True))
     gen_mdp('minimize.mdp', runtype='mini')
-    print(gmx_command(gmx[1], 'grompp', f='minimize.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1, answer=True))
+    print(gmx_command(gmx[1], 'grompp', f='minimize.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1,
+                      answer=True, fail_on_error=True))
     answer = gmx_command(gmx[1], 'genion', pass_values=['a'], s='ions', pname=cation, nname=anion, conc=ion_conc,
                          neutral=True , p="topol", o='test', answer=True)
     sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
     print(gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
-                      neutral=True, p="topol", o='ions', answer=True))
-    print(gmx_command(gmx[1], 'grompp', f='minimize.mdp', p='topol.top', c='ions.gro', o='mini', answer=True))
-    print(gmx_command(gmx[1], 'mdrun', deffnm='mini', v=True, answer=True))
-    print(gmx_command(gmx[1], 'trjconv', s='mini.tpr', f='mini.gro', o='whole.gro', pbc='whole'))
+                      neutral=True, p="topol", o='ions', answer=True, fail_on_error=True))
+    print(gmx_command(gmx[1], 'grompp', f='minimize.mdp', p='topol.top', c='ions.gro', o='mini',
+                      answer=True, fail_on_error=True))
+    print(gmx_command(gmx[1], 'mdrun', deffnm='mini', v=True,
+                      answer=True, fail_on_error=True))
+    print(gmx_command(gmx[1], 'trjconv', s='mini.tpr', f='mini.gro', o='whole.gro', pbc='whole', pass_values=[0],
+                      answer=True, fail_on_error=True))
     t = gml.Top('topol.top')
     t.clear_sections()
     t.save_top('merged_topology.top')

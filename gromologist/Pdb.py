@@ -1044,7 +1044,7 @@ class Pdb:
             raise RuntimeError('Can\'t read box properties')
         return atoms, tuple(box), remarks
 
-    def add_conect(self, cutoff=1.55):
+    def add_conect(self, cutoff=1.65):
         """
         Adds CONECT entries to the PDB, using the value of
         cutoff to determine molecule connectivity

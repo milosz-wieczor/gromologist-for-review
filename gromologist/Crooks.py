@@ -1,20 +1,20 @@
 from concurrent.futures import ProcessPoolExecutor
-import argparse
+import gromologist as gml
 import os
-import sys
+from math import ceil
 from shutil import copy
+# optional?
 import numpy as np
 from scipy.integrate import simps
-from scipy.optimize import minimize, fmin
+from scipy.optimize import fmin
 from sklearn.neighbors import KernelDensity
 from sklearn.model_selection import GridSearchCV
 from sklearn.model_selection import LeaveOneOut
-from subprocess import call
 
 
 class CrooksPool:
     def __init__(self, struct, top, xtc0, xtc1, nruns=100, length=500, gmx=None, maxwarn=1, convergence=False,
-                 alias='free', debug=False, offset=0, mpi=True, nmax=None, init_eq=50, temperature=300, stride=20,
+                 alias='free', debug=False, offset=0, nmax=None, init_eq=50, temperature=300, stride=20,
                  plumed='', top2='', tmpi=True, mutate='', pmxff='', wt_only=False, mini=False, struct2='',
                  plumed2='', hbond=False, dt=2, weights=None, random=False, **kwargs):
         """
@@ -47,12 +47,9 @@ class CrooksPool:
         self.random = random
         self.nruns = nruns
         self.stride = stride
-        self.mpi = mpi
         self.mini = mini
         self.plumed = plumed
         self.plumed2 = plumed2 if plumed2 else self.plumed
-        if self.mpi:
-            from mpi4py.futures import MPIPoolExecutor
         self.init_length = init_eq
         self.sim_length = length
         self.extra_args = kwargs
@@ -67,6 +64,14 @@ class CrooksPool:
         self.nmax = nmax if nmax is not None else self.nruns
         self.init_nst = self.init_length * int(1 / self.dt)
         self.nst = self.sim_length * int(1 / self.dt)
+        if gmx is None:
+            found_gmx = gml.find_gmx_dir()
+            if found_gmx[1]:
+                self.gmx = found_gmx
+            else:
+                raise RuntimeError("No valid gmx executable found, please specify it as gmx=/path/to/gmx")
+        else:
+            self.gmx = gmx
         self.gmx = 'gmx' if gmx is None else gmx
         self.tmpi = tmpi
         self.workers = [Crooks(self, n, lam) for n in range(offset, self.nruns + offset) for lam in [0, 1]]
@@ -92,32 +97,41 @@ class CrooksPool:
                                               for w in self.workers])
         with ProcessPoolExecutor() as executor:
             executor.map(self.run_worker, [(w, 'mini', self.stride, self.temperature, self.init_nst, self.nst,
-                                            self.lincs, self.extra_args, self.mini, self.dt) for w in self.workers])
+                                            self.lincs, self.extra_args, self.mini) for w in self.workers])
+        self.mdrun_multi('mini')
+        with ProcessPoolExecutor() as executor:
+            executor.map(self.run_worker, [(w, 'eq', self.stride, self.temperature, self.init_nst, self.nst,
+                                            self.lincs, self.extra_args, self.mini) for w in self.workers])
+        self.mdrun_multi('eq')
+        with ProcessPoolExecutor() as executor:
+            executor.map(self.run_worker, [(w, 'prod', self.stride, self.temperature, self.init_nst, self.nst,
+                                            self.lincs, self.extra_args, self.mini) for w in self.workers])
+        self.mdrun_multi('prod')
 
     @staticmethod
     def run_worker(data):
-        worker, runtype, stride, temperature, init_nst, nst, lincs, extra_args, mini, dt = data
-        worker.prep_runs('eq', stride, temperature, init_nst, nst, lincs, dt, extra_args)
-        if mini:
-            worker.prep_runs('mini', stride, temperature, init_nst, nst, lincs, dt, extra_args)
-            # We can minimize if required
-            worker.log('running energy minimization...'.format())
-            worker.grompp_me('mini')
-            worker.mdrun_me('mini')
-        else:
-            worker.cp('run{id}_l{lam}/frame{id}_l{lam}.gro'.format(id=worker.id, lam=worker.initlambda),
-                      'mini{id}_l{lam}.gro'.format(id=worker.id, lam=worker.initlambda))
-        # First there's equilibration:
-        worker.prep_runs('eq', stride, temperature, init_nst, nst, lincs, dt, extra_args)
-        worker.log('running equilibration...')
-        worker.grompp_me('eq')
-        worker.mdrun_me('eq')
-        # Then the actual alchemistry:
-        worker.prep_runs('prod', stride, temperature, init_nst, nst, lincs, dt, extra_args)
-        worker.log('running grompp for all systems...')
-        worker.grompp_me('prod')
-        worker.mdrun_me('prod')
-        worker.log('running mdrun for all systems...')
+        worker, runtype, stride, temperature, init_nst, nst, lincs, extra_args, mini = data
+        if runtype == 'mini':
+            worker.prep_runs('eq', stride, temperature, init_nst, nst, lincs, extra_args)
+            if mini:
+                worker.prep_runs(runtype, stride, temperature, init_nst, nst, lincs, extra_args)
+                # We can minimize if required
+                worker.log('running energy minimization...'.format())
+                worker.grompp_me(runtype)
+            else:
+                worker.cp('run{id}_l{lam}/frame{id}_l{lam}.gro'.format(id=worker.id, lam=worker.initlambda),
+                          'mini{id}_l{lam}.gro'.format(id=worker.id, lam=worker.initlambda))
+        elif runtype == 'eq':
+            # First there's equilibration:
+            worker.prep_runs(runtype, stride, temperature, init_nst, nst, lincs, extra_args)
+            worker.log('running equilibration...')
+            worker.grompp_me(runtype)
+        elif runtype == 'prod':
+            # The actual alchemistry:
+            worker.prep_runs('prod', stride, temperature, init_nst, nst, lincs, extra_args)
+            worker.log('running grompp for all systems...')
+            worker.grompp_me('prod')
+            worker.log('running mdrun for all systems...')
 
     def analyze(self):
         """
@@ -141,13 +155,17 @@ class CrooksPool:
         min_range = min_val - 0.1 * diff
         max_range = max_val + 0.1 * diff
         grid = np.linspace([min_range], [max_range], 200).reshape(-1, 1)
+        dens0 = self.get_opt_kde(works_0, grid)
+        dens1 = self.get_opt_kde(works_1, grid)
         np.savetxt('prob_0.dat', np.hstack([grid, dens0]), fmt='%10.5f')
         np.savetxt('prob_1.dat', np.hstack([grid, dens1]), fmt='%10.5f')
-        result_bar_pmx = self.solve_bar_pmx(works_0, works_1, *self.weights)
+        result_bar = self.solve_bar(works_0, works_1)
         np.savetxt('normalized_overlap_{}.dat'.format(self.name), self.bhattacharyya(dens0, dens1, grid),
                    fmt='%10.5f')
         if self.convergence:
             self.analyze_convergence(works_0, works_1, grid)
+        with open(f'result_{self.name}.dat') as out:
+            out.write(str(result_bar))
 
     @staticmethod
     def bhattacharyya(d0, d1, grid):
@@ -198,12 +216,11 @@ class CrooksPool:
         w1_sampled = np.random.choice(w1.reshape(-1), nsamp, replace=True).reshape(-1, 1)
         dens0_sampled = self.get_opt_kde(w0_sampled, grid, self.bandwidth)
         dens1_sampled = self.get_opt_kde(w1_sampled, grid, self.bandwidth)
-        result_kde = self.solve_kde(dens0_sampled, dens1_sampled, grid)
-        result_cgi = self.solve_bar_pmx(w0_sampled, w1_sampled)
+        result = self.solve_bar(w0_sampled, w1_sampled)
         if self.debug:
-            np.savetxt('bootstrap/conv_{}_{}_{}_{}.dat'.format(nsamp, n, str(result_kde), str(result_cgi)),
-                       np.hstack([grid, dens0_sampled, dens1_sampled]), fmt='%10.5f')
-        return result_kde
+            np.savetxt(f'bootstrap/conv_{nsamp}_{n}_{result}.dat', np.hstack([grid, dens0_sampled, dens1_sampled]),
+                       fmt='%10.5f')
+        return result
 
     @staticmethod
     def solve_kde(d0, d1, grid):
@@ -241,22 +258,8 @@ class CrooksPool:
         r1, r2 = (x1 - np.sqrt(sq)) / den, (x1 + np.sqrt(sq)) / den
         return round(r1, 3) if np.abs(r1 - mid) < np.abs(r2 - mid) else round(r2, 3)
 
-    def solve_bar(self, w0, w1, guess):
-        kbt = 2.494 * self.temperature / 300
-
-        def fun_ssq(f, work0, work1, beta):
-            ni = len(work0)
-            nj = len(work1)
-            logf = np.log(ni / nj)
-            term1 = np.sum(1 / (1 + np.exp(logf + beta * work0 - beta * f)))
-            term2 = np.sum(1 / (1 + np.exp(-logf - beta * work1 + beta * f)))
-            return (term1 - term2) ** 2
-
-        opt = minimize(fun_ssq, guess, args=(w0, w1, 1 / kbt), options={'disp': False}, tol=0.0000001)
-        return opt.x[0]
-
-    def solve_bar_pmx(self, w0, w1):
-        return BAR(w0, w1, self.temperature).dg
+    def solve_bar(self, w0, w1):
+        return bar(w0, w1, self.temperature)
 
     def get_opt_kde(self, y, x, bandwidth=None):
         """
@@ -294,6 +297,10 @@ class CrooksPool:
         :param result_bar: float, BAR result
         :return: None
         """
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            return
         fig, axes = plt.subplots(2, 1)
         axes[0].plot(*p0.T, c='C0')
         axes[0].plot(*p1.T, c='C1')
@@ -335,16 +342,19 @@ class CrooksPool:
             if not all([os.path.isfile('run{}_l{}/frame{}_l{}.gro'.format(num, i, num, i))
                         for num in range(self.offset, self.offset + self.nruns)]):
                 struct = self.struct2 if i == 1 else self.struct
-                traj = md.load(self.xtc[i], top=struct)  # TODO optional trjconv if mdtraj is missing
-                nfr = len(traj)
+                nfr = gml.frames_count(self.xtc[i], self.gmx)
                 if not self.random:
                     frames = np.linspace([0], [nfr - 0.00001], self.nmax).astype(int)[
                              self.offset:self.offset + self.nruns]
                 else:
                     frames = np.random.choice(nfr, size=self.nmax, replace=False)
-                for num, fr in enumerate(frames, self.offset):
-                    curr = traj[fr]
-                    curr.save_gro('run{}_l{}/frame{}_l{}.gro'.format(num, i, num, i))
+                with open('frames.ndx') as ndxf:
+                    ndxf.write(' [ frames ] \n')
+                    for m in range(ceil(nfr/15.0)):
+                        ndxf.write(' '.join([str(x) for x in frames[15*m:15*(m+1)]]) + '\n')
+                gml.gmx_command(self.gmx, 'trjconv', fr='frames.ndx', f=self.xtc[i], s=struct, sep=True, o='frame.gro')
+                for fr in range(nfr):
+                    os.rename(f'frame{fr}.gro', f'run{fr}_l{i}/frame{fr}_l{i}.gro')
             else:
                 print("frames for lambda {} already present, skipping generating new ones".format(i))
 
@@ -355,6 +365,12 @@ class CrooksPool:
                 'I': 'ILE', 'K': 'LYS', 'L': 'LEU', 'M': 'MET', 'N': 'ASN', 'P': 'PRO', 'Q': 'GLN',
                 'R': 'ARG', 'S': 'SER', 'T': 'THR', 'V': 'VAL', 'W': 'TRP', 'Y': 'TYR'}
         resnums, targets = [], []
+
+        try:
+            import pmx
+        except ImportError:
+            raise RuntimeError("pmx is required for introducing alchemical mutation on-the-fly")
+
         for mut in mutate.split('/'):
             if mut[1] in '1234567890':
                 if lam == 0:
@@ -374,7 +390,6 @@ class CrooksPool:
                 resnum = int(mut[2:-2])
             resnums.append(resnum)
             targets.append(target)
-        import pmx
         model = pmx.Model('run{}_l{}/frame{}_l{}.gro'.format(num, lam, num, lam))
         for resnum, target in zip(resnums, targets):  # TODO OP1, OP2 to O1P, O2P
             if target is not None:
@@ -386,10 +401,16 @@ class CrooksPool:
         crook, runtype = data
         crook.grompp_me(runtype)
 
-    @staticmethod
-    def mdrun(data):
-        crook, runtype = data
-        crook.mdrun_me(runtype)
+    def mdrun_multi(self, runtype):
+        tpr = runtype if runtype in ['mini', 'eq'] else 'dyn'
+        if self.plumed and runtype == 'eq':
+            plu = ' -plumed plumed.dat '
+        else:
+            plu = ''
+        multi = ['run{}_l{}'.format(w.id, w.initlambda) for w in self.workers]
+        if not all(['{}.gro'.format(tpr) in os.listdir('run{}_l{}'.format(w.id, w.initlambda)) for w in self.workers]):
+            print(gml.gmx_command(f'mpiexec {self.gmx}', 'mdrun', deffnm=tpr, v=plu, cpi=True, multidir=multi,
+                                  answer=True))
 
     @staticmethod
     def read_results(crook):
@@ -467,40 +488,17 @@ class Crooks:
         """
         tpr = 'eq' if runtype == 'eq' else 'mini' if runtype == 'mini' else 'dyn'
         mdp = 'mini' if runtype == 'mini' else 'md'
-        trr = '' if runtype in ['mini', 'eq'] else ' -t eq{}_l{}.trr -time {} '.format(self.id, self.initlambda,
-                                                                                       self.master.init_length)
+        trr = ' ' if runtype in ['mini', 'eq'] else ' -t eq{}_l{}.trr -time {} '.format(self.id, self.initlambda,
+                                                                                        self.master.init_length)
         os.chdir('run{}_l{}'.format(self.id, self.initlambda))
         master_top = self.master.top if int(self.initlambda) == 0 else self.master.top2
         frame = 'mini{}_l{}.gro'.format(self.id, self.initlambda) if runtype == 'eq' \
             else 'frame{}_l{}.gro'.format(self.id, self.initlambda)
         if '{}{}_l{}.tpr'.format(tpr, self.id, self.initlambda) not in os.listdir('.'):
             top = master_top if master_top.startswith('/') else '../' + master_top
-            call('{gmx} grompp -f {mdp}.mdp -p {top} -c {frame} -o {tpr}{n}_l{l}.tpr {trr}'
-                 '-maxwarn {mw} >> gmp.log 2>&1'.format(gmx=self.master.gmx, l=self.initlambda, n=self.id, trr=trr,
-                                                        top=top, mw=self.master.maxwarn, tpr=tpr, mdp=mdp,
-                                                        frame=frame), shell=True)
+            print(gml.gmx_command(self.master.gmx, f=f'{mdp}.mdp', p=top, c=frame, answer=True,
+                                  o=f'{tpr}{self.id}_l{self.initlambda}.tpr', v=trr, maxwarn=self.master.maxwarn))
             os.remove('mdout.mdp')
-        os.chdir('..')
-
-    def mdrun_me(self, runtype):
-        """
-        Checks for the final .gro file, runs mdrun if not present
-        :return: None
-        """
-        tpr = 'eq' if runtype == 'eq' else 'mini' if runtype == 'mini' else 'dyn'
-        if self.plumed and runtype == 'eq':
-            plu = ' -plumed plumed.dat '
-        else:
-            plu = ''
-        if self.master.tmpi:
-            tmpi = ' -ntmpi 1 '
-        else:
-            tmpi = ''
-        os.chdir('run{}_l{}'.format(self.id, self.initlambda))
-        if '{}{}_l{}.gro'.format(tpr, self.id, self.initlambda) not in os.listdir('.'):
-            call('{gmx} mdrun -deffnm {tpr}{n}_l{l} -v -ntomp 1 {tmpi} {plu} -cpi >> mdr.log '
-                 '2>&1'.format(gmx=self.master.gmx, l=self.initlambda, n=self.id, tpr=tpr, plu=plu, tmpi=tmpi),
-                 shell=True)
         os.chdir('..')
 
     def analyze_me(self):
@@ -520,53 +518,28 @@ class Crooks:
         self.work = simps(dhdl, np.linspace([self.initlambda], [endlambda], len(dhdl)).reshape(-1))
 
 
-class BAR:
-    def __init__(self, wf, wr, T):
-        self.kb = 0.00831447215  # kJ/(K*mol)
-        self.wf = np.array(wf)
-        self.wr = np.array(wr)
-        self.T = float(T)
-        self.nf = len(wf)
-        self.nr = len(wr)
-        self.beta = 1. / (self.kb * self.T)
-        self.M = self.kb * self.T * np.log(float(self.nf) / float(self.nr))
-        self.dg = self.calc_dg(self.wf, self.wr, self.T)
+def bar(forward_works, reverse_works, temperature):
+    kb = 0.00831447215  # in kJ units
+    forward_works = np.array(forward_works)
+    reverse_works = np.array(reverse_works)
+    temperature = float(temperature)
+    nf = float(len(forward_works))
+    nr = float(len(reverse_works))
+    beta = 1. / (kb * temperature)
+    fact = kb * temperature * np.log(nf / nr)
 
-    def calc_dg(self, wf, wr, T):
-        nf = float(len(wf))
-        nr = float(len(wr))
-        beta = 1. / (self.kb * T)
-        M = self.kb * T * np.log(nf / nr)
+    def func(x, wf, wr):
+        sf = 0
+        for v in wf:
+            sf += 1 / (1 + np.exp(beta * (fact + v - x)))
+        sr = 0
+        for v in wr:
+            sr += 1 / (1 + np.exp(-beta * (fact + v - x)))
+        r = sf - sr
+        return r ** 2
 
-        def func(x, wf, wr):
-            sf = 0
-            for v in wf:
-                sf += 1 / (1 + np.exp(beta * (M + v - x)))
-            sr = 0
-            for v in wr:
-                sr += 1 / (1 + np.exp(-beta * (M + v - x)))
-            r = sf - sr
-            return r ** 2
-
-        avA = np.average(wf)
-        avB = np.average(wr)
-        x0 = (avA + avB) / 2.
-        dg = fmin(func, x0=x0, args=(wf, wr), disp=0)
-        return float(dg)
-
-
-
-    args, extra = parse_args()
-    pool = CrooksPool(struct=args.gro, top=args.top, xtc0=args.xtc, xtc1=args.xtc2, nruns=args.njobs, length=args.time,
-                      gmx=args.gmx, maxwarn=args.maxwarn, convergence=args.conv, alias=args.alias, debug=args.debug,
-                      offset=args.offset, mpi=not args.nompi, nmax=args.nmax, init_eq=args.inittime,
-                      temperature=args.temperature, stride=args.stride, plumed=args.plumed, top2=args.top2,
-                      tmpi=not args.notmpi, mutate=args.mutate, pmxff=args.pmxff, wt_only=args.wt_only, mini=args.mini,
-                      struct2=args.gro2, plumed2=args.plumed2, hbond=args.hbond, dt=args.timestep, weights=args.weights,
-                      random=args.random, **extra)
-    if not args.norun:
-        import mdtraj as md
-
-        pool.run()
-    if not args.noan:
-        pool.analyze()
+    av_a = np.average(forward_works)
+    av_b = np.average(reverse_works)
+    x0 = (av_a + av_b) / 2.
+    dg = fmin(func, x0=x0, args=(forward_works, reverse_works), disp=0)
+    return float(dg)

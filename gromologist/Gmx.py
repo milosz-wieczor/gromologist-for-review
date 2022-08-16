@@ -136,6 +136,11 @@ def ndx(struct: gml.Pdb, selections: list, fname: str = 'gml.ndx') -> list:
     return group_names
 
 
+def frames_count(trajfile: str, gmx: Optional[str] = 'gmx') -> int:
+    output = gml.gmx_command(gmx, 'check', f=trajfile, answer=True).split('\n')
+    return [int(x.split()[1]) for x in output if len(x.split()) > 1 and  x.split()[0] == "Coords"][0]
+
+
 def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = False, traj: Optional[str] = None,
                     terms: str = 'potential', cleanup: bool = True, group_a: Optional[str] = None,
                     group_b: Optional[str] = None) -> dict:

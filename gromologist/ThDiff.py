@@ -2,6 +2,7 @@ import os
 import gromologist as gml
 from typing import Union, Optional, TypeVar, Tuple
 from itertools import combinations_with_replacement
+from multiprocessing import Pool
 
 gmlMod = TypeVar("gmlMod", bound="Mod")
 
@@ -434,14 +435,20 @@ class ThermoDiff:
         Launches reruns for each legal mod-trajectory combination
         :return: None
         """
+        p = Pool()
+        pairs = []
         for mod in self.mods:
-            mod.goto_mydir()
             for traj in self.trajs:
                 if self.equal_tops(mod.top, traj['top']):
+                    datasets = self.get_traj(traj['id'])['datasets']
                     print(f"Calculating rerun for {str(mod)}, traj {traj['path']}")
-                    self.launch_rerun(mod, traj)
+                    pairs.append((mod, traj, datasets))
+        deriv_dicts = p.map(self.launch_rerun, pairs)
+        for dd in deriv_dicts:
+            self.derivatives.update(dd)
 
-    def launch_rerun(self, mod, traj: dict):
+    @staticmethod
+    def launch_rerun(mod_traj_ds):
         """
         Launches an individual alchemical rerun and reads the data
         (skips the calculation if already performed)
@@ -449,17 +456,20 @@ class ThermoDiff:
         :param traj: dict, the trajectory and associated data
         :return: None
         """
+        derivatives = {}
+        mod, traj, datasets = mod_traj_ds
+        mod.goto_mydir()
         if 'rerun.xvg' not in os.listdir('.'):
-            self.derivatives[(mod.counter, traj['id'])] = gml.calc_gmx_dhdl('../../' + mod.structure, str(mod) + '-' +
-                                                                            mod.top.top, '../../' + traj['path'])
+            derivatives[(mod.counter, traj['id'])] = gml.calc_gmx_dhdl('../../' + mod.structure, str(mod) + '-' +
+                                                                       mod.top.top, '../../' + traj['path'])
         else:
-            self.derivatives[(mod.counter, traj['id'])] = gml.read_xvg('rerun.xvg', [0])
-        datasets = self.get_traj(traj['id'])['datasets']
+            derivatives[(mod.counter, traj['id'])] = gml.read_xvg('rerun.xvg', [0])
         for key in datasets.keys():
-            if not len(self.derivatives[(mod.counter, traj['id'])]) == len(datasets[key]):
+            if not len(derivatives[(mod.counter, traj['id'])]) == len(datasets[key]):
                 raise RuntimeError(f"The number of points in dataset {key} for trajectory num {traj['id']} "
                                    f"({len(datasets[key])}) does not match the derivatives "
-                                   f"({len(self.derivatives[(mod.counter, traj['id'])])})")
+                                   f"({len(derivatives[(mod.counter, traj['id'])])})")
+        return derivatives
 
     def calc_weights(self):
         """

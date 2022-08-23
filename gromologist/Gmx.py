@@ -137,6 +137,12 @@ def ndx(struct: gml.Pdb, selections: list, fname: str = 'gml.ndx') -> list:
 
 
 def frames_count(trajfile: str, gmx: Optional[str] = 'gmx') -> int:
+    """
+    Runs gmx check to calculate the number of frames in a specified trajectory
+    :param trajfile: str, path to/name of the trajectory
+    :param gmx: str, optionally the name of the Gromacs executable
+    :return: int, number of frames found
+    """
     output = gml.gmx_command(gmx, 'check', f=trajfile, answer=True).split('\n')
     return [int(x.split()[1]) for x in output if len(x.split()) > 1 and  x.split()[0] == "Coords"][0]
 
@@ -211,14 +217,21 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
         gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
     gen_mdp('rerun.mdp', free__energy="yes", fep__lambdas="0 1", nstdhdl="1", separate__dhdl__file="yes",
             dhdl__derivatives="yes", init__lambda__state="0")
-    gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5)
-    gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj)
+    print(gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5, answer=True))
+    print(gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj, answer=True))
     out = read_xvg('rerun.xvg', cols=[0])
     if cleanup:
         to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log']
         for filename in to_remove:
             os.remove(filename)
     return out
+
+
+def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx: Optional[str] = 'gmx') -> bool:
+    en1 = calc_gmx_energy(struct, topfile1, gmx)['potential']
+    en2 = calc_gmx_energy(struct, topfile2, gmx)['potential']
+    print(f"Topology 1 has energy {en1}, topology 2 has energy {en2}")
+    return en1 == en2
 
 
 def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] = 'tip3p',

@@ -1566,7 +1566,7 @@ class SectionParam(Section):
         """
         used_params = []
         if section == 'all':
-            subsections_to_add = ['atomtypes', 'pairtypes', 'nonbonded_params', 'constrainttypes']
+            subsections_to_add = ['atomtypes', 'pairtypes', 'nonbond_params', 'constrainttypes']
             # TODO check what with other sections?
         else:
             subsections_to_add = [section]
@@ -1627,7 +1627,7 @@ class SectionParam(Section):
         """
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes', 'atomtypes': 'atomtypes', 'pairtypes': 'pairtypes',
-                     'nonbonded_params': 'nonbonded_params', 'constrainttypes': 'constrainttypes'}
+                     'nonbond_params': 'nonbond_params', 'constrainttypes': 'constrainttypes'}
         if section == 'all':
             subs = list(matchings.values())
         else:

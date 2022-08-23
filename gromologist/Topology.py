@@ -89,6 +89,35 @@ class Top:
                     atomlist.append(a)
         return atomlist
 
+    def select_atoms(self, selection_string):
+        """
+        Returns atoms' indices according to the specified selection string
+        :param selection_string: str, a VMD-compatible selection
+        :return: list, 0-based indices of atoms compatible with the selection
+        """
+        sel = gml.SelectionParser(self)
+        return sel(selection_string)
+
+    def select_atom(self, selection_string):
+        """
+        Returns atoms' indices according to the specified selection string
+        :param selection_string: str, a VMD-compatible selection
+        :return: int, 0-based index of atom compatible with the selection
+        """
+        sel = gml.SelectionParser(self)
+        result = sel(selection_string)
+        if len(result) > 1:
+            raise RuntimeError("Selection {} returned more than one atom: {}".format(selection_string, result))
+        elif len(result) < 1:
+            raise RuntimeError("Selection {} returned no atoms".format(selection_string, result))
+        return result[0]
+
+    def get_atoms(self, selection_string):
+        return [self.atoms[i] for i in self.select_atoms(selection_string)]
+
+    def get_atom(self, selection_string):
+        return self.atoms[self.select_atom(selection_string)]
+
     @property
     def defined_atomtypes(self):
         return {ent.types[0] for ent in self.parameters.get_subsection('atomtypes').entries_param}

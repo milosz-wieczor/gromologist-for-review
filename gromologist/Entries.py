@@ -11,7 +11,7 @@ class Entry:
         semicol_index = content.find(';')
         if semicol_index >= 0:
             self.content = content[:semicol_index].strip().split()
-            self.comment = ' ' + content[semicol_index:]
+            self.comment = ' ' + content[semicol_index:].rstrip()
         else:
             self.content = content.strip().split()
             self.comment = ''
@@ -196,7 +196,7 @@ class EntryBonded(Entry):
                         fmt_suff = fmt_suff + "{:>15s} "
         fstring = self.fstring + fmt_suff
         return fstring.format(*self.atom_numbers, self.interaction_type, *self.params_state_a, *self.params_state_b) \
-            + ' ' + self.comment
+            + ' ' + self.comment + '\n'
 
         
 class EntryParam(Entry):
@@ -358,7 +358,7 @@ class EntryAtom(Entry):
             alch_fstring = "{:>11s}" + self.float_fmt(self.charge_b) + self.float_fmt(self.mass_b)
             fstring += alch_fstring
             return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
-                                  self.charge, self.mass, self.type_b, self.charge_b, self.mass_b) + self.comment
+                                  self.charge, self.mass, self.type_b, self.charge_b, self.mass_b) + self.comment + '\n'
         else:
             return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
-                                  self.charge, self.mass) + ' ' + self.comment
+                                  self.charge, self.mass) + ' ' + self.comment + '\n'

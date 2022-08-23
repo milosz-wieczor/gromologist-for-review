@@ -5,12 +5,9 @@ class SelectionParser:
     def __init__(self, master):
         self.master = master
         try:
-            self.nat = len(self.master.atoms)
+            self.nat = self.master.natoms
         except AttributeError:
-            try:
-                self.nat = self.master.natoms
-            except AttributeError:
-                raise TypeError("Can only parse selections with PDB or topology data")
+            raise TypeError("Can only parse selections with PDB or topology data")
         
     @staticmethod
     def ispdb(obj):
@@ -115,7 +112,7 @@ class SelectionParser:
                          "chain": "chain", "resname": "resname", "serial": "serial"}
         else:
             matchings = {"name": "atomname", "resid": "resid", "resnum": "resid", "mass": "mass",
-                         "resname": "resname", "serial": "num", "type": "type"}
+                         "resname": "resname", "serial": "num", "type": "type", "molecule": "molname"}
         try:
             vals = {int(x) for x in sel_string.split()[1:]}
         except ValueError:
@@ -141,10 +138,7 @@ class SelectionParser:
                 vals = range(beg+1, end)
             else:
                 vals = set(sel_string.split()[1:])
-        try:
-            atomlist = self.master.atoms
-        except AttributeError:
-            atomlist = [e for e in self.master.get_subsection('atoms').entries if isinstance(e, EntryAtom)]
+        atomlist = self.master.atoms
         for n, a in enumerate(atomlist):
             if not rev:
                 if a.__getattribute__(matchings[keyw]) in vals:

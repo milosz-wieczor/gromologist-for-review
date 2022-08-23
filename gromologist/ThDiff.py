@@ -1,6 +1,7 @@
 import os
 import gromologist as gml
-from typing import Union, Optional, Sequence, TypeVar, Tuple
+from typing import Union, Optional, TypeVar, Tuple
+from itertools import combinations_with_replacement
 
 gmlMod = TypeVar("gmlMod", bound="Mod")
 
@@ -8,8 +9,7 @@ gmlMod = TypeVar("gmlMod", bound="Mod")
 class Mod:
     counter = 0  # only used for naming with unique numbers
 
-    def __init__(self, top: Union[str, gml.Top], structure: str, resnr: Optional[list] = None,
-                 resnames: Optional[list] = None, names: Optional[list] = None, molname: Optional[list] = None):
+    def __init__(self, top: Union[str, gml.Top], structure: str, selections: Optional[list] = None):
         """
         Base class to work with parameter modifications.
         The class is actually used for the calculation of original
@@ -17,9 +17,7 @@ class Mod:
         ModNbfix and ModAtom.
         :param top: list of Top objects corresponding to the modified topology
         :param structure: str, path to a structure file (.gro or .pdb) compatible with the topology
-        :param resnr: a list of tuples, each containing a list of 3 or 4 residue numbers
-        :param resnames: a list of tuples, each containing a list of 3 or 4 residue names
-        :param names: a list of tuples, each containing a list of 3 or 4 atom names
+        :param selections: list of str, selections that will define atoms to be modified
         """
         Mod.counter += 1
         self.counter = Mod.counter
@@ -32,16 +30,11 @@ class Mod:
         self.data = None
         self.diff = None
         self.structure = structure
-        self.molname = molname
         self.topname = ''
         self.trajs = []
         self.dpar = 0.001
         self.sigma, self.chg, self.eps, self.nbs, self.nbe, self.dih, self.ang = [''] * 7
-        assert bool(names) == bool(resnames) == bool(resnr)
-        self.names = names
-        self.res = resnr
-        self.resnames = resnames
-        assert len(self.names) == len(self.res) == len(self.resnames) > 0
+        self.atoms = [self.top.get_atoms(sel) for sel in selections]
 
     def __str__(self) -> str:
         """
@@ -80,14 +73,9 @@ class Mod:
         """
         os.chdir(self.topname)
 
-    def get_type(self, name: str, res: int, resname: str, molname: str) -> str:
-        mol = self.top.get_molecule(molname)
-        return mol.get_atom(f'name {name} and resid {res} and resname {resname}').type
-
 
 class ModAtom(Mod):
-    def __init__(self, top: Union[str, gml.Top], structure: str, resnr: list, resnames: list, names: list,
-                 molname: list, changes: str):
+    def __init__(self, top: Union[str, gml.Top], structure: str, selections: list, changes: str):
         """
         Subclass to work with modified atomic params (that is,
         sigma and epsilon defined for individual types, or charge defined
@@ -97,49 +85,40 @@ class ModAtom(Mod):
         these atoms' type will be cloned from "type" to "Ytype",
         and the corresponding sigma/epsilon/charge parameters will be modified.
         :param top: a Top object corresponding to the modified topology
-        :param resnr: a list of residue numbers
-        :param resnames: a list of residue names
-        :param names: a list of atom names
+        :param selections: list of str, selections that will define atoms to be modified
         :param changes: single character denoting the change to be performed
         """
-        super(ModAtom, self).__init__(top, structure, resnr, resnames, names, molname)
+        super(ModAtom, self).__init__(top, structure, selections)
         self.sigma = 's' if 's' in changes else ''
         self.eps = 'e' if 'e' in changes else ''
         self.chg = 'c' if 'c' in changes else ''
+        assert len(self.atoms) == 1
+        self.atoms = self.atoms[0]
         if not (self.chg or self.eps or self.sigma):
             raise ValueError("no mode selected appropriate for an ModAtom object")
-        if names and resnr:
-            self.types_are_consistent()
-            self.type = self.get_type(self.names[0], self.res[0], self.resnames[0], self.molname[0])
-            if not self.chg:
-                self.top.parameters.clone_type(atomtype=self.type, prefix='Y')
-            self.mod_sigma_eps()
-            for molname in self.molname:
-                self.mod_chg(molname)
-        else:
-            self.names = ['orig']
-            self.res = []
+        self.types_are_consistent()
+        self.type = self.atoms[0].type
+        if not self.chg:
+            self.top.parameters.clone_type(atomtype=self.type, prefix='Y')
+        self.mod_sigma_eps()
+        self.mod_chg()
 
-    def mod_chg(self, molname):
+    def mod_chg(self):
         """
         looks for a line in topology section 'atoms'
         and modifies it as needed
         :return: None
         """
-        for x in range(len(self.names)):
-            name = self.names[x]
-            resname = self.resnames[x]
-            resnum = self.res[x]
-            subsection = self.top.get_molecule(molname).get_subsection('atoms')
-            for e in subsection.entries_atom:
-                if e.atomname == name and e.resid == resnum and e.resname == resname:
-                    e.mass_b = e.mass
-                    if self.chg:
-                        e.type_b = e.type
-                        e.charge_b = e.charge + self.dpar
-                    if self.sigma or self.eps:
-                        e.type_b = 'Y' + e.type
-                        e.charge_b = e.charge
+        for atom in self.atoms:
+            if "TD-MODDED" not in atom.comment:
+                atom.comment = atom.comment + "TD-MODDED"
+                atom.mass_b = atom.mass
+                if self.chg:
+                    atom.type_b = atom.type
+                    atom.charge_b = atom.charge + self.dpar
+                if self.sigma or self.eps:
+                    atom.type_b = 'Y' + atom.type
+                    atom.charge_b = atom.charge
 
     def mod_sigma_eps(self):
         """
@@ -161,17 +140,15 @@ class ModAtom(Mod):
         they are all of the same type
         :return: True if all are of the same type, False otherwise
         """
-        consistent = all([self.get_type(self.names[0], self.res[0], self.resnames[0], self.molname[0])
-                          == self.get_type(self.names[n], self.res[n], self.resnames[n], self.molname[n])
-                          for n in range(len(self.names))])
+        consistent = all([a.type == self.atoms[0].type for a in self.atoms])
         if not consistent:
             raise ValueError(
-                "atoms within a single charge, sigma or epsilon modification need to have consistent types")
+                "atoms within a single charge, sigma or epsilon modification need to have consistent types. "
+                "To change atoms with different types, define multiple modifications")
 
 
 class ModNbfix(Mod):
-    def __init__(self, top: Union[str, gml.Top], structure: str, resnr: list, resnames: list, names: list,
-                 molname: list, changes: str):
+    def __init__(self, top: Union[str, gml.Top], structure: str, selections: list, changes: str):
         """
         Subclass to work with modified NBFIX params (pairwise corrections,
         sigma and epsilon defined for pairs of types).
@@ -182,36 +159,29 @@ class ModNbfix(Mod):
         The modification can be applied to all atoms bearing the specific type
         as well as only a subgroup of these.
         :param top: a Top object corresponding to the modified topology
-        :param resnr: a list of two tuples, each containing a list of residue numbers
-        :param resnames: a list of two tuples, each containing a list of residue names
-        :param names: a list of two tuples, each containing a list of atom names
+        :param selections: list of str, selections that will define atoms to be modified
         :param changes: single character denoting the change to be performed
         """
-        super(ModNbfix, self).__init__(top, structure, resnr, resnames, names, molname)
+        super(ModNbfix, self).__init__(top, structure, selections)
         self.nbs = 'n' if 'n' in changes else ''
         self.nbe = 'm' if 'm' in changes else ''
         if not (self.nbs or self.nbe):
             raise ValueError("no mode selected appropriate for an ModParam object")
-        for tnames, tres, tresnames in zip(self.names, self.res, self.resnames):
-            self.types_are_consistent(tnames, tres, tresnames)
-            try:
-                self.types = (self.get_type(tnames[0][0], tres[0][0], tresnames[0][0], self.molname[0]),
-                              self.get_type(tnames[1][0], tres[1][0], tresnames[1][0], self.molname[1]))
-            except IndexError:
-                pass
-            else:
-                if self.types[0] == self.types[1]:
-                    self.prefixes = ['Y', 'Y']
-                else:
-                    self.prefixes = ['Q', 'Y']
-                # we mod the first type
-                self.top.parameters.clone_type(atomtype=self.types[0], prefix=self.prefixes[0])
-                self.prefix_type(tnames, tres, tresnames, 0)
-                # and then second, if different than first
-                if self.types[0] != self.types[1]:
-                    self.top.parameters.clone_type(atomtype=self.types[1], prefix=self.prefixes[1])
-                    self.prefix_type(tnames, tres, tresnames, 1)
-                self.mod_nb_sigma_eps()
+        self.types = (self.atoms[0][0].type, self.atoms[1][0].type)
+        if self.types[0] == self.types[1]:
+            self.prefixes = ['Y', 'Y']
+        else:
+            self.prefixes = ['Q', 'Y']
+        self.types_are_consistent()
+        for type, prefix in zip(self.types, self.prefixes):
+            if prefix + type not in self.top.defined_atomtypes:
+                self.top.parameters.clone_type(atomtype=type, prefix=prefix)
+        # we mod the first type
+        self.prefix_type(self.atoms[0], self.types[0], self.prefixes[0])
+        # and then second, if different than first
+        if self.types[0] != self.types[1]:
+            self.prefix_type(self.atoms[1], self.types[1], self.prefixes[1])
+        self.mod_nb_sigma_eps()
 
     def mod_nb_sigma_eps(self):
         """
@@ -227,38 +197,34 @@ class ModNbfix(Mod):
             subsection.add_nbfix(type1=self.prefixes[0] + self.types[0], type2=self.prefixes[1] + self.types[1],
                                  mod_epsilon=self.dpar, action_default='m')
 
-    def prefix_type(self, tnames: Sequence, tres: Sequence, tresnames: Sequence, prefix_number: int):
+    def prefix_type(self, atoms: list, atom_type: str, prefix: str):
         """
         looks for a line in topology section 'atoms'
         and modifies it as needed
         :return: None
         """
-        for x in range(len(tnames[prefix_number])):
-            name = tnames[prefix_number][x]
-            resname = tresnames[prefix_number][x]
-            resnum = tres[prefix_number][x]
-            subsection = self.top.get_molecule(self.molname[prefix_number])
-            subsection.set_type(resname=resname, resid=resnum, atomname=name, prefix=self.prefixes[prefix_number])
+        for atom in atoms:
+            if "TD-MODDED" not in atom.comment:
+                atom.mass_b = atom.mass
+                atom.type_b = prefix + atom_type
+                atom.charge_b = atom.charge
+                atom.comment = atom.comment + "TD-MODDED"
 
-    def types_are_consistent(self, tnames: Sequence, tres: Sequence, tresnames: Sequence):
+    def types_are_consistent(self):
         """
         if many atoms are passed in a single input line, need to make sure
         they are all of the same type; raises ValueError if this is not the case
         :return: None
         """
-        consistent1 = all([self.get_type(tnames[0][0], tres[0][0], tresnames[0][0], self.molname[0])
-                           == self.get_type(tnames[0][n], tres[0][n], tresnames[0][n], self.molname[0])
-                           for n in range(len(tnames[0]))])
-        consistent2 = all([self.get_type(tnames[1][0], tres[1][0], tresnames[1][0], self.molname[1])
-                           == self.get_type(tnames[1][n], tres[1][n], tresnames[1][n], self.molname[1])
-                           for n in range(len(tnames[1]))])
-        if not consistent1 or not consistent2:
-            raise ValueError("atoms within a single nbfix modification need to have consistent types")
+        for atomset in self.atoms:
+            consistent = all([atomset[0].type == atom.type for atom in atomset])
+            if not consistent:
+                raise ValueError("atoms within a single nbfix modification need to have consistent types")
 
 
 class ModParam(Mod):
-    def __init__(self, top: Union[str, gml.Top], structure: str, resnr: list, resnames: list, names: list,
-                 molname: list, changes: str, period: Optional[int] = -1):
+    def __init__(self, top: Union[str, gml.Top], structure: str, selections: list, changes: str,
+                 period: Optional[int] = -1):
         """
         Subclass to work with modified bonded params (angles and dihedrals).
         The class allows a lists of tuples of atoms that each corresponds
@@ -268,12 +234,10 @@ class ModParam(Mod):
         The modification can be applied to all atoms bearing the specific type
         as well as only a subgroup of these.
         :param top: Top, a Top object corresponding to the modified topology
-        :param resnr: list, a list of tuples, each containing a list of 3 or 4 residue numbers
-        :param resnames: list, a list of tuples, each containing a list of 3 or 4 residue names
-        :param names: list, a list of tuples, each containing a list of 3 or 4 atom names
+        :param selections: list of str, selections that will define atoms to be modified
         :param changes: str, single character denoting the change to be performed
         """
-        super(ModParam, self).__init__(top, structure, resnr, resnames, names, molname)
+        super(ModParam, self).__init__(top, structure, selections)
         self.dih = 'd' if 'd' in changes else ''  # implement add to top line
         self.ang = 'a' if 'a' in changes else ''  # implement add to top line
         self.period = period
@@ -284,16 +248,16 @@ class ModParam(Mod):
         if period < 0 and self.dih:
             raise RuntimeError("Please choose periodicity for the dihedral to be modified")
         self.types_are_consistent()
-        self.types = tuple(self.get_type(n, r, rn, self.molname[0]) for n, r, rn in
-                           zip(self.names[0], self.res[0], self.resnames[0]))
+        self.types = [atoms[0].type for atoms in self.atoms]
+        self.nums = [[atom.num for atom in atomset] for atomset in self.atoms]
         if self.ang:
-            for molname in self.molname:
+            for molname in list({atom.molname for atomset in self.atoms for atom in atomset}):
                 self.top.get_molecule(molname).add_ff_params('angles')
                 self.mod_ang(molname)
         if self.dih:
-            for molname in self.molname:
+            for molname in list({atom.molname for atomset in self.atoms for atom in atomset}):
                 self.top.get_molecule(molname).add_ff_params('dihedrals')
-            self.mod_dih(molname)
+                self.mod_dih(molname)
 
     def mod_ang(self, molname):
         """
@@ -305,10 +269,14 @@ class ModParam(Mod):
         assert len(self.types) == 3
         for entry in subsection.entries_bonded:
             entry.read_types()
-            if all([i == j for i, j in zip(entry.types_state_a, self.types)]) or\
+            if all([i == j for i, j in zip(entry.types_state_a, self.types)]) or \
                     all([i == j for i, j in zip(entry.types_state_a, self.types[::-1])]):
-                entry.params_state_b = entry.params_state_a[:]
-                entry.params_state_b[0] += self.dpar
+                if all([i in numset for i, numset in zip(entry.atom_numbers, self.nums)] or \
+                       [i in numset for i, numset in zip(entry.atom_numbers, self.nums[::-1])]):
+                    if "TD-MODDED" not in entry.comment:
+                        entry.params_state_b = entry.params_state_a[:]
+                        entry.params_state_b[0] += self.dpar
+                        entry.comment = entry.comment + "TD-MODDED"
 
     def mod_dih(self, molname):
         """
@@ -322,9 +290,13 @@ class ModParam(Mod):
             entry.read_types()
             if all([i == j for i, j in zip(entry.types_state_a, self.types)]) or \
                     all([i == j for i, j in zip(entry.types_state_a, self.types[::-1])]):
-                if entry.params_state_a[-1] == self.period:
-                    entry.params_state_b = entry.params_state_a[:]
-                    entry.params_state_b[1] += self.dpar
+                if all([i in numset for i, numset in zip(entry.atom_numbers, self.nums)] or \
+                       [i in numset for i, numset in zip(entry.atom_numbers, self.nums[::-1])]):
+                    if entry.params_state_a[-1] == self.period:
+                        if "TD-MODDED" not in entry.comment:
+                            entry.params_state_b = entry.params_state_a[:]
+                            entry.params_state_b[1] += self.dpar
+                            entry.comment = entry.comment + "TD-MODDED"
 
     def types_are_consistent(self):
         """
@@ -333,11 +305,10 @@ class ModParam(Mod):
         raises ValueError if not the case
         :return: None
         """
-        types_list = [tuple(self.get_type(qn, qrn, qr, m) for qn, qrn, qr in zip(n, rn, r))
-                      for n, rn, r, m in zip(self.names, self.res, self.resnames, self.molname)]
-        ok = all([types_list[0] == types_list[n] for n in range(1, len(types_list))])
-        if not ok:
-            raise ValueError("atoms within a single parameter modification need to have consistent types")
+        for atomset in self.atoms:
+            ok = all([atom.type == atomset[0].type for atom in atomset])
+            if not ok:
+                raise ValueError("atoms within a single parameter modification need to have consistent types")
 
 
 class ThermoDiff:
@@ -352,25 +323,31 @@ class ThermoDiff:
         self.discrete_observable_derivatives = {}
         self.profile_observable_derivatives = {}
 
-    def add_mod(self, top: Union[str, gml.Top], structure: str, modtype: str, resids: list, resnames: list,
-                atomnames: list, molname: list):
+    def add_mod(self, top: Union[str, gml.Top], structure: str, modtype: str, selections: list):
         """
         Adds a new modified topology for derivative calculation
         :param top: str or gml.Top, the topology compatible with the system
         :param structure: str, a path to the Pdb or Gro file
         :param modtype: str, type of the modification, one of the following: c, s, e, n, m, a, d
-        :param resids: list of int, residue IDs that will be affected by the modification
-        :param resnames: list of str, residue names that will be affected by the modification
-        :param atomnames: list of str, atom names that will be affected by the modification
-        :param molname: list of str, molecule names that correspond to the above lists
+        :param selections: list of str, selections that will define atoms to be modified
         :return: None
         """
         if modtype in 'cse':
-            self.mods.append(ModAtom(top, structure, resids, resnames, atomnames, molname, modtype))
+            self.mods.append(ModAtom(top, structure, selections, modtype))
         elif modtype in 'ad':
-            self.mods.append(ModParam(top, structure, resids, resnames, atomnames, molname, modtype))
+            self.mods.append(ModParam(top, structure, selections, modtype))
         elif modtype in 'nm':
-            self.mods.append(ModNbfix(top, structure, resids, resnames, atomnames, molname, modtype))
+            self.mods.append(ModNbfix(top, structure, selections, modtype))
+
+    def add_all_nbfix_mods(self, top: Union[str, gml.Top], structure: str):
+        topology = gml.Top(top) if isinstance(top, str) else top
+        topology.clear_sections()
+        topology.clear_ff_params()
+        for type_pair in combinations_with_replacement(topology.defined_atomtypes, 2):
+            print(f"Adding modification: {type_pair[0]}, {type_pair[1]}")
+            self.add_mod(topology, structure, modtype='n', selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
+            self.add_mod(topology, structure, modtype='m', selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
+
 
     def add_traj(self, top: Union[str, gml.Top], traj: str, datasets: Optional[dict] = None,
                  weights: Optional[list] = None):
@@ -644,12 +621,16 @@ class ThermoDiff:
                             mean_product[0.5*(x+y)] += deriv_data[n] * weights[n] * derivs[n]
                             mean_data[0.5*(x+y)] += deriv_data[n]
             if free_energy:
-                self.profile_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar
-                                                                             for x in mean_derivatives.keys()]
+                self.profile_free_energy_derivatives[(str(mod), dataset)] = ([(x+y)/2 for x, y in zip(thresh[:-1],
+                                                                                                      thresh[1:])],
+                                                                             [mean_derivatives[x] / mod.dpar
+                                                                             for x in mean_derivatives.keys()])
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
                     mean_obs[key] = (1 / 0.008314 * self.temperature) * (
                                 mean_data[key] * mean_derivatives[key] - mean_product[key])
-                self.profile_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / mod.dpar
-                                                                            for x in mean_obs.keys()]
+                self.profile_observable_derivatives[(str(mod), dataset)] = ([(x+y)/2 for x, y in zip(thresh[:-1],
+                                                                                                      thresh[1:])],
+                                                                            [mean_obs[x] / mod.dpar
+                                                                            for x in mean_obs.keys()])

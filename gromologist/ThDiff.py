@@ -3,6 +3,7 @@ import gromologist as gml
 from typing import Union, Optional, TypeVar, Tuple
 from itertools import combinations_with_replacement
 from multiprocessing import Pool
+from copy import deepcopy
 
 gmlMod = TypeVar("gmlMod", bound="Mod")
 
@@ -346,9 +347,10 @@ class ThermoDiff:
         topology.clear_ff_params()
         for type_pair in combinations_with_replacement(topology.defined_atomtypes, 2):
             print(f"Adding modification: {type_pair[0]}, {type_pair[1]}")
-            self.add_mod(topology, structure, modtype='n', selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
-            self.add_mod(topology, structure, modtype='m', selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
-
+            self.add_mod(deepcopy(topology), structure, modtype='n',
+                         selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
+            self.add_mod(deepcopy(topology), structure, modtype='m',
+                         selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
 
     def add_traj(self, top: Union[str, gml.Top], traj: str, datasets: Optional[dict] = None,
                  weights: Optional[list] = None):
@@ -450,10 +452,9 @@ class ThermoDiff:
     @staticmethod
     def launch_rerun(mod_traj_ds):
         """
-        Launches an individual alchemical rerun and reads the data
+        Launches an individual alchemical rerun and reads the data, can be parallelized
         (skips the calculation if already performed)
-        :param mod: subclass of gml.Mod, the modified topology to be selected for this rerun
-        :param traj: dict, the trajectory and associated data
+        :param mod_traj_ds: tuple, contains the mod, traj and dataset objects
         :return: None
         """
         derivatives = {}
@@ -641,6 +642,6 @@ class ThermoDiff:
                     mean_obs[key] = (1 / 0.008314 * self.temperature) * (
                                 mean_data[key] * mean_derivatives[key] - mean_product[key])
                 self.profile_observable_derivatives[(str(mod), dataset)] = ([(x+y)/2 for x, y in zip(thresh[:-1],
-                                                                                                      thresh[1:])],
+                                                                                                     thresh[1:])],
                                                                             [mean_obs[x] / mod.dpar
                                                                             for x in mean_obs.keys()])

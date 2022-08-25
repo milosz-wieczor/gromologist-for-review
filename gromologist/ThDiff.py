@@ -345,7 +345,7 @@ class ThermoDiff:
         topology = gml.Top(top) if isinstance(top, str) else top
         topology.clear_sections()
         topology.clear_ff_params()
-        for type_pair in combinations_with_replacement(topology.defined_atomtypes, 2):
+        for type_pair in sorted(list(combinations_with_replacement(topology.defined_atomtypes, 2))):
             print(f"Adding modification: {type_pair[0]}, {type_pair[1]}")
             self.add_mod(deepcopy(topology), structure, modtype='n',
                          selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])

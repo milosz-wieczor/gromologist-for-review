@@ -437,7 +437,6 @@ class ThermoDiff:
         Launches reruns for each legal mod-trajectory combination
         :return: None
         """
-        p = Pool()
         pairs = []
         for mod in self.mods:
             for traj in self.trajs:
@@ -445,7 +444,8 @@ class ThermoDiff:
                     datasets = self.get_traj(traj['id'])['datasets']
                     print(f"Calculating rerun for {str(mod)}, traj {traj['path']}")
                     pairs.append((mod, traj, datasets))
-        deriv_dicts = p.map(self.launch_rerun, pairs)
+        with Pool() as p:
+            deriv_dicts = p.map(self.launch_rerun, pairs)
         for dd in deriv_dicts:
             self.derivatives.update(dd)
 

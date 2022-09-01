@@ -572,20 +572,20 @@ class ThermoDiff:
             if len(threshold) % 2 == 1:
                 raise RuntimeError("The list 'threshold' has to have an even number of entries, one for each starting "
                                    "and ending point of each state")
-        states = [(x, y) for x, y in zip(threshold[::2], threshold[1::2])] if threshold is not None else \
-            {data for traj in self.trajs for data in traj['datasets'][dataset]}
+        states = [(round(x, 6), round(y, 6)) for x, y in zip(threshold[::2], threshold[1::2])] if threshold is not None else \
+            sorted(list({data for traj in self.trajs for data in traj['datasets'][dataset]}))
         binning_dset, deriv_dset = (dataset, dataset) if cv_dataset is None else (cv_dataset, dataset)
         for mod in self.mods:
             binning_data, deriv_data, weights, derivs = self.get_flat_data(binning_dset, deriv_dset, mod)
-            mean_derivatives = {st: 0 for st in states}
-            mean_product = {st: 0 for st in states}
-            mean_data = {st: 0 for st in states}
+            mean_derivatives = {st: 0 for st in states + [None]}
+            mean_product = {st: 0 for st in states + [None]}
+            mean_data = {st: 0 for st in states + [None]}
             for n in range(len(binning_data)):
                 state_index = None
                 if threshold is not None:
                     for x, y in zip(threshold[::2], threshold[1::2]):
                         if x <= binning_data[n] < y:
-                            state_index = (x, y)
+                            state_index = (round(x, 6), round(y, 6))
                             break
                 else:
                     state_index = binning_data[n]

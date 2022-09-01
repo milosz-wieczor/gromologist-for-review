@@ -128,11 +128,12 @@ def ndx(struct: gml.Pdb, selections: list, fname: str = 'gml.ndx') -> list:
         group_names.append(f'g{n}')
     with open(fname, 'w') as out:
         for gname, gat in zip(group_names, groups):
-            out.write(f'{gname}\n')
+            out.write(f'[ {gname} ]\n')
             for n, at in enumerate(gat):
                 out.write(f'{at:8d}')
                 if n % 15 == 14:
                     out.write('\n')
+            out.write('\n')
     return group_names
 
 
@@ -229,6 +230,15 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
 
 
 def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx: Optional[str] = 'gmx') -> bool:
+    """
+    Given two topologies and a structure file, checks if both yield
+    the same potential energy
+    :param struct: str, path to the reference structure file
+    :param topfile1: str, path to the first Top file
+    :param topfile2: str, path to the other Top file
+    :param gmx: str, optional path to the gmx executable if different than simply 'gmx'
+    :return: bool, whether the energies are identical
+    """
     en1 = calc_gmx_energy(struct, topfile1, gmx)['potential']
     en2 = calc_gmx_energy(struct, topfile2, gmx)['potential']
     print(f"Topology 1 has energy {en1}, topology 2 has energy {en2}")
@@ -238,7 +248,22 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
 def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] = 'tip3p',
                    box: Optional[str] = 'dodecahedron', box_margin: Optional[float] = 1.5, cation: Optional[str] = 'K',
                    anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15):
+    """
+    Implements a full system preparation workflow (parsing the structure with pdb2gmx,
+    setting the box size, adding solvent and ions, minimizing, generating a final
+    merged topology + structure with added chains)
+    :param struct: str, path to the structure file
+    :param ff: str, name of the force field to be chosen (by default interactive)
+    :param water: str, name of the water model to be used
+    :param box: str, box type (default is dodecahedron)
+    :param box_margin: float, box margin passed to editconf to set box size (default is 1.5 nm)
+    :param cation: str, the cation to be used (default is K)
+    :param anion: str, the anion to be used (default is CL)
+    :param ion_conc: float, the ion concentration to be applied (default 0.15)
+    :return: None
+    """
     gmx = gml.find_gmx_dir()
+    # TODO use recommended water models
     found = [f'{i} (local)' for i in glob(f'*ff')] + glob(f'{gmx[0]}/*ff')
     if ff is None:
         for n, i in enumerate(found):
@@ -259,20 +284,21 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
                       answer=True, fail_on_error=True))
     print(gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro',
                       answer=True, fail_on_error=True))
-    gen_mdp('minimize.mdp', runtype='mini')
-    print(gmx_command(gmx[1], 'grompp', f='minimize.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1,
+    gen_mdp('do_minimization.mdp', runtype='mini')
+    print(gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1,
                       answer=True, fail_on_error=True))
     answer = gmx_command(gmx[1], 'genion', pass_values=['a'], s='ions', pname=cation, nname=anion, conc=ion_conc,
                          neutral=True , p="topol", o='test', answer=True)
     sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
     print(gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
                       neutral=True, p="topol", o='ions', answer=True, fail_on_error=True))
-    print(gmx_command(gmx[1], 'grompp', f='minimize.mdp', p='topol.top', c='ions.gro', o='mini',
+    print(gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='ions.gro', o='do_mini',
                       answer=True, fail_on_error=True))
-    print(gmx_command(gmx[1], 'mdrun', deffnm='mini', v=True,
+    print(gmx_command(gmx[1], 'mdrun', deffnm='do_mini', v=True,
                       answer=True, fail_on_error=True))
-    print(gmx_command(gmx[1], 'trjconv', s='mini.tpr', f='mini.gro', o='whole.gro', pbc='whole', pass_values=[0],
-                      answer=True, fail_on_error=True))
+    ndx(gml.Pdb('do_mini.gro'), selections=['all', 'not solvent'])
+    print(gmx_command(gmx[1], 'trjconv', s='do_mini.tpr', f='do_mini.gro', o='whole.gro', pbc='cluster', pass_values=[1, 0],
+                      n='gml.ndx', answer=True, fail_on_error=True))
     t = gml.Top('topol.top')
     t.clear_sections()
     t.save_top('merged_topology.top')

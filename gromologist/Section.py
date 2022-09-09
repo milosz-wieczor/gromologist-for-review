@@ -979,7 +979,7 @@ class SectionMol(Section):
     def find_used_ff_params(self, section='all'):
         used_params = []
         if section == 'all':
-            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
+            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers', 'cmap']
         else:
             subsections_to_add = [section]
         for sub in subsections_to_add:
@@ -1627,7 +1627,8 @@ class SectionParam(Section):
         """
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
                      'impropers': 'dihedraltypes', 'atomtypes': 'atomtypes', 'pairtypes': 'pairtypes',
-                     'nonbond_params': 'nonbond_params', 'constrainttypes': 'constrainttypes'}
+                     'nonbond_params': 'nonbond_params', 'constrainttypes': 'constrainttypes', 'cmap': 'cmaptypes',
+                     'implicit_genborn_params': 'implicit_genborn_params'}
         if section == 'all':
             subs = list(matchings.values())
         else:

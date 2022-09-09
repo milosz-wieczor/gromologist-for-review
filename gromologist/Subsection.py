@@ -222,7 +222,7 @@ class SubsectionBonded(Subsection):
         """
         used_parm_entries = []
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
-                     'impropers': 'dihedraltypes'}
+                     'impropers': 'dihedraltypes', 'cmap': 'cmaptypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections if
                           sub.header == matchings[self.header]]
         for entry in self.entries_bonded:

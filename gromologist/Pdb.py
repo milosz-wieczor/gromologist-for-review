@@ -928,10 +928,11 @@ class Pdb:
             n = self.get_atom(f'name {at1} and resnum {resnum} and resname {resname} {chn}')
             c = self.get_atom(f'name {at2} and resnum {resnum} and resname {resname} {chn}')
             h = self.get_atom(f'name {at3} and resnum {resnum} and resname {resname} {chn}')
-            chi = self._get_chirality(at, n, c, h, nopbc)
-            if chi < -2.5 or 0 > chi > -1.5:
+            chi = self._get_chirality([n, c, h, at], nopbc)
+            if chi < -0.9 or 0 > chi > -0.35:
                 if printing:
                     print(f"Check {label} for residue {resname} num {resnum}, looks a bit off")
+                    print(chi)
                 else:
                     return False
             elif chi > 0:
@@ -957,25 +958,25 @@ class Pdb:
         """
         self.reposition_atom_from_hook(h_sel, c_sel, 1.09, h_sel, c_sel)
 
-    def _get_chirality(self, *atoms, nopbc=False):
+    def _get_chirality(self, atomlist, nopbc=False):
         """
         Calculates a dihedral defined by 4 atoms that
         constitute a chiral center
-        :param atoms: list of len 4, atoms defining the chiral center
+        :param atomlist: list of len 4, atoms defining the chiral center
         :param nopbc: bool, whether to ignore PBC when calculating vectors
         :return: float, the dihedral's value
         """
         if nopbc:
-            v1 = self._atoms_vec(atoms[1], atoms[0])
-            v2 = self._atoms_vec(atoms[0], atoms[2])
-            v3 = self._atoms_vec(atoms[2], atoms[3])
+            v1 = self._atoms_vec(atomlist[0], atomlist[1])
+            v2 = self._atoms_vec(atomlist[1], atomlist[2])
+            v3 = self._atoms_vec(atomlist[2], atomlist[3])
         else:
-            v1 = self._atoms_vec_pbc(atoms[1], atoms[0])
-            v2 = self._atoms_vec_pbc(atoms[0], atoms[2])
-            v3 = self._atoms_vec_pbc(atoms[2], atoms[3])
+            v1 = self._atoms_vec_pbc(atomlist[0], atomlist[1])
+            v2 = self._atoms_vec_pbc(atomlist[1], atomlist[2])
+            v3 = self._atoms_vec_pbc(atomlist[2], atomlist[3])
         n1 = self._normalize(self._cross_product(v1, v2))
         n2 = self._normalize(self._cross_product(v2, v3))
-        m1 = self._cross_product(n1, self._normalize(v2))
+        m1 = self._normalize(self._cross_product(n1, self._normalize(v2)))
         x = self._scalar_product(n1, n2)
         y = self._scalar_product(m1, n2)
         return math.atan2(y, x)

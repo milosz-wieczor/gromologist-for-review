@@ -31,13 +31,13 @@ class Section:
                 self.subsections[-1].conditional = self.conditional + excess_if
             if self.subsections[-1].conditional > 0:
                 if isinstance(self.subsections[-1], gml.SubsectionParam):
-                    print(f"Subection {str(self.subsections[-1])} recognized as conditional, will not be merged")
+                    self.top.print(f"Subection {str(self.subsections[-1])} recognized as conditional, will not be merged")
                 elif isinstance(self.subsections[-1], gml.SubsectionBonded) \
                         or isinstance(self.subsections[-1], gml.SubsectionAtom):
-                    print(f"Subection {str(self.subsections[-1])} "
-                          f"in molecule {str(self.subsections[-1].section.subsections[0].entries[1]).split()[0]} recognized as conditional")
+                    self.top.print(f"Subection {str(self.subsections[-1])} "
+                                   f"in molecule {str(self.subsections[-1].section.subsections[0].entries[1]).split()[0]} recognized as conditional")
                 else:
-                    print(f"Subection {str(self.subsections[-1])} recognized as conditional")
+                    self.top.print(f"Subection {str(self.subsections[-1])} recognized as conditional")
     
     def __repr__(self):
         return "{} section with {} subsections".format(self.name, len(self.subsections))
@@ -143,6 +143,10 @@ class SectionMol(Section):
     @property
     def natoms(self):
         return len(self.atoms)
+
+    @property
+    def nmols(self):
+        return sum([mol_count[1] for mol_count in self.top.system if mol_count[0] == self.mol_name])
 
     @property
     def charge(self):
@@ -632,16 +636,18 @@ class SectionMol(Section):
             atoms.insert(position, new_entry)
         self.update_dicts()
     
-    def del_atom(self, atom_number, del_in_pdb=True):
+    def del_atom(self, atom_number, del_in_pdb=True, renumber_in_pdb=True):
         """
         Removes an atom from the topology, as specified using
         topology numbering (1-based)
         :param atom_number: int, atom number in topology
         :param del_in_pdb: bool, whether to also remove in the bound PDB file
+        :param renumber_in_pdb: bool, whether to renumber atoms in the bound PDB file
         :return: None
         """
         if atom_number > self.natoms:
             raise RuntimeError(f"Can't remove atom {atom_number}, molecule only has {self.natoms} atoms")
+        matched = self._match_pdb_to_top(atom_number) if del_in_pdb else []
         self._del_atom(atom_number)
         self._del_params(atom_number)
         self.offset_numbering(-1, atom_number)
@@ -650,8 +656,10 @@ class SectionMol(Section):
         self._check_correct()
         if del_in_pdb:
             if self.top.pdb:
-                for to_remove in self._match_pdb_to_top(atom_number):
+                for to_remove in matched:
                     self.top.pdb.delete_atom(to_remove)
+                if renumber_in_pdb:
+                    self.top.pdb.renumber_atoms()
 
     def swap_atom(self, atom_number, new_position, swap_in_pdb=True):
         """
@@ -740,15 +748,14 @@ class SectionMol(Section):
         """
         if not self.top.pdb:
             raise ValueError("No PDB object matched to the currently processed topology")
-        count = 0
-        pdb_atom_indices = []
-        for molecule in self.top.system.keys():
-            if molecule != self.mol_name:
-                count += self.top.get_molecule(molecule).natoms
-            else:
-                count += atom_number - 1
-                pdb_atom_indices.append(self.top.pdb.atoms[count].serial)
-        return pdb_atom_indices
+        count = atom_number - 1
+        pdb_atom_serials = []
+        for mol_count in self.top.system:
+            for _ in range(mol_count[1]):
+                if mol_count[0] == self.mol_name:
+                    pdb_atom_serials.append(self.top.pdb.atoms[count].serial)
+                count += self.top.get_molecule(mol_count[0]).natoms
+        return pdb_atom_serials
         
     def _del_atom(self, atom_number):
         subsect_atoms = self.get_subsection('atoms')
@@ -1380,7 +1387,7 @@ class SectionMol(Section):
             self.gen_state_b(atomname=atom_add, resid=resid, new_type=htype, new_charge=hcharge, new_mass=1.008)
         self.gen_state_b(atomname=orig_name, resid=resid, new_type=ctype, new_charge=ccharge, new_mass=12.0)
         if add_in_pdb and self.top.pdb:
-            if len(self.top.system) > 1 or self.top.system[list(self.top.system.keys())[0]] > 1:
+            if len(self.top.system) > 1 or self.top.system[0][1] > 1:
                 raise RuntimeError("Adding groups in PDB only supported for systems containing one molecule")
             bonds = self.list_bonds(returning=True)
             hook = [j for i in bonds for j in i if orig_name in i and orig_name != j][0]

@@ -1,5 +1,6 @@
 import gromologist as gml
 from collections import defaultdict
+from typing import Optional, Union, Iterable
 import math
 
 
@@ -15,7 +16,8 @@ class Pdb:
                 'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
                 'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"}
 
-    def __init__(self, filename=None, top=None, altloc='A', qt=False, **kwargs):
+    def __init__(self, filename: str = None, top: Union[str, "gml.Top"] = None, altloc: str = 'A', qt: bool = False,
+                 **kwargs):
         """
         Initializes a Pdb instnace
         :param filename: str, name of the file (.gro or .pdb)
@@ -47,10 +49,10 @@ class Pdb:
         self._atom_format_gro = "{:>5d}{:5s}{:>5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
 
-    def add_top(self, top, **kwargs):
+    def add_top(self, top: str, **kwargs):
         """
         Adds a Top object to the current Pdb object, enabling some
         operations that couple the two
@@ -63,15 +65,15 @@ class Pdb:
             self.top.pdb = self
 
     @property
-    def natoms(self):
+    def natoms(self) -> int:
         return len(self.atoms)
 
     @property
-    def chains(self):
+    def chains(self) -> list:
         return sorted({a.chain for a in self.atoms})
 
     @classmethod
-    def from_selection(cls, pdb, selection):
+    def from_selection(cls, pdb: "gml.Pdb", selection: str) -> "gml.Pdb":
         """
         Creates a new Pdb instance as a subset of an existing one,
         given a selection that defines a subset of atoms
@@ -89,7 +91,7 @@ class Pdb:
         return new_pdb
 
     @classmethod
-    def from_text(cls, text, orig_pdb):
+    def from_text(cls, text: str, orig_pdb: "gml.Pdb") -> "gml.Pdb":
         """
         Reads coordinates from text, useful for reading trajectories
         :param text: str, contents of the pdb/gro
@@ -112,7 +114,7 @@ class Pdb:
         new_pdb.altloc = orig_pdb.altloc
         return new_pdb
 
-    def print_protein_sequence(self, gaps=False):
+    def print_protein_sequence(self, gaps: bool = False) -> list:
         """
         Prints protein sequence chain by chain, recognizing amino acids
         as residues that contain a CA atom; unrecognized residues are written as X
@@ -123,7 +125,7 @@ class Pdb:
         sequences = []
         if not chains:
             print("No protein chains in the molecule, run Pdb.add_chains() first")
-            return
+            return []
         for ch in sorted(chains):
             cas = set(self.get_atom_indices(f'name CA and chain {ch}'))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas and a.altloc in [' ', self.altloc]]
@@ -144,7 +146,7 @@ class Pdb:
                 sequences.append(''.join(seq))
         return sequences
 
-    def print_nucleic_sequence(self):
+    def print_nucleic_sequence(self) -> list:
         """
         Prints nucleic acid sequences chain by chain, recognizing nucleotides
         as residues that contain an O4' atom; unrecognized residues are written as X
@@ -156,7 +158,7 @@ class Pdb:
         chains = list({a.chain.strip() for a in self.atoms if a.atomname == "O4'"})
         if not chains:
             print("No nucleic acid chains in the molecule, run Pdb.add_chains() first")
-            return
+            return []
         for ch in sorted(chains):
             cas = set(self.get_atom_indices(f"name O4' and chain {ch}"))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
@@ -205,7 +207,8 @@ class Pdb:
                 atomlist = []
             atomlist.append(at.atomname)
 
-    def add_chains(self, selection=None, chain=None, offset=0, maxwarn=100, cutoff=10, protein_only=False, nopbc=False):
+    def add_chains(self, selection: str = None, chain: str = None, offset: int = 0, maxwarn: int = 100,
+                   cutoff: float = 10, protein_only: bool = False, nopbc: bool = False):
         """
         Given a matching Top instance, adds chain identifiers to atoms
         based on the (previously verified) matching between invididual
@@ -255,10 +258,10 @@ class Pdb:
             self.check_top(maxwarn=maxwarn)
             excluded = {'SOL', 'HOH', 'TIP3', 'WAT', 'OPC', 'K', 'NA', 'CL', 'POT', 'SOD', 'NA+', 'K+', 'CLA'}
             index = 0
-            for mol_name in self.top.system.keys():
-                if mol_name.upper() not in excluded:
-                    n_mols = self.top.system[mol_name]
-                    mol = self.top.get_molecule(mol_name)
+            for mol_count in self.top.system:
+                if mol_count[0].upper() not in excluded:
+                    n_mols = mol_count[1]
+                    mol = self.top.get_molecule(mol_count[0])
                     n_atoms = mol.natoms
                     for m in range(n_mols):
                         for a in range(n_atoms):
@@ -269,7 +272,7 @@ class Pdb:
                         if base_char > 90:
                             return
 
-    def list_atoms(self, selection=None):
+    def list_atoms(self, selection: str = None):
         """
         Prints atoms in the structure, optionally
         only the subset corresponding to the selection
@@ -280,7 +283,7 @@ class Pdb:
         for a in atoms:
             print(self._write_atom(a).strip())
 
-    def check_top(self, maxwarn=20, fix_pdb=False, fix_top=False):
+    def check_top(self, maxwarn: int = 20, fix_pdb: bool = False, fix_top: bool = False):
         """
         Checks the structure against the associated topology to identify
         and list potential mismatches in atom names
@@ -314,7 +317,7 @@ class Pdb:
         print("Check passed, all names match")
 
     @staticmethod
-    def _check_mismatch(atom_entry, atom_instance, mol_name):
+    def _check_mismatch(atom_entry: "gml.EntryAtom", atom_instance: "gml.Atom", mol_name: str) -> int:
         """
         Checks a Pdb entry against a Top entry to make sure the atom names match
         :param atom_entry: EntryAtom instance from the Top
@@ -382,7 +385,7 @@ class Pdb:
         """
         self.atoms = [a for a in self.atoms if a.altloc in [' ', self.altloc]]
 
-    def _write_atom(self, atom, pdb=True):
+    def _write_atom(self, atom: "gml.Atom", pdb: bool = True) -> str:
         """
         Fn to convert an Atom instance to a line compatible with .pdb or .gro formatting
         :param atom: an Atom instance to be written
@@ -404,10 +407,10 @@ class Pdb:
                                                 atom.y / 10, atom.z / 10)
 
     @staticmethod
-    def _write_conect(atom, bonded):
+    def _write_conect(atom: int, bonded: list) -> str:
         return 'CONECT' + ('{:>5}' * (len(bonded) + 1)).format(atom, *bonded) + '\n'
 
-    def tip3_to_opc(self, offset=0.147722363):
+    def tip3_to_opc(self, offset: float = 0.147722363):
         """
         Converts a 3-point water model in a structure to a 4-point
         by adding a virtual site to each water molecule
@@ -444,7 +447,7 @@ class Pdb:
                 new_atoms.append(a)
         self.atoms = new_atoms
 
-    def renumber_atoms(self, offset=1, selection=None):
+    def renumber_atoms(self, offset: int = 1, selection: Optional[str] = None):
         """
         Consecutively renumbers all atoms in the structure
         :param offset: int, number of the first atom to be set
@@ -455,7 +458,7 @@ class Pdb:
         for n, atom in enumerate(ats, offset):
             atom.serial = n
 
-    def renumber_residues(self, offset=1, selection=None, per_chain=False):
+    def renumber_residues(self, offset: int = 1, selection: Optional[str] = None, per_chain: bool = False):
         """
         Consecutively renumbers all residues in the structure
         :param offset: int, number of the first residue to be set
@@ -479,7 +482,8 @@ class Pdb:
             self.atoms[n].resnum = count
             count = temp
 
-    def reposition_atom_from_hook(self, atomsel, hooksel, bondlength, p1_sel=None, p2_sel=None, vector=None):
+    def reposition_atom_from_hook(self, atomsel: str, hooksel: str, bondlength: float, p1_sel: Optional[str] = None,
+                                  p2_sel: Optional[str] = None, vector: Optional[Iterable] = None):
         """
         Sets coordinates of an atom based on a "hook" atom (one it's bound to), bond length, and a vector defining
         the direction of the bond
@@ -506,7 +510,7 @@ class Pdb:
         scale = bondlength / vec_len
         movable.set_coords([h + scale * v for h, v in zip(hook_xyz, vec)])
 
-    def match_order_by_top_names(self, arange=None):
+    def match_order_by_top_names(self, arange: Optional[tuple] = None):
         """
         Whenever PDB atoms have different ordering than .top ones
         but naming is consistent, we can use the ordering from .top
@@ -523,9 +527,9 @@ class Pdb:
         new_atoms = []
         index = 0
         # TODO is arange here working at all?
-        for mol_name in self.top.system.keys():
-            mol = self.top.get_molecule(mol_name)
-            n_mols = self.top.system[mol_name]
+        for mol_count in self.top.system:
+            mol = self.top.get_molecule(mol_count[0])
+            n_mols = mol_count[1]
             atom_subsection = mol.get_subsection('atoms')
             atom_entries = [e for e in atom_subsection if isinstance(e, gml.EntryAtom)]
             for _ in range(n_mols):
@@ -544,8 +548,9 @@ class Pdb:
                     index += 1
         self.atoms = new_atoms
 
-    def insert_atom(self, serial, name="HX", hooksel=None, bondlength=None, p1_sel=None, p2_sel=None,
-                    vector=None, renumber=True, **kwargs):
+    def insert_atom(self, serial: int, name: str = "HX", hooksel: Optional[str] = None,
+                    bondlength: Optional[float] = None, p1_sel: Optional[str] = None, p2_sel: Optional[str] = None,
+                    vector: Optional[Iterable] = None, renumber: Optional[bool] = True, **kwargs):
         """
         Inserts an atom into the atomlist. The atom is defined by
         providing a base Atom instance and a number of keyworded modifiers,
@@ -577,7 +582,7 @@ class Pdb:
                 ((p1_sel is not None and p2_sel is not None) or vector is not None)):
             self.reposition_atom_from_hook(atomsel, hooksel, bondlength, p1_sel, p2_sel, vector)
 
-    def delete_atom(self, serial, renumber=False):
+    def delete_atom(self, serial: int, renumber: bool = False):
         """
         Removes an atom from the Pdb object
         :param serial: int, serial number of the atom to be removed (usually 1-based)
@@ -604,7 +609,7 @@ class Pdb:
             if not a.element:
                 a.element = [x for x in a.atomname if not x.isdigit()][0]
 
-    def get_atom_indices(self, selection_string):
+    def get_atom_indices(self, selection_string: str) -> list:
         """
         Applies a selection to the structure and returns the 0-based indices of selected atoms
         :param selection_string: str, consistent with the selection language syntax (see README)

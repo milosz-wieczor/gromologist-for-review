@@ -50,13 +50,13 @@ class Top:
         self._parse_sections()
 
     @property
-    def system(self) -> dict:
+    def system(self) -> list:
         """
-        Returns a dictionary with the contents of the system,
+        Returns a list of tuples with the contents of the system,
         following the [ molecules ] section of a topology
         """
         if not self.top.endswith('top'):
-            return {}
+            return []
         else:
             return self.read_system_properties()
 
@@ -117,10 +117,10 @@ class Top:
         :return: list of EntryAtom entries
         """
         atomlist = []
-        for mol in self.system.keys():
-            mol_sect = [s for s in self.molecules if s.mol_name == mol][0]
-            for q in range(self.system[mol]):
-                for a in mol_sect.atoms:
+        for mol_count in self.system:
+            molecule = self.get_molecule(mol_count[0])
+            for q in range(mol_count[1]):
+                for a in molecule.atoms:
                     atomlist.append(a)
         return atomlist
 
@@ -177,8 +177,8 @@ class Top:
         Prints out a list of molecules contained in the System
         :return: None
         """
-        for mol in self.system.keys():
-            print("{:20s}{:>10d}".format(mol, self.system[mol]))
+        for mol_count in self.system:
+            print("{:20s}{:>10d}".format(mol_count[0], mol_count[1]))
 
     def clear_ff_params(self, section: str = 'all'):
         used_params = []
@@ -205,6 +205,25 @@ class Top:
         """
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
+
+    def add_molecule_from_itp(self, itpfile: str, molnames: Optional[list] = None):
+        """
+        Adds
+        :param molnames:
+        :param itpfile:
+        :return:
+        """
+        contents = [line for line in open(itpfile)]
+        special_sections = {'defaults', 'moleculetype', 'system'}
+        special_lines = [n for n, l in enumerate(contents)
+                         if l.strip() and l.strip().strip('[]').strip().split()[0] in special_sections]
+        special_lines.append(len(contents))
+        for beg, end in zip(special_lines[:-1], special_lines[1:]):
+            if 'moleculetype' in contents[beg]:
+                molsections = [n for n, i in enumerate(self.sections) if isinstance(i, gml.SectionMol)][-1]
+                section = self._yield_sec(contents[beg:end])
+                if molnames is None or section.name in molnames:
+                    self.sections.insert(molsections+1, section)
 
     def find_missing_ff_params(self, section: str = 'all', fix_by_analogy: bool = False, fix_B_from_A: bool = False,
                                fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):
@@ -378,7 +397,7 @@ class Top:
             raise AttributeError("System properties have not been read, this is likely not a complete .top file")
         sections_to_delete = []
         for section_num, section in enumerate(self.sections):
-            if isinstance(section, gml.SectionMol) and section.mol_name not in self.system.keys():
+            if isinstance(section, gml.SectionMol) and section.mol_name not in {x[0] for x in self.system}:
                 sections_to_delete.append(section_num)
         self.sections = [s for n, s in enumerate(self.sections) if n not in sections_to_delete]
 
@@ -472,31 +491,31 @@ class Top:
         else:
             return len([ln for ln in self._contents[:linenum] if ln.strip().startswith("#endif")])
 
-    def read_system_properties(self) -> OrderedDict:
+    def read_system_properties(self) -> list:
         """
         Reads in system composition based on the [ molecules ] section
-        :return: None
+        :return: list of tuples (Mol_name, number_of_molecules)
         """
         system_subsection = [s.get_subsection('molecules') for s in self.sections
                              if 'molecules' in [ss.header for ss in s.subsections]]
-        molecules = OrderedDict()  # we want to preserve the order of molecules in the system for e.g. PDB checking
+        molecules = []  # we want to preserve the order of molecules in the system for e.g. PDB checking
         if len(system_subsection) > 1:
             raise RuntimeError("Multiple 'molecules' subsection found in the topology, this is not allowed")
         elif len(system_subsection) == 0:
             self.print("Section 'molecules' not present in the topology, assuming this is an isolated .itp")
-            return OrderedDict()
+            return []
         for e in system_subsection[0]:
             if e.content:
-                molecules[e.content[0]] = int(e.content[1])
+                molecules.append((e.content[0], int(e.content[1])))
         return molecules
 
     @property
     def charge(self) -> float:
-        return sum([self.system[mol] * self.get_molecule(mol).charge for mol in self.system.keys()])
+        return sum([mol_count[1] * self.get_molecule(mol_count[0]).charge for mol_count in self.system])
 
     @property
     def natoms(self) -> int:
-        return sum([self.system[mol] * self.get_molecule(mol).natoms for mol in self.system.keys()])
+        return sum([mol_count[1] * self.get_molecule(mol_count[0]).natoms for mol_count in self.system])
 
     def explicit_defines(self):
         """

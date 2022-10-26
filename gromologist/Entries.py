@@ -33,9 +33,15 @@ class Entry:
             nf = len(str(flt).split('.')[1])
         except IndexError:
             nf = 3
+        if nf > 12:
+            flt = float(str(flt).split('.')[0] + '.' + str(flt).split('.')[1][:12])
+            nf = len(str(flt).split('.')[1])
         if nf > dpmax:
-            nf = dpmax
-        return "{:>" + str(fields) + "." + str(nf) + "f}"
+            dpmax = nf
+            fields = dpmax + 3 + len(str(int(flt)))
+        else:
+            dpmax = nf
+        return "{:>" + str(fields) + "." + str(dpmax) + "f}"
 
     @staticmethod
     def infer_type(val):
@@ -350,7 +356,10 @@ class EntryAtom(Entry):
 
     def _get_atomtype_entry(self):
         atomtypes = self.subsection.section.top.parameters.get_subsection('atomtypes')
-        return [e for e in atomtypes if isinstance(e, EntryParam) and e.types[0] == self.type][-1]
+        try:
+            return [e for e in atomtypes if isinstance(e, EntryParam) and e.types[0] == self.type][-1]
+        except IndexError:
+            raise RuntimeError(f"Couldn't find non-bonded parameters for atomtype {self.type}")
 
     def __str__(self):
         fstring = self.fstring + self.float_fmt(self.charge) + self.float_fmt(self.mass) + '   '

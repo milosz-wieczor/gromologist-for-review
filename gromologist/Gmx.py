@@ -61,7 +61,7 @@ def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
         outfile.write(mdp)
 
 
-def find_gmx_dir():
+def find_gmx_dir(suppress=False):
     """
     Attempts to find Gromacs internal files to fall back to
     when default .itp files are included using the
@@ -75,7 +75,8 @@ def find_gmx_dir():
         gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
     if gmx:
         gmx_dir = '/'.join(gmx.split('/')[:-2]) + '/share/gromacs/top'
-        print('Gromacs files found in directory {}'.format(gmx_dir))
+        if not suppress:
+            print('Gromacs files found in directory {}'.format(gmx_dir))
         return gmx_dir, gmx
     else:
         print('No working Gromacs compilation found, assuming all file dependencies are referred to locally; '
@@ -112,21 +113,32 @@ def get_legend(gmx: str, fname: str) -> dict:
             if output[i].isnumeric()}
 
 
-def ndx(struct: gml.Pdb, selections: list, fname: str = 'gml.ndx') -> list:
+def ndx(struct: gml.Pdb, selections: list, fname: Optional[str] = None, append: Optional[str] = None) -> list:
     """
     Writes a .ndx file with groups g1, g2, ... defined by the
     list of selections passed as input
     :param struct: gml.Pdb, a structure file
     :param selections: list of str, selections compatible with `struct`
-    :param fname: str, name of the resulting .ndx file
+    :param fname: str, name of the resulting .ndx file (default is 'gml.ndx'
+    :param append: str, if provided then the groups will be appended to an existing file
     :return: list of str, names of the group
     """
     groups = []
     group_names = []
+    if append is not None and fname is not None:
+        raise RuntimeError("Specify either 'append' or 'fname'")
+    elif fname is None:
+        fname = 'gml.ndx'
+    elif append is not None and append not in os.listdir():
+        raise RuntimeError(f"Cannot append to {append}: no such file")
     for n, sel in enumerate(selections, 1):
         groups.append([x + 1 for x in struct.get_atom_indices(sel)])
         group_names.append(f'g{n}')
-    with open(fname, 'w') as out:
+    if append is not None:
+        flink = open(append, 'a')
+    else:
+        flink = open(fname, 'w')
+    with flink as out:
         for gname, gat in zip(group_names, groups):
             out.write(f'[ {gname} ]\n')
             for n, at in enumerate(gat):
@@ -245,9 +257,9 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
     return en1 == en2
 
 
-def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] = 'tip3p',
+def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] = None,
                    box: Optional[str] = 'dodecahedron', box_margin: Optional[float] = 1.5, cation: Optional[str] = 'K',
-                   anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15):
+                   anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15, maxsol: Optional[int] = None):
     """
     Implements a full system preparation workflow (parsing the structure with pdb2gmx,
     setting the box size, adding solvent and ions, minimizing, generating a final
@@ -263,7 +275,6 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     :return: None
     """
     gmx = gml.find_gmx_dir()
-    # TODO use recommended water models
     found = [f'{i} (local)' for i in glob(f'*ff')] + glob(f'{gmx[0]}/*ff')
     if ff is None:
         for n, i in enumerate(found):
@@ -278,12 +289,19 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     if ff not in [i.split('/')[-1] for i in found]:
         raise RuntimeError(f"Force field {ff.split('/')[-1]} not found in the list: {[i.split('/')[-1] for i in found]}")
     ff = ff.replace('.ff', '')
+    if water is None:
+        water = [line.split()[0] for line in open(found[30 - 1].replace(' (local)', '') + os.sep + 'watermodels.dat')
+                 if 'recommended' in line][0]
     print(gmx_command(gmx[1], 'pdb2gmx', quiet=False, f=struct, ff=ff, water=water,
                       answer=True, fail_on_error=True))
     print(gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box,
                       answer=True, fail_on_error=True))
-    print(gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro',
-                      answer=True, fail_on_error=True))
+    if maxsol is None:
+        print(gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro',
+                          answer=True, fail_on_error=True))
+    else:
+        print(gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', maxsol=maxsol,
+                          answer=True, fail_on_error=True))
     gen_mdp('do_minimization.mdp', runtype='mini')
     print(gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1,
                       answer=True, fail_on_error=True))

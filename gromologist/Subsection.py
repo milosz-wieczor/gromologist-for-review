@@ -654,6 +654,7 @@ class SubsectionAtom(Subsection):
         so only fill in the values when explicitly asked to
         :return: None
         """
+        # TODO should they be @properties, called only when needed? EITHER WAY, REVISE
         if not self.name_to_num or force_update:
             self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
 

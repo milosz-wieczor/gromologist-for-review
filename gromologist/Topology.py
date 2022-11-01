@@ -517,6 +517,9 @@ class Top:
     def natoms(self) -> int:
         return sum([mol_count[1] * self.get_molecule(mol_count[0]).natoms for mol_count in self.system])
 
+    def nmol(self, name: Optional[str] = None) -> int:
+        return sum([x[1] for x in self.system if name is None or x[0] == name])
+
     def explicit_defines(self):
         """
         Changes pre-defined keywords in parameter sets

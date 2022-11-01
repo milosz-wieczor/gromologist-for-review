@@ -84,7 +84,7 @@ class BasicTopTest(unittest.TestCase):
 
     def test_system_properties(self):
         # checks if system properties are returned correctly (both values have to be 1)
-        self.assertEqual(self.top.read_system_properties()['Protein_chain_A'] * len(self.top.read_system_properties().keys()), 1)
+        self.assertEqual(self.top.nmol('Protein_chain_A') * len(self.top.system), 1)
 
     def test_clear_params(self):
         # checks if parameters are cleared properly

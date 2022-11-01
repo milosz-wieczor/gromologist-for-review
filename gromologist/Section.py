@@ -1,5 +1,6 @@
 import os
 from itertools import product, combinations
+from typing import Optional
 from functools import reduce
 from copy import deepcopy
 from glob import glob
@@ -417,8 +418,9 @@ class SectionMol(Section):
                 x1 = self.get_atom(f'resid {resid1} and name ND1')
         self.merge_two(other, x1.num, x2.num)
 
-    def gen_state_b(self, atomname=None, resname=None, resid=None, atomtype=None, new_type=None, new_charge=None,
-                    new_mass=None):
+    def gen_state_b(self, atomname: Optional[str] = None, resname: Optional[str] = None,
+                    resid: Optional[int] = None, atomtype: Optional[str] = None, new_type: Optional[str] = None,
+                    new_charge: Optional[float] = None, new_mass: Optional[float] = None):
         """
         Generates alchemical state B for a subset of atoms,
         with specified types/charges/masses
@@ -443,7 +445,8 @@ class SectionMol(Section):
                 entry.charge_b = new_charge if new_charge is not None else entry.charge
         self.update_dicts()
 
-    def drop_state_a(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
+    def drop_state_a(self, remove_dummies: bool = False, atomname: Optional[str] = None, resname: Optional[str] = None,
+                     resid: Optional[int] = None, atomtype: Optional[str] = None):
         """
         Collapses alchemical B states, making state B
         the new non-alchemical default state A
@@ -494,7 +497,8 @@ class SectionMol(Section):
                         entry.types_state_b = None
         self.update_dicts()
 
-    def swap_states(self, atomname=None, resname=None, resid=None, atomtype=None):
+    def swap_states(self, atomname: Optional[str] = None, resname: Optional[str] = None,
+                     resid: Optional[int] = None, atomtype: Optional[str] = None):
         """
         Swaps alchemical states A and B
         :param atomname: str, name of the selected atom(s) for which state B will be swapped
@@ -528,7 +532,8 @@ class SectionMol(Section):
                         entry.types_state_a, entry.types_state_b = entry.types_state_b, entry.types_state_a
         self.update_dicts()
 
-    def drop_state_b(self, remove_dummies=False, atomname=None, resname=None, resid=None, atomtype=None):
+    def drop_state_b(self, remove_dummies: bool = False, atomname: Optional[str] = None, resname: Optional[str] = None,
+                     resid: Optional[int] = None, atomtype: Optional[str] = None):
         """
         Makes the topology non-alchemical again, just dropping
         all parameters for state B
@@ -573,7 +578,9 @@ class SectionMol(Section):
                 dummies = [entry for entry in sub.entries_atom if entry.type[0] == "D" and entry.num in selected]
         self.update_dicts()
     
-    def add_atom(self, atom_number, atom_name, atom_type, charge=0.0, resid=None, resname=None, mass=None, prnt=True):
+    def add_atom(self, atom_number: int, atom_name: str, atom_type: str, charge: float = 0.0,
+                 resid: Optional[int] = None, resname: Optional[str] = None, mass: Optional[float] = None,
+                 prnt: bool = True):
         """
         For convenience, we try to infer as much as possible
         from existing data, so that it is sufficient to pass
@@ -636,7 +643,7 @@ class SectionMol(Section):
             atoms.insert(position, new_entry)
         self.update_dicts()
     
-    def del_atom(self, atom_number, del_in_pdb=True, renumber_in_pdb=True):
+    def del_atom(self, atom_number: int, del_in_pdb: bool = True, renumber_in_pdb: bool = True):
         """
         Removes an atom from the topology, as specified using
         topology numbering (1-based)
@@ -647,7 +654,8 @@ class SectionMol(Section):
         """
         if atom_number > self.natoms:
             raise RuntimeError(f"Can't remove atom {atom_number}, molecule only has {self.natoms} atoms")
-        matched = self._match_pdb_to_top(atom_number) if del_in_pdb else []
+        if self.top.pdb:
+            matched = self._match_pdb_to_top(atom_number) if del_in_pdb else []
         self._del_atom(atom_number)
         self._del_params(atom_number)
         self.offset_numbering(-1, atom_number)
@@ -661,7 +669,7 @@ class SectionMol(Section):
                 if renumber_in_pdb:
                     self.top.pdb.renumber_atoms()
 
-    def swap_atom(self, atom_number, new_position, swap_in_pdb=True):
+    def swap_atom(self, atom_number: int, new_position: int, swap_in_pdb: bool = True):
         """
         Changes the position of a chosen atom (1-based index atom_number)
         so that it now has index new_position (and other atoms are renumbered).
@@ -674,20 +682,13 @@ class SectionMol(Section):
         """
         if swap_in_pdb:
             if self.top.pdb:
-                if len(self._match_pdb_to_top(atom_number)) > 1:
-                    raise RuntimeError("Two or more atoms in PDB matching the requested atom {} "
-                                       "in .top".format(atom_number))
-                elif len(self._match_pdb_to_top(atom_number)) == 0:
-                    raise RuntimeError("Could not match .top atom {} to a corresponding PDB atom".format(atom_number))
-                if len(self._match_pdb_to_top(new_position)) > 1:
-                    raise RuntimeError("Two or more atoms in PDB matching the requested atom {} "
-                                       "in .top".format(new_position))
-                elif len(self._match_pdb_to_top(new_position)) == 0:
-                    raise RuntimeError("Could not match .top atom {} to a corresponding PDB atom".format(new_position))
-                old_loc = self._match_pdb_to_top(atom_number)[0]
-                new_loc = self._match_pdb_to_top(new_position)
-                atom = self.top.pdb.atoms.pop(old_loc-1)
-                self.top.pdb.atoms.insert(new_loc + 1, atom)
+                self.top.pdb.renumber_atoms()
+                old_locs = self._match_pdb_to_top(atom_number)
+                new_locs = self._match_pdb_to_top(new_position)
+                for old_loc, new_loc in zip(old_locs[::-1], new_locs[::-1]):
+                    atom = self.top.pdb.atoms.pop(old_loc - 1)
+                    self.top.pdb.atoms.insert(new_loc - 1, atom)
+                self.top.pdb.renumber_atoms()
         subsect_atoms = self.get_subsection('atoms')
         atom_entry_list = [e for e in subsect_atoms.entries]
         entry_ind = [n for n, e in enumerate(atom_entry_list) if isinstance(e, gml.EntryAtom)
@@ -701,7 +702,7 @@ class SectionMol(Section):
         subsect_atoms.entries.insert(entry_final_ind, entry)
         self.update_dicts()
 
-    def _hide_atom(self, old_pos, new_pos):
+    def _hide_atom(self, old_pos: int, new_pos: int):
         subsect_atoms = self.get_subsection('atoms')
         chosen = [e for e in subsect_atoms.entries if isinstance(e, gml.EntryAtom) and e.num == old_pos][0]
         chosen.num = -new_pos
@@ -718,7 +719,7 @@ class SectionMol(Section):
             except KeyError:
                 pass
 
-    def _return_atom(self, new_pos):
+    def _return_atom(self, new_pos: int):
         subsect_atoms = self.get_subsection('atoms')
         chosen = [e for e in subsect_atoms.entries if isinstance(e, gml.EntryAtom) and e.num < 0][0]
         assert chosen.num == -new_pos
@@ -739,7 +740,7 @@ class SectionMol(Section):
             except KeyError:
                 pass
     
-    def _match_pdb_to_top(self, atom_number):
+    def _match_pdb_to_top(self, atom_number: int) -> list:
         """
         Returns a list of PDB atom indices (assuming .top matches .pdb)
         that correspond to the specified atom_number in the molecule topology
@@ -755,14 +756,19 @@ class SectionMol(Section):
                 if mol_count[0] == self.mol_name:
                     pdb_atom_serials.append(self.top.pdb.atoms[count].serial)
                 count += self.top.get_molecule(mol_count[0]).natoms
+        if len(pdb_atom_serials) > self.top.nmol(self.mol_name):
+            raise RuntimeError("Too many atoms atoms in PDB matching the requested atom {} "
+                               "in .top".format(atom_number))
+        elif len(pdb_atom_serials) == 0:
+            raise RuntimeError("Could not match .top atom {} to a corresponding PDB atom".format(atom_number))
         return pdb_atom_serials
         
-    def _del_atom(self, atom_number):
+    def _del_atom(self, atom_number: int):
         subsect_atoms = self.get_subsection('atoms')
         chosen = [e for e in subsect_atoms.entries if isinstance(e, gml.EntryAtom) and e.num == atom_number][0]
         subsect_atoms.entries.remove(chosen)
     
-    def _del_params(self, atom_number):
+    def _del_params(self, atom_number: int):
         for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
             try:
                 subsection = self.get_subsection(subs)
@@ -798,13 +804,13 @@ class SectionMol(Section):
                 bond_list.append(entry.atom_numbers)
         self.bonds = bond_list
         
-    def add_bond(self, first_atom, second_atom):
+    def add_bond(self, first_atom: int, second_atom: int):
         """
         This is just an alias for merge_two if bond is intramolecular
         """
         self.merge_two(self, first_atom, second_atom)
 
-    def merge_two(self, other, anchor_own, anchor_other):
+    def merge_two(self, other: "gml.SectionMol", anchor_own: int, anchor_other: int):
         """
         Creates a new bond by either merging two distinct
         molecules (both being part of the same topology)
@@ -872,7 +878,7 @@ class SectionMol(Section):
             except KeyError:
                 other.subsections.append(self._yield_sub([f"[ {sub} ]\n"]))
 
-    def remove_bond(self, at1, at2):
+    def remove_bond(self, at1: int, at2: int):
         self._get_bonds()
         bond_to_remove = [(at1, at2)]
         if not (bond_to_remove[0] in self.bonds or tuple(x for x in bond_to_remove[0][::-1]) in self.bonds):

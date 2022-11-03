@@ -15,7 +15,7 @@ class Section:
     Subsections together
     """
     
-    def __init__(self, content, top):
+    def __init__(self, content: list, top: "gml.Top"):
         self.name = 'System'
         self.top = top
         self.conditional = 0
@@ -36,15 +36,16 @@ class Section:
                 elif isinstance(self.subsections[-1], gml.SubsectionBonded) \
                         or isinstance(self.subsections[-1], gml.SubsectionAtom):
                     self.top.print(f"Subection {str(self.subsections[-1])} "
-                                   f"in molecule {str(self.subsections[-1].section.subsections[0].entries[1]).split()[0]} recognized as conditional")
+                                   f"in molecule {str(self.subsections[-1].section.subsections[0].entries[1]).split()[0]} "
+                                   f"recognized as conditional")
                 else:
                     self.top.print(f"Subection {str(self.subsections[-1])} recognized as conditional")
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "{} section with {} subsections".format(self.name, len(self.subsections))
     
     @staticmethod
-    def _split_content(content):
+    def _split_content(content: list) -> list:
         """
         Splits a block of text (list of strings passed to the __init__,
         corresponding to the entire content of the given section)
@@ -55,7 +56,7 @@ class Section:
         special_lines = [n for n, l in enumerate(content) if l.strip().startswith('[')] + [len(content)]
         return [content[beg:end] for beg, end in zip(special_lines[:-1], special_lines[1:])]
         
-    def _yield_sub(self, content):
+    def _yield_sub(self, content: list):
         """
         A wrapper that will select which kind of subsection
         should be instantiated (generic, bonded, or params);
@@ -85,16 +86,14 @@ class Section:
         else:
             return gml.Subsection(content, self)
 
-
     @staticmethod
-    def count_ifs(content, endif=False):
+    def count_ifs(content: list, endif: bool = False) -> int:
         if endif:
             return len([ln for ln in content if ln.strip().startswith("#endif")])
         else:
             return len([ln for ln in content if ln.strip().startswith("#ifdef") or ln.strip().startswith("#ifndef")])
 
-
-    def get_subsection(self, section_name):
+    def get_subsection(self, section_name: str):
         """
         Returns the specified subsection; we always need to run merge()
         on SectionParam first to avoid duplicates
@@ -110,7 +109,7 @@ class Section:
             raise RuntimeError("Error: subsection {} duplicated in {}".format(section_name, str(self)))
         return ssect[0]
 
-    def get_subsections(self, section_name):
+    def get_subsections(self, section_name: str) -> list:
         """
         Returns the list of specified subsections
         :param section_name: str
@@ -128,37 +127,37 @@ class SectionMol(Section):
     (i.e. one [ moleculetype ], one [ atoms ], one [ bonds ] etc.)
     """
     
-    def __init__(self, content_list, top):
+    def __init__(self, content_list: list, top: "gml.Top"):
         super().__init__(content_list, top)
         self.bonds = None
         self.mol_name = self.get_subsection('moleculetype').molname
         self.name = '{} molecule'.format(self.mol_name)
         
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.name
 
     @property
-    def atoms(self):
+    def atoms(self) -> list:
         return self.get_subsection('atoms').entries_atom
 
     @property
-    def natoms(self):
+    def natoms(self) -> int:
         return len(self.atoms)
 
     @property
-    def nmols(self):
+    def nmols(self) -> int:
         return sum([mol_count[1] for mol_count in self.top.system if mol_count[0] == self.mol_name])
 
     @property
-    def charge(self):
+    def charge(self) -> float:
         return sum([a.charge for a in self.atoms])
 
     @property
-    def mass(self):
+    def mass(self) -> float:
         return sum([a.mass for a in self.atoms])
 
     @property
-    def residues(self):
+    def residues(self) -> list:
         resid = None
         reslist = []
         for at in self.atoms:
@@ -167,7 +166,18 @@ class SectionMol(Section):
                 reslist.append(f'{at.resname}-{at.resid}')
         return reslist
 
-    def set_type(self, type_to_set, atomname, resname=None, resid=None, prefix=None):
+    def set_type(self, type_to_set: str, atomname: str, resname: Optional[str] = None, resid: Optional[int] = None,
+                 prefix: Optional[str] = None):
+        """
+        Sets a defined atomic type for all atoms fulfilling a criterion
+        (residue name/id, atom name)
+        :param type_to_set: str, the type to be set
+        :param atomname: str, atoms with this atomname will have their type changed
+        :param resname: str, atoms that will have their type changed will be restricted to this residue name
+        :param resid: int, atoms that will have their type changed will be restricted to this residue id
+        :param prefix: str, if specified then prefix + original type will be set instead of type_to_set
+        :return: None
+        """
         if resname is None:
             resnames = list({a.resname for a in self.atoms})
         else:
@@ -189,7 +199,7 @@ class SectionMol(Section):
                 else:
                     a.type = prefix + a.type
 
-    def select_atoms(self, selection_string):
+    def select_atoms(self, selection_string: str) -> list:
         """
         Returns atoms' indices according to the specified selection string
         :param selection_string: str, a VMD-compatible selection
@@ -198,7 +208,7 @@ class SectionMol(Section):
         sel = gml.SelectionParser(self)
         return sel(selection_string)
 
-    def select_atom(self, selection_string):
+    def select_atom(self, selection_string: str) -> int:
         """
         Returns atoms' indices according to the specified selection string
         :param selection_string: str, a VMD-compatible selection
@@ -212,10 +222,10 @@ class SectionMol(Section):
             raise RuntimeError("Selection {} returned no atoms".format(selection_string, result))
         return result[0]
 
-    def get_atoms(self, selection_string):
+    def get_atoms(self, selection_string: str) -> list:
         return [self.atoms[i] for i in self.select_atoms(selection_string)]
 
-    def get_atom(self, selection_string):
+    def get_atom(self, selection_string: str) -> "gml.EntryAtom":
         return self.atoms[self.select_atom(selection_string)]
 
     def print_molecule(self):
@@ -224,7 +234,7 @@ class SectionMol(Section):
             print(str(entry), end='')
 
     @property
-    def is_alchemical(self):
+    def is_alchemical(self) -> bool:
         sect = self.get_subsection('atoms')
         for ent in sect.entries_atom:
             if ent.type_b is not None:
@@ -298,7 +308,7 @@ class SectionMol(Section):
                     entry.params_state_a[1] = 0.0
                 entry.comment = entry.comment.rstrip() + ' fixed\n' if entry.comment else '; fixed\n'
 
-    def offset_numbering(self, offset, startfrom=0):
+    def offset_numbering(self, offset: int, startfrom: int = 0):
         """
         Offsets atom numbering starting from a specified position;
         necessary e.g. when adding or removing atoms to the topology
@@ -310,7 +320,7 @@ class SectionMol(Section):
         self._offset_atoms(offset, startfrom)
         self._offset_params(offset, startfrom)
 
-    def _offset_atoms(self, offset, startfrom):
+    def _offset_atoms(self, offset: int, startfrom: int):
         """
         Offsets atoms in the [ atoms ] section
         :param offset: int, by how much we wish to offset the numbering
@@ -322,7 +332,7 @@ class SectionMol(Section):
             if entry.num >= startfrom:
                 entry.num += offset
 
-    def _offset_params(self, offset, startfrom):
+    def _offset_params(self, offset: int, startfrom: int):
         """
         Offsets atomic numbering in all parameter sections,
         e.g., [ bonds ]
@@ -335,7 +345,7 @@ class SectionMol(Section):
             for entry in subsection.entries_bonded:
                 entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
 
-    def add_disulfide(self, resid1, resid2, other=None, rtp=None):
+    def add_disulfide(self, resid1: int, resid2: int, other: Optional["gml.SectionMol"] = None, rtp: Optional[str] = None):
         """
         Adds a bond between the SG atoms of a selected residue pair (either within
         or between molecules), removes the extra hydrogens, and adjusts atom types
@@ -369,7 +379,7 @@ class SectionMol(Section):
                 atom.resname = disulf_resname
         self.merge_two(other, s1.num, s2.num)
 
-    def add_coordinated_ion(self, resid1, resid2, other=None, rtp=None):
+    def add_coordinated_ion(self, resid1: int, resid2: int, other: Optional["gml.SectionMol"] = None, rtp: Optional[str] = None):
         """
         Adds a bond between the cysteine sulfur or histidine nitrogen and (usually)
         a transition metal ion like Zn or Fe, and adjusts atom types
@@ -833,7 +843,7 @@ class SectionMol(Section):
             system_setup = self.top.sections[-1].get_subsection('molecules')
             system_setup.entries = [e for e in system_setup if other.mol_name not in e]
 
-    def merge_molecules(self, other):
+    def merge_molecules(self, other: "gml.SectionMol"):
         other.offset_numbering(self.natoms)
         self._merge_fields(other)
         self.top.sections.remove(other)
@@ -841,7 +851,7 @@ class SectionMol(Section):
         system_setup = self.top.sections[-1].get_subsection('molecules')
         system_setup.entries = [e for e in system_setup if other.mol_name not in e]
 
-    def _merge_fields(self, other):
+    def _merge_fields(self, other: "gml.SectionMol"):
         self.top.print('WARNING watch out for #ifdef POSRES keywords that might get misplaced')
         for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap', 'position_restraints']:
             # TODO merge all subsections
@@ -856,7 +866,7 @@ class SectionMol(Section):
             except KeyError:
                 pass
     
-    def _make_bond(self, atom_own, atom_other, other):
+    def _make_bond(self, atom_own: int, atom_other: int, other: "gml.SectionMol"):
         self._get_bonds()
         try:
             other._get_bonds()
@@ -923,7 +933,7 @@ class SectionMol(Section):
             for n in to_remove[::-1]:
                 _ = subsection.entries.pop(n)
 
-    def _generate_angles(self, other, atom_own, atom_other):
+    def _generate_angles(self, other: "gml.SectionMol", atom_own: int, atom_other: int):
         """
         Generates new angles when an additional bond is formed
         :param other: SectionMol instance, the other molecule that participates in the bond (can be self)
@@ -937,7 +947,7 @@ class SectionMol(Section):
         new_angles += [(atom_own, atom_other, at2) for at2 in neigh_atoms_2]
         return new_angles
 
-    def _generate_14(self, other, atom_own, atom_other):
+    def _generate_14(self, other: "gml.SectionMol", atom_own: int, atom_other: int) -> (list, list):
         """
         Generates new 1-4 interaction (pairs and dihedrals)
         when an additional bond is formed
@@ -968,7 +978,7 @@ class SectionMol(Section):
         new_dihedrals = [dih for dih in new_dihedrals if dih[0] != dih[-1]]
         return new_pairs, new_dihedrals
     
-    def add_ff_params(self, add_section='all', force_all=False):
+    def add_ff_params(self, add_section: str = 'all', force_all: bool = False):
         """
         Looks for FF parameters to be put for every bonded term in the topology,
         then adds them so that they can be explicitly seen/modified
@@ -989,7 +999,7 @@ class SectionMol(Section):
                 for ssub in subsections:
                     ssub.add_ff_params(force_all)
 
-    def find_used_ff_params(self, section='all'):
+    def find_used_ff_params(self, section: str = 'all') -> list:
         used_params = []
         if section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers', 'cmap']
@@ -1005,8 +1015,8 @@ class SectionMol(Section):
                     used_params.extend(ssub.find_used_ff_params())
         return used_params
 
-    def find_missing_ff_params(self, add_section='all', fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False,
-                               fix_dummy=False, once=False):
+    def find_missing_ff_params(self, add_section: str = 'all', fix_by_analogy: bool = False, fix_B_from_A: bool = False,
+                               fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):
         if add_section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
@@ -1023,7 +1033,7 @@ class SectionMol(Section):
                     ssub.find_missing_ff_params(fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy, once)
         del self.printed
 
-    def label_types(self, add_section='all'):
+    def label_types(self, add_section: str = 'all'):
         if add_section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
         else:
@@ -1036,7 +1046,7 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
-    def add_posres(self, keyword='POSRES', value=500):
+    def add_posres(self, keyword: str = 'POSRES', value: float = 500.0):
         """
         Adds a position restraint section to the topology
         :param keyword: conditional keyword that will be used in the #ifdef directive, default is POSRES
@@ -1060,7 +1070,7 @@ class SectionMol(Section):
         else:
             self.top.print(f"[ position_restraints ] already present in molecule {self.mol_name}, skipping")
 
-    def find_rtp(self, rtp):
+    def find_rtp(self, rtp: str) -> str:
         """
         Looks for aminoacids.rtp or merged.rtp in local files (*ff/*rtp or *rtp)
         and in the Gromacs directory, then allows to interactively choose which one to use
@@ -1087,7 +1097,7 @@ class SectionMol(Section):
             rtp = ''
         return rtp
 
-    def mutate_protein_residue(self, resid, target, rtp=None, mutate_in_pdb=True):
+    def mutate_protein_residue(self, resid: int, target: str, rtp: Optional[str] = None, mutate_in_pdb: bool = True):
         """
         Mutates an amino acid to a different one, optionally in the topology
         and structure simultaneously
@@ -1226,7 +1236,7 @@ class SectionMol(Section):
         elif mutate_in_pdb and not self.top.pdb:
             print("No .pdb file bound to the topology, use Top.add_pdb() to add one")
 
-    def parse_rtp(self, rtp, remember=False):
+    def parse_rtp(self, rtp: str, remember: bool = False) -> (dict, dict, dict, dict, dict):
         """
         Reads an .rtp file to extract molecule definitions, separating them into
         dictionaries for: types, charges, impropers, dihedrals, bondedtypes
@@ -1306,19 +1316,19 @@ class SectionMol(Section):
         for atom in self.atoms:
             print(str(atom).strip())
 
-    def list_bonds(self, by_types=False, by_params=False, returning=False):
+    def list_bonds(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
         return self._list_bonded('bonds', by_types, by_params, returning)
 
-    def list_angles(self, by_types=False, by_params=False, returning=False):
+    def list_angles(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
         return self._list_bonded('angles', by_types, by_params, returning)
 
-    def list_impropers(self, by_types=False, by_params=False, returning=False):
+    def list_impropers(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
         return self._list_bonded('impropers', by_types, by_params, returning)
 
-    def list_dihedrals(self, by_types=False, by_params=False, returning=False):
+    def list_dihedrals(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
         return self._list_bonded('dihedrals', by_types, by_params, returning)
 
-    def _list_bonded(self, term, by_types, by_params, returning):
+    def _list_bonded(self, term: str, by_types: bool = False, by_params: bool = False, returning: bool = False):
         self.update_dicts()
         subsection = self.get_subsection(term)
         tried_adding = False
@@ -1349,8 +1359,9 @@ class SectionMol(Section):
                         returnable.append(entry.types_state_a)
         return None if not returning else returnable
 
-    def alch_h_to_ch3(self, resid, orig_name, basename, ctype=None, htype=None, ccharge=None, hcharge=0.09,
-                      dummy_type='DH', add_in_pdb=True):
+    def alch_h_to_ch3(self, resid: int, orig_name: str, basename: str, ctype: Optional[str] = None,
+                      htype: Optional[str] = None, ccharge: Optional[float] = None, hcharge: float = 0.09,
+                      dummy_type: str = 'DH', add_in_pdb: bool = True):
         """
         A generic routine to change a hydrogen atom into a methyl group
         :param resid: int, ID of the residue in which the change is to be made
@@ -1407,7 +1418,7 @@ class SectionMol(Section):
                                          p1_sel='resid {} and name {}'.format(resid, ali),
                                          p2_sel='resid {} and name {}'.format(resid, hook), atomname=at)
 
-    def add_dummy_def(self, dummy_type):
+    def add_dummy_def(self, dummy_type: str):
         params = self.top.parameters
         atomtypes = params.get_subsection('atomtypes')
         dummy_entries = [e for e in atomtypes if isinstance(e, gml.EntryParam) and e.types[0] == dummy_type]
@@ -1415,11 +1426,11 @@ class SectionMol(Section):
             atomtypes.add_entry(gml.EntryParam('   {}     0        1.008  0.0000  A  0.000000000000  0.0000  '
                                                '\n'.format(dummy_type), atomtypes))
 
-    def make_stateB_dummy(self, resid, orig_name, dummy_type='DH'):
+    def make_stateB_dummy(self, resid: int, orig_name: str, dummy_type: str = 'DH'):
         self.add_dummy_def(dummy_type)
         self.gen_state_b(atomname=orig_name, resid=resid, new_type=dummy_type, new_charge=0, new_mass=1.008)
 
-    def solute_tempering(self, temperatures, selection=None):
+    def solute_tempering(self, temperatures: list, selection: str = None):
         """
         Prepares a modified topology for REST2 simulations
         and writes the respective .top files
@@ -1435,7 +1446,7 @@ class SectionMol(Section):
             mod.get_molecule(self.mol_name).scale_rest2_bonded(temperatures[0]/t, selection)
             mod.save_top(self.top.fname.replace('.top', f'-rest{temperatures[0]/t:.3f}.top'))
 
-    def scale_rest2_bonded(self, gamma, selection=None):
+    def scale_rest2_bonded(self, gamma: float, selection: str = None):
         """
         Modifies bonded terms for the REST2 protocol
         :param gamma: float, the scaling parameter from REST2
@@ -1462,7 +1473,7 @@ class SectionMol(Section):
         except KeyError:
             pass
 
-    def scale_rest2_charges(self, gamma, selection=None):
+    def scale_rest2_charges(self, gamma: float, selection: str = None):
         """
         Modifies charges for the REST2 protocol
         :param gamma: float, the scaling parameter from REST2
@@ -1476,7 +1487,7 @@ class SectionMol(Section):
                 a.charge = round(a.charge * gamma**0.5, 4)
                 a.type = 'y' + a.type
 
-    def alchemical_proton(self, resid, rtp=None, b_is_protonated=False):
+    def alchemical_proton(self, resid: int, rtp: Optional[str] = None, b_is_protonated: bool = False):
         """
         Creates an alchemical residue (starting from ASP or GLU) where the B-state
         corresponds to a protonated variant of that residue
@@ -1529,7 +1540,7 @@ class SectionParam(Section):
     facilitate the search of matching params
     """
     
-    def __init__(self, content_list, top):
+    def __init__(self, content_list: list, top: "gml.Top"):
         super().__init__(content_list, top)
         self.name = 'Parameters'
         self.defines = {}
@@ -1571,7 +1582,7 @@ class SectionParam(Section):
             if 'dihedral' in sub.header:
                 sub.sort()  # TODO if two have same periodicity & atoms, remove one with 0-s (PMX)
 
-    def find_used_ff_params(self, section='all'):
+    def find_used_ff_params(self, section: str = 'all') -> list:
         """
         Finds FF parameters that are used by the system
         :param section: str, for which section should the search be performed ('all' or 'atomtypes', '...')
@@ -1607,7 +1618,7 @@ class SectionParam(Section):
                         assert entry.params[-2] == 0
                         entry.params[-1] = 1
 
-    def clone_type(self, atomtype, prefix='y', new_type=None):
+    def clone_type(self, atomtype: str, prefix: str = 'y', new_type: Optional[str] = None):
         """
         Generates an exact type of a selected atomtype,
         preserving all interactions with other types
@@ -1631,7 +1642,7 @@ class SectionParam(Section):
         self.sort_dihedrals()
         self._remove_symm_dupl(new_atomtype)
 
-    def clean_unused(self, used_params, section='all'):
+    def clean_unused(self, used_params: str, section: str = 'all'):
         """
         Cleans up FF parameters that are not used by the given system
         :param used_params: list of str, identifiers of parameters we already know are being used
@@ -1666,16 +1677,16 @@ class SectionParam(Section):
                 new_entries.append(entry)
         ssect.entries = new_entries
 
-    def _remove_symm_dupl(self, new_atomtype):
+    def _remove_symm_dupl(self, new_atomtype: str):
         for sub in self.subsections:
             if 'dihedral' in sub.header:
                 sub._remove_symm(new_atomtype)
 
-    def get_opt_dih(self, types=False):
+    def get_opt_dih(self, types: bool = False) -> list:
         ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
         return ss.get_opt_dih(types)
 
-    def get_opt_dih_indices(self):
+    def get_opt_dih_indices(self) -> list:
         ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
         return ss.get_opt_dih_indices()
 
@@ -1683,7 +1694,8 @@ class SectionParam(Section):
         ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
         ss.set_opt_dih(values)
 
-    def add_nbfix(self, type1, type2, mod_sigma=0.0, mod_epsilon=0.0, action_default='x'):
+    def add_nbfix(self, type1: str, type2: str, mod_sigma: float = 0.0, mod_epsilon: float = 0.0,
+                  action_default: str = 'x'):
         """
         Generates NBFIX entries for the chosen pair of atomtypes by modifying the current
         Lorentz-Berthelot rules, or an existing NBFIX
@@ -1732,7 +1744,7 @@ class SectionParam(Section):
         nbsub.add_entry(gml.Subsection.yield_entry(nbsub, entry_line))
 
     @staticmethod
-    def gen_clones(entry, atomtype, new_atomtype):
+    def gen_clones(entry: "gml.EntryParam", atomtype: str, new_atomtype: str) -> list:
         """
         Copies entry that contains an atomtype to be cloned, taking into
         account possible multiple occurences of that type and generating
@@ -1752,11 +1764,11 @@ class SectionParam(Section):
         return lines
 
     @staticmethod
-    def gen_combs(count, tuples):
+    def gen_combs(count: int, tuples: int) -> list:
         return list(combinations(range(count), tuples))
 
     @staticmethod
-    def mod_types(entry, mods, new_atomtype, atomtype):
+    def mod_types(entry: "gml.EntryParam", mods: list, new_atomtype: str, atomtype: str) -> str:
         """
         Modifies an EntryParam to include the new atomtype instead of the old one
         in places specified by the directive in mods

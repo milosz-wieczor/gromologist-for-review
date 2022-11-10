@@ -313,7 +313,7 @@ class Pdb:
             index += 1
             if err > maxwarn > -1:
                 raise RuntimeError("Error: too many warnings; use maxwarn=N to allow for up to N exceptions,"
-                                   "or -1 to allow for any number of them")
+                                   "or maxwarn=-1 to allow for any number of them")
         print("Check passed, all names match")
 
     @staticmethod
@@ -794,12 +794,23 @@ class Pdb:
         atoms_remove = mutant.atoms_to_remove()
         for at in atoms_remove:
             equivalents = {'OG': 'OG1', 'HG': 'HG1', 'HG1': 'HG11', 'HG2': 'HG12', 'HG3': 'HG13', 'CG': 'CG1',
-                           'CD': 'CD1', 'HD': 'HD1', 'HD1': 'HD11', 'HD2': 'HD12', 'HD3': 'HD13'}
+                           'CD': 'CD1', 'HD': 'HD1', 'HD1': ['HD11', 'HE2'], 'HD2': 'HD12', 'HD3': 'HD13'}
             print("Removing atom {} from resid {} in structure".format(at, resid))
+            atnum = None
             try:
                 atnum = self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, at))
             except RuntimeError:
-                atnum = self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, equivalents[at]))
+                equivs = equivalents[at] if isinstance(equivalents[at], list) else [equivalents[at]]
+                for equiv in equivs:
+                    try:
+                        atnum = self.get_atom_index('{}resid {} and name {}'.format(chstr, resid, equiv))
+                    except RuntimeError:
+                        continue
+                    else:
+                        break
+                else:
+                    if atnum is None:
+                        raise RuntimeError(f"Couldn't find any of the following: {at}, {', '.join(equivs)}")
             _ = self.atoms.pop(atnum)
         for atom_add, hook, geo_ref, bond_length, aft in zip(atoms_add, hooks, geo_refs, bond_lengths, afters):
             print("Adding atom {} to resid {} in structure".format(atom_add, resid))

@@ -1,6 +1,6 @@
 import os
 from itertools import product, combinations
-from typing import Optional
+from typing import Optional, Union
 from functools import reduce
 from copy import deepcopy
 from glob import glob
@@ -1070,7 +1070,7 @@ class SectionMol(Section):
         else:
             self.top.print(f"[ position_restraints ] already present in molecule {self.mol_name}, skipping")
 
-    def find_rtp(self, rtp: str) -> str:
+    def find_rtp(self, rtp: Union[str, None]) -> str:
         """
         Looks for aminoacids.rtp or merged.rtp in local files (*ff/*rtp or *rtp)
         and in the Gromacs directory, then allows to interactively choose which one to use
@@ -1094,7 +1094,7 @@ class SectionMol(Section):
             else:
                 rtp = found[rtpnum-1]
         elif self.top.rtp:
-            rtp = ''
+            rtp = None
         return rtp
 
     def mutate_protein_residue(self, resid: int, target: str, rtp: Optional[str] = None, mutate_in_pdb: bool = True):
@@ -1110,14 +1110,14 @@ class SectionMol(Section):
         alt_names = {('THR', 'OG'): 'OG1', ('THR', 'HG'): 'HG1', ('LEU', 'CD'): 'CD1', ('LEU', 'HD1'): 'HD11',
                      ('LEU', 'HD2'): 'HD12', ('LEU', 'HD3'): 'HD13', ('VAL', 'CG'): 'CG1', ('VAL', 'HG1'): 'HG11',
                      ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13'}
-        rtp = self.find_rtp(rtp)
+        rtp = self.find_rtp(rtp) if rtp is None else rtp
         orig = self.get_atom('resid {} and name CA'.format(resid))
         mutant = gml.ProteinMutant(orig.resname, target)
         targ = mutant.target_3l
         self.top.print("\n  Mutating residue {} (resid {}) into {}\n".format(orig.resname, resid, targ))
         atoms_add, hooks, _, _, extra_bonds, afters = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
-        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(rtp)
+        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(rtp, remember=True)
         # some residue-specific modifications here
         if targ == 'HIS':
             targ = 'HSD' if ('HSD', 'CA') in types.keys() else 'HID'
@@ -1131,12 +1131,23 @@ class SectionMol(Section):
         # first remove all unwanted atoms
         for at in atoms_remove:
             equivalents = {'OG': 'OG1', 'HG': 'HG1', 'HG1': 'HG11', 'HG2': 'HG12', 'HG3': 'HG13', 'CG': 'CG1',
-                           'CD': 'CD1', 'HD': 'HD1', 'HD1': 'HD11', 'HD2': 'HD12', 'HD3': 'HD13'}
+                           'CD': 'CD1', 'HD': 'HD1', 'HD1': ['HD11', 'HE2'], 'HD2': 'HD12', 'HD3': 'HD13'}
             self.top.print("Removing atom {} from resid {} in topology".format(at, resid))
+            atnum = None
             try:
                 atnum = self.get_atom('resid {} and name {}'.format(resid, at)).num
             except RuntimeError:
-                atnum = self.get_atom('resid {} and name {}'.format(resid, equivalents[at])).num
+                equivs = equivalents[at] if isinstance(equivalents[at], list) else [equivalents[at]]
+                for equiv in equivs:
+                    try:
+                        atnum = self.get_atom('resid {} and name {}'.format(resid, equiv)).num
+                    except RuntimeError:
+                        continue
+                    else:
+                        break
+                else:
+                    if atnum is None:
+                        raise RuntimeError(f"Couldn't find any of the following: {at}, {', '.join(equivs)}")
             self.del_atom(atnum, del_in_pdb=False)
         for atom_add, hook, aft in zip(atoms_add, hooks, afters):
             self.top.print("Adding atom {} to resid {} in topology".format(atom_add, resid))
@@ -1246,7 +1257,7 @@ class SectionMol(Section):
         (ordered: types, charges, dihedrals, impropers, bondedtypes)
         """
         # TODO check against amber/ILDN
-        if self.top.rtp and remember:
+        if self.top.rtp and not rtp and remember:
             print("Using previously selected .rtp file")
             return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['dihedrals'], \
                    self.top.rtp['impropers'], self.top.rtp['bondedtypes']

@@ -206,14 +206,14 @@ class Top:
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
 
-    def add_molecule_from_itp(self, itpfile: str, molnames: Optional[list] = None):
+    def add_molecule_from_file(self, filename: str, molnames: Optional[list] = None):
         """
-        Adds
-        :param molnames:
-        :param itpfile:
-        :return:
+        Adds a molecule from an external file (can be .itp or .top) to the current topology
+        :param molnames: list, enumerates molecules to be added (can be just 1-element list)
+        :param filename: name of the file containing the molecule to be added
+        :return: None
         """
-        contents = [line for line in open(itpfile)]
+        contents = [line for line in open(filename)]
         special_sections = {'defaults', 'moleculetype', 'system'}
         special_lines = [n for n, l in enumerate(contents)
                          if l.strip() and l.strip().strip('[]').strip().split()[0] in special_sections]
@@ -224,6 +224,32 @@ class Top:
                 section = self._yield_sec(contents[beg:end])
                 if molnames is None or section.name in molnames:
                     self.sections.insert(molsections+1, section)
+        print("Molecules inserted. Try running Top.find_missing_ff_params() to see if the topology contains"
+              "all necessary parameters")  # TODO add filling/merging params from ext file
+
+    def add_molecules_to_system(self, molname: str, nmol: int):
+        """
+        Adds a specified number of molecules to the system (specified
+        in the [ molecules ] section at the end of the .top file)
+        :param molname: str, name of the molecule (has to be already defined in the topology)
+        :param nmol: int, number of molecules to be repeated
+        :return: None
+        """
+        mollist = [mol.molname for mol in self.molecules]
+        if molname not in mollist:
+            raise RuntimeError(f"Molecule {molname} not found among defined molecules ({mollist}), please add it"
+                               f"manually or via Top.add_molecule_from_itp()")
+        system_subsection = [s.get_subsection('molecules') for s in self.sections
+                             if 'molecules' in [ss.header for ss in s.subsections]]
+        if len(system_subsection) > 1:
+            raise RuntimeError("Multiple 'molecules' subsection found in the topology, this is not allowed")
+        elif len(system_subsection) == 0:
+            self.print("Section 'molecules' not present in the topology, will be created now")
+            system_subsection = self._yield_sec(["[ molecules ]"])
+            self.sections.append(system_subsection)
+        else:
+            system_subsection = system_subsection[0]
+        system_subsection.add_entry(f"{molname} {nmol}")
 
     def find_missing_ff_params(self, section: str = 'all', fix_by_analogy: bool = False, fix_B_from_A: bool = False,
                                fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):
@@ -546,16 +572,19 @@ class Top:
             raise RuntimeError("Molecule {} is duplicated in topology".format(mol_name))
         return mol[0]
 
-    def check_pdb(self, maxwarn: Optional[int] = None):
+    def check_pdb(self, maxwarn: Optional[int] = None, fix_pdb: bool = False, fix_top: bool = False):
         """c2r.gro
         Compares the topology with a PDB object to check
         for consistency, just as gmx grompp does;
         if inconsistencies are found, prints a report
+        :param maxwarn: int, maximum number of warnings to print, default is 20
+        :param fix_pdb: bool, whether to set names in Pdb using names from the Top
+        :param fix_top: bool, whether to set names in Top using names from the Pdb
         :return: None
         """
         if self.pdb:
             mw = 20 if maxwarn is None else maxwarn
-            self.pdb.check_top(mw)
+            self.pdb.check_top(mw, fix_pdb=fix_pdb, fix_top=fix_top)
         else:
             raise AttributeError("No PDB file has been bound to this topology")
 

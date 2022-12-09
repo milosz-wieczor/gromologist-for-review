@@ -80,6 +80,7 @@ class EntryBonded(Entry):
     between specific atoms in the topology
     """
     fstr_suff = {('bonds', '1'): (float, float),
+                 ('bonds', '2'): (float, float),
                  ('angles', '1'): (float, float),
                  ('angles', '2'): (float, float),
                  ('angles', '5'): (float, float, float, float),

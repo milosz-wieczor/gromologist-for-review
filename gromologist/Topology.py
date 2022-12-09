@@ -1,4 +1,5 @@
 import os
+import platform
 import datetime
 from copy import deepcopy
 from typing import Optional, Iterable, TextIO
@@ -209,8 +210,8 @@ class Top:
     def add_molecule_from_file(self, filename: str, molnames: Optional[list] = None):
         """
         Adds a molecule from an external file (can be .itp or .top) to the current topology
-        :param molnames: list, enumerates molecules to be added (can be just 1-element list)
         :param filename: name of the file containing the molecule to be added
+        :param molnames: list, enumerates molecules to be added (can be just 1-element list), None means add all
         :return: None
         """
         contents = [line for line in open(filename)]
@@ -222,10 +223,35 @@ class Top:
             if 'moleculetype' in contents[beg]:
                 molsections = [n for n, i in enumerate(self.sections) if isinstance(i, gml.SectionMol)][-1]
                 section = self._yield_sec(contents[beg:end])
-                if molnames is None or section.name in molnames:
+                if molnames is None or section.mol_name in molnames:
                     self.sections.insert(molsections+1, section)
         print("Molecules inserted. Try running Top.find_missing_ff_params() to see if the topology contains"
               "all necessary parameters")  # TODO add filling/merging params from ext file
+
+    def add_parameters_from_file(self, filename: str, sections: Optional[list] = None, overwrite: bool = False):
+        """
+        Adds parameters from an external file
+        :param filename: name of the file containing the parameters to be added
+        :param sections: list, enumerates sections to be added (can be just 1-element list), None means add all
+        :param overwrite: bool, whether to overwrite existing parameters in case of conflict (default is not)
+        :return: None
+        """
+        other = gml.Top(filename, ignore_ifdef=True)
+        if not all([i == j for i, j in zip(self.parameters.get_subsection('defaults').entries_param[0].content,
+                                           other.parameters.get_subsection('defaults').entries_param[0].content)]):
+            raise RuntimeError("Can't merge parameters with different [ defaults ] sections, "
+                               "make sure they are identical")
+        for subsection in other.parameters.subsections:
+            if subsection.header != 'defaults':
+                try:
+                    # let's check if we already have this subsection in our topo
+                    own_subs = self.parameters.get_subsection(subsection.header)
+                except KeyError:
+                    # if not, let's add it as it is assuming it's non-empty
+                    if len(subsection.entries_param) > 0:
+                        self.parameters.subsections.append()
+                else:
+                    own_subs._combine_entries(subsection)
 
     def add_molecules_to_system(self, molname: str, nmol: int):
         """
@@ -265,6 +291,7 @@ class Top:
         :param once: bool, will only print a given missing term once per molecule
         :return: None
         """
+        # TODO check if all types are defined
         for mol in self.molecules:
             mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy, once=once)
 
@@ -685,8 +712,8 @@ class Top:
         outname = outfile.name.split('/')[-1]
         outfile.write(";\n;  File {} was generated with the gromologist library\n"
                       ";  by user: {}\n;  on host: {}\n;  at date: {} \n;\n".format(outname,
-                                                                                    os.getenv("USER"),
-                                                                                    os.uname()[1],
+                                                                                    platform.os.getenv("USER"),
+                                                                                    platform.uname()[1],
                                                                                     datetime.datetime.now()))
         for entry in self.header:
             str_entry = str(entry).rstrip() + '\n'

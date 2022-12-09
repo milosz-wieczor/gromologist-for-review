@@ -539,7 +539,35 @@ class SubsectionParam(Subsection):
                 used_parm_entries.append(entry.identifier)
         return used_parm_entries
 
-    def _sorting_fn(self, entry):
+    def _combine_entries(self, other_subsection: "gml.SubsectionParam", overwrite: bool = False):
+        """
+        When merging parameter sets, makes sure there are no duplications, and in these cases resolves conflicts
+        :param other_subsection: the gml.Subsection instance from which entries will be added to merge files
+        :param overwrite: bool, whether to accept new parameters in case of a mismatch
+        :return: None
+        """
+        for entry in other_subsection.entries_param:
+            existing = [e for e in self.entries_param if e.types == entry.types]
+            if len(existing) == 1:
+                ex_entry = existing[0]
+                if ex_entry.params == entry.params and ex_entry.interaction_type == entry.interaction_type \
+                        and ex_entry.modifiers == entry.modifiers:
+                    continue
+                else:
+                    if overwrite:
+                        ex_entry.params = entry.params
+                        ex_entry.interaction_type = entry.interaction_type
+                        ex_entry.modifiers = entry.modifiers
+                    else:
+                        print(f"Found mismatch between original entry {str(ex_entry)} and new {entry}, keeping the "
+                              f"original; if this is not desired, set overwrite=True")
+            elif len(existing) == 0:
+                self.add_entry(str(entry))
+            else:
+                raise RuntimeError(f"Found multiple entries matching the types of {entry.types} in section"
+                                   f"{self.header}, make sure this is intentional")
+
+    def _sorting_fn(self, entry: "gml.Entry") -> int:
         """
         Comments should go first, then we sort based on first, second,
         ... column of the section

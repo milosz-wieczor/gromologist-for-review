@@ -99,8 +99,8 @@ class Section:
         on SectionParam first to avoid duplicates
         # TODO need special treatment for param sections with different interaction types (mostly dihedraltypes)
         # TODO should we simply split them whenever intr type changes as we parse them?
-        :param section_name:
-        :return:
+        :param section_name: str, name of the subsection to be returned
+        :return: gml.Subsection
         """
         ssect = [s for s in self.subsections if s.header == section_name]
         if len(ssect) == 0:
@@ -1753,6 +1753,23 @@ class SectionParam(Section):
         entry_line = "{} {} 1 {} {} ; sigma chg by {}, eps chg by {} {}".format(type1, type2, new_sigma, new_epsilon,
                                                                                 mod_sigma, mod_epsilon, comment)
         nbsub.add_entry(gml.Subsection.yield_entry(nbsub, entry_line))
+
+    def edit_atomtype(self, type1: str, mod_sigma: float = 0.0, mod_epsilon: float = 0.0):
+        """
+        Modifies the values of sigma or epsilon for a chosen atomtype
+        :param type1: str, type to be edited
+        :param mod_sigma: float, by how much should sigma be changed (in nm)
+        :param mod_epsilon: float, by how much should epsilon be changed (in kJ/mol)
+        :return: None
+        """
+        atp = self.get_subsection('atomtypes')
+        for entry in atp:
+            if isinstance(entry, gml.EntryParam):
+                if entry.types[0] == type1:
+                    entry.params[0] += mod_sigma
+                    entry.params[1] += mod_epsilon
+                    return
+        raise RuntimeError(f"Couldn't find type {type1}, check your topology")
 
     @staticmethod
     def gen_clones(entry: "gml.EntryParam", atomtype: str, new_atomtype: str) -> list:

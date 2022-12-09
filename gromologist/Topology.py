@@ -226,7 +226,8 @@ class Top:
                 if molnames is None or section.mol_name in molnames:
                     self.sections.insert(molsections+1, section)
         print("Molecules inserted. Try running Top.find_missing_ff_params() to see if the topology contains"
-              "all necessary parameters")  # TODO add filling/merging params from ext file
+              "all necessary parameters.\n\nTo add the newly defined molecule to the system, use "
+              "Top.add_molecules_to_system() or manually edit the [ molecules ] section in the topology")
 
     def add_parameters_from_file(self, filename: str, sections: Optional[list] = None, overwrite: bool = False):
         """
@@ -241,7 +242,7 @@ class Top:
                                            other.parameters.get_subsection('defaults').entries_param[0].content)]):
             raise RuntimeError("Can't merge parameters with different [ defaults ] sections, "
                                "make sure they are identical")
-        for subsection in other.parameters.subsections:
+        for subsection in other.parameters.subsections:  # TODO make optional selections available
             if subsection.header != 'defaults':
                 try:
                     # let's check if we already have this subsection in our topo
@@ -251,7 +252,7 @@ class Top:
                     if len(subsection.entries_param) > 0:
                         self.parameters.subsections.append()
                 else:
-                    own_subs._combine_entries(subsection)
+                    own_subs._combine_entries(subsection, overwrite)
 
     def add_molecules_to_system(self, molname: str, nmol: int):
         """

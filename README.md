@@ -20,6 +20,9 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Adding alchemical B-states](#adding-alchemical-b-states)
         * [Removing or swapping alchemical states](#removing-or-swapping-alchemical-states)
         * [Duplicating and reassigning types](#duplicating-and-reassigning-types)
+        * [Adding parameters or molecules from other topology files](#adding-external-params)
+        * [Editing the contents of the system](#editing-contents-system)
+        * [Modifying Lennard-Jones parameters](#modifying-lj-terms)
         * [Adding NBFIX terms](#adding-nbfix-terms)
         * [Explicitly listing parameters in topology & finding missing parameters](#explicitly-listing-parameters-in-topology---finding-missing-parameters)
         * [Preparing REST2 topologies](#preparing-rest2-topologies)
@@ -441,13 +444,55 @@ To then set e.g. all CA atoms in the 1st molecule to the new type, run the follo
 >>> t.molecules[0].set_type("CY", atomname="CA", resname=["ALA", "LYS"])  # sets CAs in ALA and LYS as CY
 ```
 
+##### Adding parameters or molecules from other topology files
+<a name="adding-external-params"/>
+
+To incorporate and merge parameters from another topology (e.g. a ligand parametrization
+generated elsewhere), use the following:
+
+```
+>>> t.add_parameters_from_file('ligand.top')
+```
+
+To "import" molecule definitions in the same way, go for:
+
+```
+>>> t.add_molecule_from_file('ligand.top')
+>>> t.add_molecule_from_file('ligand.top', ['LIG']) # to import only selected molecules
+```
+
+##### Editing the contents of the system
+<a name="editing-contents-system"/>
+
+To add a specified number of molecules to the system (note, this is different than 
+just adding molecule definitions!), use:
+
+```
+>>> t.add_molecules_to_system(molname="LIG", nmol=3)
+```
+In turn, to completely remove the molecule (both definition & in system contents),
+you can use:
+
+```
+>>> t.remove_molecule(molname="LIG")
+```
+
+##### Modifying Lennard-Jones parameters
+<a name="modifying-lj-terms"/>
+
+To change the values of sigma or epsilon for a given type, use:
+
+```
+>>> t.parameters.edit_atomtype('CT', mod_sigma=0.01, mod_epsilon=-0.1)
+```
+
 ##### Adding NBFIX terms
 <a name="adding-nbfix-terms"/>
 
 To generate an NBFIX (custom combination rule) entry, use the following snippet:
 
 ```
->>> t.parameters.add_nbfix(type1=CT, type2=HA, mod_sigma=0.01, mod_epsilon=-0.1)
+>>> t.parameters.add_nbfix(type1='CT', type2='HA', mod_sigma=0.01, mod_epsilon=-0.1)
 ```
 
 This will introduce a term modifying the CT-HA Lennard-Jones interaction, increasing the default 

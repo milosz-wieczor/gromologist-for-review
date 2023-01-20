@@ -37,6 +37,8 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Converting a 3-point water model to a 4-point one](#converting-a-3-point-water-model-to-a-4-point-one)
     + [Selection language syntax](#selection-language-syntax)
     + [Access to Gromacs utilities](#access-to-gromacs-utilities)
+        * [Energy decomposition for a structure or trajectory](#energy-decomposition-for-a-structure-or-trajectory)
+        * [Sensitivity analysis](#sensitivity-analysis)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
@@ -719,6 +721,9 @@ Examples:
 ### Access to Gromacs utilities
 <a name="access-to-gromacs-utilities"/>
 
+##### Energy decomposition for a structure or trajectory
+<a name="energy-decomposition-for-a-structure-or-trajectory"/>
+
 To perform energy decomposition using the Gromacs rerun module, use the
 `calc_gmx_energy()` utility function:
 
@@ -730,3 +735,23 @@ To perform energy decomposition using the Gromacs rerun module, use the
 The `terms` keyword can be "all" (returns all available energy/pressure/volume terms), 
 any specific keyword allowed by `gmx energy` (e.g. "potential"), 
 or a list of these (e.g. ["bonds", "angles", "potential"]).
+
+##### Sensitivity analysis
+<a name="sensitivity-analysis"/>
+To perform a full sensitivity analysis in the NBFIX space, start by calculating
+the energy derivatives for each frame for each possible NBFIX:
+
+```
+>>> import gromologist as gml
+>>> td = gml.ThermoDiff()
+>>> # this adds all possible NBFIXes to the list of calculated sensitivities:
+>>> td.add_all_nbfix_mods(top='md/topol.top', structure='md/conf.pdb')
+>>> # this specifies a trajectory on which the sensitivity will be calculated, as well as relevant datasets:
+>>> hdata = np.loadtxt('helix_content.dat')[:,1]
+>>> td.add_traj(top='md/topol.top', traj='md/traj.xtc', dataset={'helicity': hdata})
+>>> td.run() # this part will take some time
+>>> # let's find the difference between the binned derivatives for the lower and upper half of the dataset:
+>>> hmin, hmax = np.min(hdata), np.max(hdata)
+>>> hmid = 0.5 * (hmin + hmax)
+>>> td.calc_discrete_derivatives(dataset='helicity', threshold=[hmin, hmid, hmid, hmax])
+```

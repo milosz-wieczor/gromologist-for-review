@@ -8,4 +8,7 @@ from gromologist.Gmx import *
 from gromologist.Parser import SelectionParser
 from gromologist.Mutant import ProteinMutant
 from gromologist.ThDiff import *
-from gromologist.Crooks import *
+try:
+    from gromologist.Crooks import *
+except ModuleNotFoundError:
+    pass

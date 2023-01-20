@@ -87,10 +87,11 @@ class Subsection:
         """
         Adds a single entry to the subsection, either at the end
         or in a specified position
-        :param new_entry: str, entry to be added
+        :param new_entry: gml.Entry, entry to be added
         :param position: where to add the entry (None is at the end)
         :return: None
         """
+        new_entry.subsection = self
         if position is not None:
             position = int(position)
             self.entries.insert(position, new_entry)
@@ -101,10 +102,12 @@ class Subsection:
         """
         Adds multiple entries to the subsection, either at the end
         or in a specified position
-        :param new_entries_list: list of str, entries to be added
+        :param new_entries_list: list of gml.Entry, entries to be added
         :param position: where to add the entries (None is at the end)
         :return: None
         """
+        for new_entry in new_entries_list:
+            new_entry.subsection = self
         if position is not None:
             position = int(position)
             for new_entry in new_entries_list:
@@ -562,7 +565,7 @@ class SubsectionParam(Subsection):
                         print(f"Found mismatch between original entry {str(ex_entry)} and new {entry}, keeping the "
                               f"original; if this is not desired, set overwrite=True")
             elif len(existing) == 0:
-                self.add_entry(str(entry))
+                self.add_entry(entry)
             else:
                 raise RuntimeError(f"Found multiple entries matching the types of {entry.types} in section"
                                    f"{self.header}, make sure this is intentional")
@@ -685,6 +688,18 @@ class SubsectionAtom(Subsection):
         # TODO should they be @properties, called only when needed? EITHER WAY, REVISE
         if not self.name_to_num or force_update:
             self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
+
+    def check_defined_types(self):
+        defined_types = self.section.top.parameters.get_subsection('atomtypes')
+        typelist = {ent.types[0] for ent in defined_types.entries_param}
+        for atom in self.entries_atom:
+            if atom.type not in typelist:
+                print(f'Couldn\'t find definition of atom type {atom.type} (atom {atom.num} in molecule '
+                      f'{self.section.mol_name}) in parameters')
+            if atom.type_b:
+                if atom.type_b not in typelist:
+                    print(f'Couldn\'t find definition of atom type {atom.type_b} (atom {atom.num} in molecule '
+                          f'{self.section.mol_name}) in parameters')
 
     def _mol_type_nums(self):
         """

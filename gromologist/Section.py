@@ -842,6 +842,8 @@ class SectionMol(Section):
             # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
             system_setup = self.top.sections[-1].get_subsection('molecules')
             system_setup.entries = [e for e in system_setup if other.mol_name not in e]
+        if self.top.pdb:
+            print("WARNING: if merging molecules that are not consecutive, make sure to adjust your PDB numbering")
 
     def merge_molecules(self, other: "gml.SectionMol"):
         other.offset_numbering(self.natoms)
@@ -1022,6 +1024,7 @@ class SectionMol(Section):
         else:
             subsections_to_add = [add_section]
         self.printed = []
+        self.get_subsection('atoms').check_defined_types()
         for sub in subsections_to_add:
             try:
                 subsections = [s for s in self.subsections if s.header == sub]
@@ -1526,7 +1529,7 @@ class SectionMol(Section):
                 atom.charge_b = 0.0
                 atom.mass_b = 1.008
         if 'DH' not in self.top.defined_atomtypes:
-            self.top.parameters.get_subsection('atomtypes').add_entry('DH  0  0.0  0.0  A   0.0  0.0')
+            self.top.parameters.get_subsection('atomtypes').add_entry(gml.EntryParam('DH  0  0.0  0.0  A   0.0  0.0'))
         if b_is_protonated:
             self.swap_states(resid=resid)
         self.update_dicts()
@@ -1768,6 +1771,7 @@ class SectionParam(Section):
                 if entry.types[0] == type1:
                     entry.params[0] += mod_sigma
                     entry.params[1] += mod_epsilon
+                    entry.comment = f"; sigma chg by {mod_sigma}, eps chg by {mod_epsilon} {entry.comment}"
                     return
         raise RuntimeError(f"Couldn't find type {type1}, check your topology")
 

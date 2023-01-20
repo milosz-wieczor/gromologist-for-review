@@ -28,6 +28,8 @@ def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pas
                    + ' ' + ' '.join([f'-{k} ' for k, v in params.items() if isinstance(v, bool) and v]) + qui
     result = run(call_command.split(), input=pv, stderr=PIPE, stdout=PIPE, check=True if fail_on_error else False)
     # result = call(call_command, shell=True)
+    if not quiet:
+        print(result.stdout.decode() + result.stderr.decode())
     if answer:
         return result.stdout.decode() + result.stderr.decode()
 
@@ -133,7 +135,10 @@ def ndx(struct: gml.Pdb, selections: list, fname: Optional[str] = None, append: 
         raise RuntimeError(f"Cannot append to {append}: no such file")
     for n, sel in enumerate(selections, 1):
         groups.append([x + 1 for x in struct.get_atom_indices(sel)])
-        group_names.append(f'g{n}')
+        if sel == 'all':
+            group_names.append('System')
+        else:
+            group_names.append(f'g{n}')
     if append is not None:
         flink = open(append, 'a')
     else:
@@ -183,7 +188,7 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
     if not gmx:
         gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
     if group_a and group_b:
-        group_names = ndx(gml.Pdb(struct), [group_a, group_b])
+        group_names = ndx(gml.Pdb(struct), [group_a, group_b, 'all'])
         gen_mdp('rerun.mdp', energygrps=f"{group_names[0]} {group_names[1]} ")
         gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5, n='gml.ndx')
     else:

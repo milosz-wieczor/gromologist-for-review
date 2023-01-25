@@ -352,6 +352,30 @@ class ThermoDiff:
             self.add_mod(deepcopy(topology), structure, modtype='m',
                          selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
 
+    def add_all_sigma_mods(self, top: Union[str, gml.Top], structure: str):
+        self._add_lj_mods(top, structure, 'sigma')
+
+    def add_all_epsilon_mods(self, top: Union[str, gml.Top], structure: str):
+        self._add_lj_mods(top, structure, 'epsilon')
+
+    def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str):
+        """
+        Automatically adds calculations of derivatives with respect to
+        all sigma or epsilon values in the system at hand
+        :param top: either str (filename) or gml.Top instance
+        :param structure: str, filename of the .pdb or .gro corresponding to the .top file
+        :param which: str, 'sigma' or 'epsilon'
+        :return: None
+        """
+        topology = gml.Top(top) if isinstance(top, str) else top
+        topology.clear_sections()
+        topology.clear_ff_params()
+        for atomtype in sorted(topology.defined_atomtypes):
+            assert which in ['sigma', 'epsilon']
+            print(f"Adding {which} modification: {atomtype}")
+            self.add_mod(deepcopy(topology), structure, modtype=which[0],
+                         selections=[f'type {atomtype}'])
+
     def add_traj(self, top: Union[str, gml.Top], traj: str, datasets: Optional[dict] = None,
                  weights: Optional[list] = None):
         """

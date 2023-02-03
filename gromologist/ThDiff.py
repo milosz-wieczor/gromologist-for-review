@@ -702,3 +702,17 @@ class ThermoDiff:
                                                                                                          thresh[1:])],
                                                                             [mean_obs[x] / mod.dpar
                                                                              for x in mean_obs.keys()])
+
+    def write_discrete_derivatives(self, dataset: str, free_energy: bool):
+        """
+
+        :param dataset:
+        :param free_energy:
+        :return:
+        """
+        derivs = self.discrete_free_energy_derivatives if free_energy else self.discrete_observable_derivatives
+        for key in derivs.keys():
+            if key[1] == dataset:
+                mod = key[0]
+                with open(f'working/{mod}/{key[1]}-discrete_sensitivity.dat', 'w') as outfile:
+                    outfile.write(f"{round(derivs[key][1] - derivs[key][0], 3)}\n")

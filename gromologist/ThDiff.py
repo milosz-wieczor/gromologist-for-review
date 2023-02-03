@@ -2,7 +2,7 @@ import os
 import gromologist as gml
 from typing import Union, Optional, TypeVar, Tuple
 from itertools import combinations_with_replacement
-from multiprocessing import Pool
+from concurrent.futures import ProcessPoolExecutor
 from copy import deepcopy
 
 gmlMod = TypeVar("gmlMod", bound="Mod")
@@ -352,13 +352,13 @@ class ThermoDiff:
             self.add_mod(deepcopy(topology), structure, modtype='m',
                          selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
 
-    def add_all_sigma_mods(self, top: Union[str, gml.Top], structure: str):
-        self._add_lj_mods(top, structure, 'sigma')
+    def add_all_sigma_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None):
+        self._add_lj_mods(top, structure, 'sigma', exclude)
 
-    def add_all_epsilon_mods(self, top: Union[str, gml.Top], structure: str):
-        self._add_lj_mods(top, structure, 'epsilon')
+    def add_all_epsilon_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None):
+        self._add_lj_mods(top, structure, 'epsilon', exclude)
 
-    def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str):
+    def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str, exclude: Optional[list] = None):
         """
         Automatically adds calculations of derivatives with respect to
         all sigma or epsilon values in the system at hand
@@ -371,6 +371,8 @@ class ThermoDiff:
         topology.clear_sections()
         topology.clear_ff_params()
         for atomtype in sorted(topology.defined_atomtypes):
+            if atomtype in exclude:
+                continue
             assert which in ['sigma', 'epsilon']
             print(f"Adding {which} modification: {atomtype}")
             self.add_mod(deepcopy(topology), structure, modtype=which[0],
@@ -468,7 +470,7 @@ class ThermoDiff:
                     datasets = self.get_traj(traj['id'])['datasets']
                     print(f"Calculating rerun for {str(mod)}, traj {traj['path']}")
                     pairs.append((mod, traj, datasets))
-        with Pool() as p:
+        with ProcessPoolExecutor() as p:
             deriv_dicts = p.map(self.launch_rerun, pairs)
         for dd in deriv_dicts:
             self.derivatives.update(dd)

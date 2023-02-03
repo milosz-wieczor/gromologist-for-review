@@ -370,6 +370,7 @@ class ThermoDiff:
         topology = gml.Top(top) if isinstance(top, str) else top
         topology.clear_sections()
         topology.clear_ff_params()
+        topology.add_ff_params()
         for atomtype in sorted(topology.defined_atomtypes):
             if atomtype in exclude:
                 continue

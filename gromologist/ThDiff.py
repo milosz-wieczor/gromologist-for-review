@@ -636,6 +636,7 @@ class ThermoDiff:
             mean_derivatives = {st: 0 for st in states + [None]}
             mean_product = {st: 0 for st in states + [None]}
             mean_data = {st: 0 for st in states + [None]}
+            counter = {st: 0 for st in states + [None]}
             for n in range(len(binning_data)):
                 state_index = None
                 if threshold is not None:
@@ -646,19 +647,19 @@ class ThermoDiff:
                 else:
                     state_index = binning_data[n]
                 mean_derivatives[state_index] += weights[n] * derivs[n]
+                counter += weights[n]
                 if not free_energy:
-                    if not free_energy:
-                        mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n]
-                        mean_data[state_index] += deriv_data[n]
+                    mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n]
+                    mean_data[state_index] += deriv_data[n]
             if free_energy:
-                self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar
+                self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / (mod.dpar * counter[x])
                                                                               for x in mean_derivatives.keys()]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
                     mean_obs[key] = (1 / 0.008314 * self.temperature) * (
                             mean_data[key] * mean_derivatives[key] - mean_product[key])
-                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / mod.dpar
+                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / (mod.dpar * counter[x])
                                                                              for x in mean_obs.keys()]
 
     def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50,

@@ -748,7 +748,7 @@ the energy derivatives for each frame for each possible NBFIX:
 >>> td.add_all_nbfix_mods(top='md/topol.top', structure='md/conf.pdb')
 >>> # this specifies a trajectory on which the sensitivity will be calculated, as well as relevant datasets:
 >>> hdata = np.loadtxt('helix_content.dat')[:,1]
->>> td.add_traj(top='md/topol.top', traj='md/traj.xtc', dataset={'helicity': hdata})
+>>> td.add_traj(top='md/topol.top', traj='md/traj.xtc', datasets={'helicity': hdata})
 >>> td.run() # this part will take some time
 >>> # let's find the difference between the binned derivatives for the lower and upper half of the dataset:
 >>> hmin, hmax = np.min(hdata), np.max(hdata)

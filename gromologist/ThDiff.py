@@ -113,7 +113,7 @@ class ModAtom(Mod):
         """
         for atom in self.atoms:
             if "TD-MODDED" not in atom.comment:
-                atom.comment = atom.comment + "TD-MODDED"
+                atom.comment = atom.comment + " ; TD-MODDED"
                 atom.mass_b = atom.mass
                 if self.chg:
                     atom.type_b = atom.type
@@ -210,7 +210,7 @@ class ModNbfix(Mod):
                 atom.mass_b = atom.mass
                 atom.type_b = prefix + atom_type
                 atom.charge_b = atom.charge
-                atom.comment = atom.comment + "TD-MODDED"
+                atom.comment = atom.comment + " ; TD-MODDED"
 
     def types_are_consistent(self):
         """
@@ -278,7 +278,7 @@ class ModParam(Mod):
                     if "TD-MODDED" not in entry.comment:
                         entry.params_state_b = entry.params_state_a[:]
                         entry.params_state_b[0] += self.dpar
-                        entry.comment = entry.comment + "TD-MODDED"
+                        entry.comment = entry.comment + " ; TD-MODDED"
 
     def mod_dih(self, molname):
         """
@@ -298,7 +298,7 @@ class ModParam(Mod):
                         if "TD-MODDED" not in entry.comment:
                             entry.params_state_b = entry.params_state_a[:]
                             entry.params_state_b[1] += self.dpar
-                            entry.comment = entry.comment + "TD-MODDED"
+                            entry.comment = entry.comment + " ; TD-MODDED"
 
     def types_are_consistent(self):
         """

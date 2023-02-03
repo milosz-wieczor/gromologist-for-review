@@ -647,7 +647,7 @@ class ThermoDiff:
                 else:
                     state_index = binning_data[n]
                 mean_derivatives[state_index] += weights[n] * derivs[n]
-                counter += weights[n]
+                counter[state_index] += weights[n]
                 if not free_energy:
                     mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n]
                     mean_data[state_index] += deriv_data[n]

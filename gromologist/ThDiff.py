@@ -488,7 +488,8 @@ class ThermoDiff:
         mod.goto_mydir()
         if 'rerun.xvg' not in os.listdir('.'):
             derivatives[(mod.counter, traj['id'])] = gml.calc_gmx_dhdl('../../' + mod.structure, str(mod) + '-' +
-                                                                       mod.top.top, '../../' + traj['path'])
+                                                                       mod.top.top, '../../' + traj['path'], nb='cpu',
+                                                                       pme='cpu')
         else:
             derivatives[(mod.counter, traj['id'])] = gml.read_xvg('rerun.xvg', [0])
         for key in datasets.keys():
@@ -507,7 +508,7 @@ class ThermoDiff:
             if not traj['weights']:
                 traj['weights'] = [1] * self.get_length(traj['id'])
             wsum = sum(traj['weights'])
-            traj['weights'] = [w/wsum for w in traj['weights']]
+            traj['weights'] = [w / wsum for w in traj['weights']]
 
     def run(self):
         """
@@ -598,7 +599,8 @@ class ThermoDiff:
             if len(threshold) % 2 == 1:
                 raise RuntimeError("The list 'threshold' has to have an even number of entries, one for each starting "
                                    "and ending point of each state")
-        states = [(round(x, 6), round(y, 6)) for x, y in zip(threshold[::2], threshold[1::2])] if threshold is not None else \
+        states = [(round(x, 6), round(y, 6)) for x, y in
+                  zip(threshold[::2], threshold[1::2])] if threshold is not None else \
             sorted(list({data for traj in self.trajs for data in traj['datasets'][dataset]}))
         binning_dset, deriv_dset = (dataset, dataset) if cv_dataset is None else (cv_dataset, dataset)
         for mod in self.mods:
@@ -626,7 +628,7 @@ class ThermoDiff:
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
-                    mean_obs[key] = (1/0.008314*self.temperature) * (
+                    mean_obs[key] = (1 / 0.008314 * self.temperature) * (
                             mean_data[key] * mean_derivatives[key] - mean_product[key])
                 self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / mod.dpar
                                                                              for x in mean_obs.keys()]
@@ -646,28 +648,28 @@ class ThermoDiff:
         for mod in self.mods:
             binning_data, deriv_data, weights, derivs = self.get_flat_data(binning_dset, deriv_dset, mod)
             dmin, dmax = min(binning_data), max(binning_data)
-            thresh = [dmin + n * (dmax-dmin)/(nbins+1) for n in range(nbins+1)]
+            thresh = [dmin + n * (dmax - dmin) / (nbins + 1) for n in range(nbins + 1)]
             mean_derivatives = {0.5 * (x + y): 0 for x, y in zip(thresh[:-1], thresh[1:])}
             mean_product = {0.5 * (x + y): 0 for x, y in zip(thresh[:-1], thresh[1:])}
             mean_data = {0.5 * (x + y): 0 for x, y in zip(thresh[:-1], thresh[1:])}
             for n in range(len(binning_data)):
                 for x, y in zip(thresh[:-1], thresh[1:]):
                     if x <= binning_data[n] < y:
-                        mean_derivatives[0.5*(x+y)] += weights[n] * derivs[n]
+                        mean_derivatives[0.5 * (x + y)] += weights[n] * derivs[n]
                         if not free_energy:
-                            mean_product[0.5*(x+y)] += deriv_data[n] * weights[n] * derivs[n]
-                            mean_data[0.5*(x+y)] += deriv_data[n]
+                            mean_product[0.5 * (x + y)] += deriv_data[n] * weights[n] * derivs[n]
+                            mean_data[0.5 * (x + y)] += deriv_data[n]
             if free_energy:
-                self.profile_free_energy_derivatives[(str(mod), dataset)] = ([(x+y)/2 for x, y in zip(thresh[:-1],
-                                                                                                      thresh[1:])],
+                self.profile_free_energy_derivatives[(str(mod), dataset)] = ([(x + y) / 2 for x, y in zip(thresh[:-1],
+                                                                                                          thresh[1:])],
                                                                              [mean_derivatives[x] / mod.dpar
-                                                                             for x in mean_derivatives.keys()])
+                                                                              for x in mean_derivatives.keys()])
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
                     mean_obs[key] = (1 / 0.008314 * self.temperature) * (
-                                mean_data[key] * mean_derivatives[key] - mean_product[key])
-                self.profile_observable_derivatives[(str(mod), dataset)] = ([(x+y)/2 for x, y in zip(thresh[:-1],
-                                                                                                     thresh[1:])],
+                            mean_data[key] * mean_derivatives[key] - mean_product[key])
+                self.profile_observable_derivatives[(str(mod), dataset)] = ([(x + y) / 2 for x, y in zip(thresh[:-1],
+                                                                                                         thresh[1:])],
                                                                             [mean_obs[x] / mod.dpar
-                                                                            for x in mean_obs.keys()])
+                                                                             for x in mean_obs.keys()])

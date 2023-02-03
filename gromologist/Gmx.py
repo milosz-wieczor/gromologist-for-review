@@ -216,7 +216,7 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
 
 
 def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bool = False,
-                  cleanup: bool = True) -> list:
+                  cleanup: bool = True, **kwargs) -> list:
     """
     Calculates selected energy terms given a structure/topology pair or structure/topology/trajectory set.
     :param struct: str, path to the structure file
@@ -225,6 +225,7 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
     :param quiet: bool, whether to print gmx output to the screen
     :param traj: str, path to the trajectory (optional)
     :param cleanup: bool, whether to remove intermediate files (useful for debugging)
+    :param kwargs: dict, additional "-key value" parameter sets to be passed to mdrun
     :return: dict of lists, one list of per-frame values per each selected term
     """
     if not gmx:
@@ -237,7 +238,7 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
             dhdl__derivatives="yes", init__lambda__state="0")
     print(gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5, answer=True))
     print(gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj, answer=True,
-                      ntomp=1, ntmpi=1))
+                      ntomp=1, ntmpi=1, **kwargs))
     out = read_xvg('rerun.xvg', cols=[0])
     if cleanup:
         to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log']

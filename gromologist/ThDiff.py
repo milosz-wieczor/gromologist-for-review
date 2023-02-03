@@ -641,7 +641,7 @@ class ThermoDiff:
                 state_index = None
                 if threshold is not None:
                     for x, y in zip(threshold[::2], threshold[1::2]):
-                        if x <= binning_data[n] < y:
+                        if x <= binning_data[n] <= y:
                             state_index = (round(x, 6), round(y, 6))
                             break
                 else:
@@ -653,14 +653,14 @@ class ThermoDiff:
                     mean_data[state_index] += deriv_data[n]
             if free_energy:
                 self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / (mod.dpar * counter[x])
-                                                                              for x in mean_derivatives.keys()]
+                                                                              for x in mean_derivatives.keys() if counter[x] > 0]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
                     mean_obs[key] = (1 / 0.008314 * self.temperature) * (
                             mean_data[key] * mean_derivatives[key] - mean_product[key])
                 self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / (mod.dpar * counter[x])
-                                                                             for x in mean_obs.keys()]
+                                                                             for x in mean_obs.keys() if counter[x] > 0]
 
     def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50,
                                  cv_dataset: Optional[str] = None):

@@ -105,6 +105,15 @@ class ModAtom(Mod):
         self.mod_sigma_eps()
         self.mod_chg()
 
+    def __repr__(self):
+        """
+        string representation of a Mod object, should be unique
+        :return: mod one-letter code + Mod index, 1-based
+        """
+        return "{}-{}, types {}".format(
+            ''.join([self.sigma, self.chg, self.eps, self.nbs, self.nbe, self.dih, self.ang]),
+            self.counter, self.type)
+
     def mod_chg(self):
         """
         looks for a line in topology section 'atoms'
@@ -185,6 +194,15 @@ class ModNbfix(Mod):
             self.prefix_type(self.atoms[1], self.types[1], self.prefixes[1])
         self.mod_nb_sigma_eps()
 
+    def __repr__(self):
+        """
+        string representation of a Mod object, should be unique
+        :return: mod one-letter code + Mod index, 1-based
+        """
+        return "{}-{}, types {}".format(
+            ''.join([self.sigma, self.chg, self.eps, self.nbs, self.nbe, self.dih, self.ang]),
+            self.counter, self.types)
+
     def mod_nb_sigma_eps(self):
         """
         looks for a line in topology section 'nonbond_params'
@@ -260,6 +278,15 @@ class ModParam(Mod):
             for molname in list({atom.molname for atomset in self.atoms for atom in atomset}):
                 self.top.get_molecule(molname).add_ff_params('dihedrals')
                 self.mod_dih(molname)
+
+    def __repr__(self):
+        """
+        string representation of a Mod object, should be unique
+        :return: mod one-letter code + Mod index, 1-based
+        """
+        return "{}-{}, types {}".format(
+            ''.join([self.sigma, self.chg, self.eps, self.nbs, self.nbe, self.dih, self.ang]),
+            self.counter, self.types)
 
     def mod_ang(self, molname):
         """

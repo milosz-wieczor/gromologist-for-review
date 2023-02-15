@@ -398,6 +398,7 @@ class ThermoDiff:
         topology.clear_sections()
         topology.clear_ff_params()
         topology.add_ff_params()
+        exclude = [] if exclude is None else exclude
         for atomtype in sorted(topology.defined_atomtypes):
             if atomtype in exclude:
                 continue

@@ -296,7 +296,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
         raise RuntimeError(f"Force field {ff.split('/')[-1]} not found in the list: {[i.split('/')[-1] for i in found]}")
     ff = ff.replace('.ff', '')
     if water is None:
-        water = [line.split()[0] for line in open(found[30 - 1].replace(' (local)', '') + os.sep + 'watermodels.dat')
+        water = [line.split()[0] for line in open(found[rtpnum - 1].replace(' (local)', '') + os.sep + 'watermodels.dat')
                  if 'recommended' in line][0]
     print(gmx_command(gmx[1], 'pdb2gmx', quiet=False, f=struct, ff=ff, water=water,
                       answer=True, fail_on_error=True))

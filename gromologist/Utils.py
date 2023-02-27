@@ -4,7 +4,15 @@ from typing import Optional, Iterable
 # TODO make top always optional between str/path and gml.Top
 
 
-def generate_dftb3_aa(top: "gml.Top", pdb: "gml.Pdb", selection: str):
+def generate_dftb3_aa(top: "gml.Top", selection: str, pdb: Optional["gml.Pdb"] = None):
+    """
+    Prepares a DFT3B-compatible topology and structure, setting up amino acids
+    for QM/MM calculations (as defined by the selection)
+    :param top: gml.Top, a Topology object
+    :param selection: str, a selection defining the residues to be modified
+    :param pdb: gml.Pdb, a Pdb object (optional, alternatively can be an attribute of top)
+    :return: None
+    """
     special_atoms = {'N': -0.43, 'H': 0.35, 'HN': 0.35, 'C': 0.55, 'O': -0.47}
     atoms = top.get_atoms(selection)
     print("The following atoms were found:")
@@ -37,9 +45,11 @@ def generate_dftb3_aa(top: "gml.Top", pdb: "gml.Pdb", selection: str):
             molecule.add_constraint(ca.num, cb.num, 0.155)
         # TODO add vs2 to PDB for each chain that is affected
         cas_all, cbs_all = [at for at in atoms if at.atomname == 'CA'], [at for at in atoms if at.atomname == 'CB']
+        if pdb is not None and top.pdb is None:
+            top.add_pdb(pdb)
         for ca, cb in zip(cas_all, cbs_all):
             mol = top.get_molecule(ca.molname)
-            pdb_num_ca = mol._match_pdb_to_top(ca.num)[0]
-            pdb_num_cb = mol._match_pdb_to_top(cb.num)[0]
-            last_atom = mol._match_pdb_to_top(len(mol.atoms))[0]
-            pdb.add_vs2(ca.resid, pdb_num_ca, pdb_num_cb, 'LIN', fraction=0.72, serial=last_atom)
+            for pdb_num_ca, last_atom in zip(mol._match_pdb_to_top(ca.num), mol._match_pdb_to_top(len(mol.atoms))):
+                resid = top.pdb.atoms[pdb_num_ca].resnum
+                chain = top.pdb.atoms[pdb_num_ca].chain
+                top.pdb.add_vs2(resid, 'CA', 'CB', 'LIN', fraction=0.72, serial=last_atom, chain=chain)

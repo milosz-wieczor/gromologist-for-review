@@ -875,7 +875,7 @@ class Pdb:
         return f * sum(v[0] for v in vecs) / nv, f * sum(v[1] for v in vecs) / nv, f * sum(v[2] for v in vecs) / nv
 
     def add_vs2(self, resid: int, name1: str, name2: str, vsname: str = 'V1', fraction: float = 0.5,
-                serial: Optional[int] = None):
+                serial: Optional[int] = None, chain: Optional[str] = None):
         """
         Adds a virtual site (VS) defined by two atoms, interpolating between
         their coordinates
@@ -885,15 +885,17 @@ class Pdb:
         :param vsname: str, name of the new virtual site
         :param fraction: float, where to put the VS (0 = on atom 1, 1 = on atom 2, can be interpolated or extrapolated)
         :param serial: int, where to locate the new VS in the atomlist
+        :param chain: str, additional specification to identify the atoms
         :return: None
         """
-        serial = self.get_atoms(f"resid {resid}")[-1].serial + 2 if serial is None else serial
-        a1 = self.get_atom(f"resid {resid} and name {name1}")
-        a2 = self.get_atom(f"resid {resid} and name {name2}")
+        chsel = f' and chain {chain}' if chain is not None else ''
+        serial = self.get_atoms(f"resid {resid}{chsel}")[-1].serial + 2 if serial is None else serial
+        a1 = self.get_atom(f"resid {resid} and name {name1}{chsel}")
+        a2 = self.get_atom(f"resid {resid} and name {name2}{chsel}")
         dist = self._atoms_dist_pbc(a1, a2)
-        self.insert_atom(serial, name=vsname, hooksel=f"resid {resid} and name {name1}",
-                         bondlength=dist * fraction, p1_sel=f"resid {resid} and name {name1}",
-                         p2_sel=f"resid {resid} and name {name2}", atomname=vsname)
+        self.insert_atom(serial, name=vsname, hooksel=f"resid {resid} and name {name1}{chsel}",
+                         bondlength=dist * fraction, p1_sel=f"resid {resid} and name {name1}{chsel}",
+                         p2_sel=f"resid {resid} and name {name2}{chsel}", atomname=vsname)
 
     def interatomic_dist(self, resid1=1, resid2=2):
         """

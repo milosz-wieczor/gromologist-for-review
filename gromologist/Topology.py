@@ -2,7 +2,7 @@ import os
 import platform
 import datetime
 from copy import deepcopy
-from typing import Optional, Iterable, TextIO
+from typing import Optional, Iterable, TextIO, Union
 
 import gromologist as gml
 from collections import OrderedDict
@@ -188,13 +188,16 @@ class Top:
         used_params.extend(self.parameters.find_used_ff_params(section=section))
         self.parameters.clean_unused(used_params, section=section)
 
-    def add_pdb(self, pdbfile: str):
+    def add_pdb(self, pdbfile: Union[str, "gml.Pdb"]):
         """
         Allows to pair a PDB file with the topology after the instance was initialized
-        :param pdbfile: str, path to PDB file
+        :param pdbfile: str, path to PDB file, or gml.Pdb object
         :return: None
         """
-        self.pdb = gml.Pdb(pdbfile, top=self)
+        if isinstance(pdbfile, str):
+            self.pdb = gml.Pdb(pdbfile, top=self)
+        else:
+            self.pdb = pdbfile
 
     def add_ff_params(self, section: str = 'all'):
         """

@@ -874,7 +874,8 @@ class Pdb:
         f = -1 if nv == 3 else 1
         return f * sum(v[0] for v in vecs) / nv, f * sum(v[1] for v in vecs) / nv, f * sum(v[2] for v in vecs) / nv
 
-    def add_vs2(self, resid, name1, name2, vsname='V1', fraction=0.5):
+    def add_vs2(self, resid: int, name1: str, name2: str, vsname: str = 'V1', fraction: float = 0.5,
+                serial: Optional[int] = None):
         """
         Adds a virtual site (VS) defined by two atoms, interpolating between
         their coordinates
@@ -883,9 +884,10 @@ class Pdb:
         :param name2: str, 2nd atom to use for the construction of the VS
         :param vsname: str, name of the new virtual site
         :param fraction: float, where to put the VS (0 = on atom 1, 1 = on atom 2, can be interpolated or extrapolated)
+        :param serial: int, where to locate the new VS in the atomlist
         :return: None
         """
-        serial = self.get_atoms(f"resid {resid}")[-1].serial + 2
+        serial = self.get_atoms(f"resid {resid}")[-1].serial + 2 if serial is None else serial
         a1 = self.get_atom(f"resid {resid} and name {name1}")
         a2 = self.get_atom(f"resid {resid} and name {name2}")
         dist = self._atoms_dist_pbc(a1, a2)

@@ -262,7 +262,7 @@ class Top:
         :param nmol: int, number of molecules to be repeated
         :return: None
         """
-        mollist = [mol.molname for mol in self.molecules]
+        mollist = [mol.mol_name for mol in self.molecules]
         if molname not in mollist:
             raise RuntimeError(f"Molecule {molname} not found among defined molecules ({mollist}), please add it"
                                f"manually or via Top.add_molecule_from_itp()")
@@ -276,7 +276,7 @@ class Top:
             self.sections.append(system_subsection)
         else:
             system_subsection = system_subsection[0]
-        system_subsection.add_entry(f"{molname} {nmol}")
+        system_subsection.add_entry(gml.Entry(f"{molname} {nmol}", system_subsection))
 
     def find_missing_ff_params(self, section: str = 'all', fix_by_analogy: bool = False, fix_B_from_A: bool = False,
                                fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):

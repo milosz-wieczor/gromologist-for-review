@@ -143,7 +143,8 @@ class SubsectionBonded(Subsection):
     e.g., bonds or dihedrals; should be included in SectionMol
     """
     n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'impropers': 4,
-               'cmap': 5, 'settles': 1, 'exclusions': 2, 'position_restraints': 1}
+               'cmap': 5, 'settles': 1, 'exclusions': 2, 'position_restraints': 1,
+               'virtual_sites2': 3, 'constraints': 2}
     
     def __init__(self, content, section):
         super().__init__(content, section)

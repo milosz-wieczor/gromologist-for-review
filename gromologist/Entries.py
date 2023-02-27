@@ -96,6 +96,8 @@ class EntryBonded(Entry):
                  ('cmap', '1'): (float,),
                  ('position_restraints', '1'): (float, float, float),
                  ('dihedral_restraints', '1'): (float, float, float),
+                 ('constraints', '2'): (float,),
+                 ('virtual_sites2', '1'): (float,),
                  ('settles', '1'): (float, float)}
 
     def __init__(self, content, subsection):

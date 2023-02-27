@@ -74,7 +74,8 @@ class Section:
                 return gml.SubsectionBonded(content, self)
             else:
                 return gml.SubsectionBonded([line.replace('dihedrals', 'impropers') for line in content], self)
-        elif header in {'bonds', 'pairs', 'angles', 'settles', 'exclusions', 'cmap', 'position_restraints'}:
+        elif header in {'bonds', 'pairs', 'angles', 'settles', 'exclusions', 'cmap', 'position_restraints',
+                        'virtual_sites2', 'constraints'}:
             return gml.SubsectionBonded(content, self)
         elif header == 'atoms':
             return gml.SubsectionAtom(content, self)
@@ -1114,6 +1115,9 @@ class SectionMol(Section):
                      ('LEU', 'HD2'): 'HD12', ('LEU', 'HD3'): 'HD13', ('VAL', 'CG'): 'CG1', ('VAL', 'HG1'): 'HG11',
                      ('VAL', 'HG2'): 'HG12', ('VAL', 'HG3'): 'HG13'}
         rtp = self.find_rtp(rtp) if rtp is None else rtp
+        if not 'rtp':
+            raise RuntimeError("Failed to locate .rtp files from a local Gromacs installation, please specify"
+                               " a custom .rtp file through rtp='/path/to/rtp/file'")
         orig = self.get_atom('resid {} and name CA'.format(resid))
         mutant = gml.ProteinMutant(orig.resname, target)
         targ = mutant.target_3l
@@ -1440,6 +1444,41 @@ class SectionMol(Section):
             atomtypes.add_entry(gml.EntryParam('   {}     0        1.008  0.0000  A  0.000000000000  0.0000  '
                                                '\n'.format(dummy_type), atomtypes))
 
+    def add_vs2(self, atom1: int, atom2: int, fraction: float, atomname: str, atomtype: str):
+        """
+        Adds an interpolation-type virtual site (between two atoms) at the end of the molecule.
+        If the respective section does not exist in the topology, it will be created.
+        :param atom1: int, serial numbers of the first atom
+        :param atom2: int, serial numbers of the second atom
+        :param fraction: float, at which point between the 1st (0) and 2nd (1) atom the VS will be created
+        :param atomname: str, name of the new atom
+        :param atomtype: str, type of the new atom
+        :return: None
+        """
+        try:
+            ssect = self.get_subsection('virtual_sites2')
+        except KeyError:
+            self.subsections.append(self._yield_sub(['[ virtual_sites2 ]']))
+            ssect = self.get_subsection('virtual_sites2')
+        ref = self.atoms[atom1-1]
+        self.add_atom(len(self.atoms) + 1, atomname, atomtype, resid=ref.resid, resname=ref.resname, mass=0.0)
+        ssect.add_entry(gml.EntryBonded(f'{atom1} {atom2} {len(self.atoms)} 1 {fraction}\n', ssect))
+
+    def add_constraint(self, atom1: int, atom2: int, distance: float):
+        """
+        Adds a constraint
+        :param atom1: int, serial numbers of the first atom
+        :param atom2: int, serial numbers of the second atom
+        :param distance: float, the distance (in nm) at which the pair will be constrained
+        :return: None
+        """
+        try:
+            ssect = self.get_subsection('constraints')
+        except KeyError:
+            self.subsections.append(self._yield_sub(['[ constraints ]']))
+            ssect = self.get_subsection('constraints')
+        ssect.add_entry(gml.EntryBonded(f'{atom1} {atom2} 2 {distance}\n', ssect))
+
     def make_stateB_dummy(self, resid: int, orig_name: str, dummy_type: str = 'DH'):
         self.add_dummy_def(dummy_type)
         self.gen_state_b(atomname=orig_name, resid=resid, new_type=dummy_type, new_charge=0, new_mass=1.008)
@@ -1595,6 +1634,13 @@ class SectionParam(Section):
         for sub in self.subsections:
             if 'dihedral' in sub.header:
                 sub.sort()  # TODO if two have same periodicity & atoms, remove one with 0-s (PMX)
+
+    def add_dummy_def(self, dummy_type: str):
+        atomtypes = self.get_subsection('atomtypes')
+        dummy_entries = [e for e in atomtypes if isinstance(e, gml.EntryParam) and e.types[0] == dummy_type]
+        if not dummy_entries:
+            atomtypes.add_entry(gml.EntryParam('   {}     0        1.008  0.0000  A  0.000000000000  0.0000  '
+                                               '\n'.format(dummy_type), atomtypes))
 
     def find_used_ff_params(self, section: str = 'all') -> list:
         """

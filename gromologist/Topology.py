@@ -702,7 +702,7 @@ class Top:
         :return:
         """
         for subsection in section.subsections:
-            outfile.write('\n[ {} ]\n'.format(subsection.write_header))
+            outfile.write('\n[ {} ]\n'.format(subsection.header))
             for entry in subsection:
                 str_entry = str(entry).rstrip() + '\n'
                 outfile.write(str_entry)

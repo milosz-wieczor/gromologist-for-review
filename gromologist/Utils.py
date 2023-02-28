@@ -53,3 +53,6 @@ def generate_dftb3_aa(top: "gml.Top", selection: str, pdb: Optional["gml.Pdb"] =
                 resid = top.pdb.atoms[pdb_num_ca].resnum
                 chain = top.pdb.atoms[pdb_num_ca].chain
                 top.pdb.add_vs2(resid, 'CA', 'CB', 'LIN', fraction=0.72, serial=last_atom, chain=chain)
+
+
+# TODO move REST2 preparation here

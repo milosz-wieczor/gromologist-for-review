@@ -64,6 +64,11 @@ class Entry:
     
     def __getitem__(self, item):
         return self.content[item]
+
+    def is_header(self):
+        if len(self.content) == 0:
+            return False
+        return True if (self.content[0].strip().startswith('[') and self.content[-1].strip().endswith(']')) else False
     
     def __str__(self):
         """
@@ -87,12 +92,9 @@ class EntryBonded(Entry):
                  ('angles', '10'): (float, float),
                  ('dihedrals', '9'): (float, float, int),
                  ('dihedrals', '4'): (float, float, int),
-                 ('impropers', '4'): (float, float, int),
                  ('dihedrals', '1'): (float, float, int),
                  ('dihedrals', '3'): (float, float, float, float, float, float),
                  ('dihedrals', '2'): (float, float),
-                 ('impropers', '2'): (float, float),
-                 ('impropers', '1'): (float, float, int),  # temporary hack, fix this pls
                  ('cmap', '1'): (float,),
                  ('position_restraints', '1'): (float, float, float),
                  ('dihedral_restraints', '1'): (float, float, float),

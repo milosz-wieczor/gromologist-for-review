@@ -59,23 +59,14 @@ class Section:
     def _yield_sub(self, content: list):
         """
         A wrapper that will select which kind of subsection
-        should be instantiated (generic, bonded, or params);
-        the [ dihedrals ] section gets special treatment as
-        first occurrence contains 'proper' and second contains
-        'improper' dihedrals, hence we replace to avoid confusion
+        should be instantiated (generic, bonded, or params)
         :param content: list of strings, content of the subsection
         :return: a Subsection instance (or a derived class)
         """
         until = content[0].index(']')
         header = content[0][:until].strip().strip('[]').strip()
-        if header == 'dihedrals':
-            if not self.dih_processed:
-                self.dih_processed = True
-                return gml.SubsectionBonded(content, self)
-            else:
-                return gml.SubsectionBonded([line.replace('dihedrals', 'impropers') for line in content], self)
-        elif header in {'bonds', 'pairs', 'angles', 'settles', 'exclusions', 'cmap', 'position_restraints',
-                        'virtual_sites2', 'constraints'}:
+        if header in {'bonds', 'pairs', 'angles', 'dihedrals', 'settles', 'exclusions', 'cmap', 'position_restraints',
+                      'virtual_sites2', 'constraints'}:
             return gml.SubsectionBonded(content, self)
         elif header == 'atoms':
             return gml.SubsectionAtom(content, self)
@@ -98,8 +89,6 @@ class Section:
         """
         Returns the specified subsection; we always need to run merge()
         on SectionParam first to avoid duplicates
-        # TODO need special treatment for param sections with different interaction types (mostly dihedraltypes)
-        # TODO should we simply split them whenever intr type changes as we parse them?
         :param section_name: str, name of the subsection to be returned
         :return: gml.Subsection
         """
@@ -133,6 +122,7 @@ class SectionMol(Section):
         self.bonds = None
         self.mol_name = self.get_subsection('moleculetype').molname
         self.name = '{} molecule'.format(self.mol_name)
+        self._merge()
         
     def __repr__(self) -> str:
         return self.name
@@ -166,6 +156,19 @@ class SectionMol(Section):
                 resid = at.resid
                 reslist.append(f'{at.resname}-{at.resid}')
         return reslist
+
+    def _merge(self):
+        parsed_headers = set()
+        to_remove = []
+        for n, sub in enumerate(self.subsections):
+            if sub.header not in parsed_headers:
+                parsed_headers.add(sub.header)
+            else:
+                first_ssect = [s for s in self.subsections if s.header == sub.header][0]
+                first_ssect.add_entries([e for e in sub.entries if not e.is_header()])
+                to_remove.append(n)
+        for ssect_index in to_remove[::-1]:
+            self.subsections.pop(ssect_index)
 
     def set_type(self, type_to_set: str, atomname: str, resname: Optional[str] = None, resid: Optional[int] = None,
                  prefix: Optional[str] = None):
@@ -717,7 +720,7 @@ class SectionMol(Section):
         subsect_atoms = self.get_subsection('atoms')
         chosen = [e for e in subsect_atoms.entries if isinstance(e, gml.EntryAtom) and e.num == old_pos][0]
         chosen.num = -new_pos
-        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap']:
             try:
                 subsection = self.get_subsection(subs)
                 for entry in subsection:
@@ -735,7 +738,7 @@ class SectionMol(Section):
         chosen = [e for e in subsect_atoms.entries if isinstance(e, gml.EntryAtom) and e.num < 0][0]
         assert chosen.num == -new_pos
         chosen.num *= -1
-        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap']:
             try:
                 subsection = self.get_subsection(subs)
                 for entry in subsection:
@@ -780,7 +783,7 @@ class SectionMol(Section):
         subsect_atoms.entries.remove(chosen)
     
     def _del_params(self, atom_number: int):
-        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap']:
             try:
                 subsection = self.get_subsection(subs)
                 to_del = []
@@ -793,7 +796,7 @@ class SectionMol(Section):
                 pass
 
     def _check_correct(self):
-        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap']:
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap']:
             try:
                 subsection = self.get_subsection(subs)
                 for entry in subsection.entries_bonded:
@@ -856,9 +859,8 @@ class SectionMol(Section):
 
     def _merge_fields(self, other: "gml.SectionMol"):
         self.top.print('WARNING watch out for #ifdef POSRES keywords that might get misplaced')
-        for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'impropers', 'cmap', 'position_restraints']:
+        for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'cmap', 'position_restraints']:
             # TODO merge all subsections
-            # TODO need a more consistent treatment of impropers
             # TODO check for a "conditional" attribute of a section
             try:
                 subsection_other = other.get_subsection(subs)
@@ -898,10 +900,7 @@ class SectionMol(Section):
             raise RuntimeError("Bond between atoms {} and {} not found in the topology".format(at1, at2))
         angles_to_remove = self._generate_angles(self, at1, at2)
         pairs_to_remove, dihedrals_to_remove = self._generate_14(self, at1, at2)
-        try:
-            impropers = self.get_subsection('impropers')
-        except KeyError:
-            impropers = self.get_subsection('dihedrals')
+        impropers = self.get_subsection('dihedrals')
         impropers_to_remove = []
         for n, entry in enumerate(impropers.entries):
             if isinstance(entry, gml.EntryBonded) and at1 in entry.atom_numbers and at2 in entry.atom_numbers:
@@ -990,7 +989,7 @@ class SectionMol(Section):
         :return: None
         """
         if add_section == 'all':
-            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
+            subsections_to_add = ['bonds', 'angles', 'dihedrals']
         else:
             subsections_to_add = [add_section]
         for sub in subsections_to_add:
@@ -1005,7 +1004,7 @@ class SectionMol(Section):
     def find_used_ff_params(self, section: str = 'all') -> list:
         used_params = []
         if section == 'all':
-            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers', 'cmap']
+            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'cmap']
         else:
             subsections_to_add = [section]
         for sub in subsections_to_add:
@@ -1021,7 +1020,7 @@ class SectionMol(Section):
     def find_missing_ff_params(self, add_section: str = 'all', fix_by_analogy: bool = False, fix_B_from_A: bool = False,
                                fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):
         if add_section == 'all':
-            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
+            subsections_to_add = ['bonds', 'angles', 'dihedrals']
         else:
             subsections_to_add = [add_section]
         self.printed = []
@@ -1039,7 +1038,7 @@ class SectionMol(Section):
 
     def label_types(self, add_section: str = 'all'):
         if add_section == 'all':
-            subsections_to_add = ['bonds', 'angles', 'dihedrals', 'impropers']
+            subsections_to_add = ['bonds', 'angles', 'dihedrals']
         else:
             subsections_to_add = [add_section]
         for sub in subsections_to_add:
@@ -1133,7 +1132,7 @@ class SectionMol(Section):
         if orig.resname == 'GLY':
             self.get_atom('resid {} and name HA1'.format(resid)).atomname = 'HA'
         impropers_to_add = []
-        impr_sub = self.get_subsection('impropers')
+        impr_sub = self.get_subsection('dihedrals')
         atoms_sub = self.get_subsection('atoms')
         # first remove all unwanted atoms
         for at in atoms_remove:
@@ -1340,9 +1339,6 @@ class SectionMol(Section):
     def list_angles(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
         return self._list_bonded('angles', by_types, by_params, returning)
 
-    def list_impropers(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
-        return self._list_bonded('impropers', by_types, by_params, returning)
-
     def list_dihedrals(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
         return self._list_bonded('dihedrals', by_types, by_params, returning)
 
@@ -1352,7 +1348,7 @@ class SectionMol(Section):
         tried_adding = False
         returnable = []
         formatstring = {'bonds': "{:>5s} {:>5s}", 'angles': "{:>5s} {:>5s} {:>5s}",
-                        'dihedrals': '{:>5s} {:>5s} {:>5s} {:>5s}', 'impropers': '{:>5s} {:>5s} {:>5s} {:>5s}'}
+                        'dihedrals': '{:>5s} {:>5s} {:>5s} {:>5s}'}
         for entry in subsection:
             if isinstance(entry, gml.EntryBonded):
                 entry.read_types()
@@ -1710,8 +1706,8 @@ class SectionParam(Section):
         :return: None
         """
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
-                     'impropers': 'dihedraltypes', 'atomtypes': 'atomtypes', 'pairtypes': 'pairtypes',
-                     'nonbond_params': 'nonbond_params', 'constrainttypes': 'constrainttypes', 'cmap': 'cmaptypes',
+                     'atomtypes': 'atomtypes', 'pairtypes': 'pairtypes', 'nonbond_params': 'nonbond_params',
+                     'constrainttypes': 'constrainttypes', 'cmap': 'cmaptypes',
                      'implicit_genborn_params': 'implicit_genborn_params'}
         if section == 'all':
             subs = list(matchings.values())

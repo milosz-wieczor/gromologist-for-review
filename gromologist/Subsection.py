@@ -20,7 +20,6 @@ class Subsection:
         if ';' in self.header:
             pos = self.header.index(';')
             self.header = self.header[:pos].strip().strip('[]').strip()
-        self.write_header = self.header if self.header != 'impropers' else 'dihedrals'
         if self.header in Subsection.counter.keys():
             Subsection.counter[self.header] += 1
         else:
@@ -142,7 +141,7 @@ class SubsectionBonded(Subsection):
     SubsectionBonded contains a subsection with entries corresponding to bonded terms,
     e.g., bonds or dihedrals; should be included in SectionMol
     """
-    n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'impropers': 4,
+    n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4,
                'cmap': 5, 'settles': 1, 'exclusions': 2, 'position_restraints': 1,
                'virtual_sites2': 3, 'constraints': 2}
     
@@ -200,8 +199,7 @@ class SubsectionBonded(Subsection):
         :param force_all: bool, whether to add params from scratch if some are assigned already
         :return: None
         """
-        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
-                     'impropers': 'dihedraltypes'}
+        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections
                           if sub.header == matchings[self.header]]
         self.bkp_entries = self.entries[:]  # we can't change what we're iterating over, so we modify the copy
@@ -225,8 +223,7 @@ class SubsectionBonded(Subsection):
         :return: list of str, labels of used parameters
         """
         used_parm_entries = []
-        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
-                     'impropers': 'dihedraltypes', 'cmap': 'cmaptypes'}
+        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes', 'cmap': 'cmaptypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections if
                           sub.header == matchings[self.header]]
         for entry in self.entries_bonded:
@@ -281,8 +278,8 @@ class SubsectionBonded(Subsection):
         :param once: bool, only shows the missing parameter once if repeated
         :return: None
         """
-        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes',
-                     'impropers': 'dihedraltypes'}
+        matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes'}
+        # TODO add cmaps?
         subsect_params = [sub for sub in self.section.top.parameters.subsections if
                           sub.header == matchings[self.header]]
         for entry in self.entries_bonded:

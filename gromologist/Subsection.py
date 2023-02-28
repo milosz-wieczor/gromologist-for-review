@@ -149,12 +149,12 @@ class SubsectionBonded(Subsection):
         super().__init__(content, section)
         self.bkp_entries = None
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
-        self.prmtype = self._check_parm_type()
-        self.label = '{}-{}'.format(self.header, self.prmtype)
+        self.prmtypes = self._check_parm_type()
+        self.label = '{}-{}'.format(self.header, self.prmtypes)
         self.fstring = "{:5} " * (SubsectionBonded.n_atoms[self.header] + 1) + '\n'
     
     def __repr__(self):
-        return "Subsection {} with interaction type {}".format(self.header, self.prmtype)
+        return "Subsection {} with interaction type {}".format(self.header, ' '.join(self.prmtypes))
 
     @property
     def entries_bonded(self):
@@ -308,7 +308,7 @@ class SubsectionBonded(Subsection):
                 if candid:
                     entry.params_state_a = candid
             if fix_dummy:
-                entry.params_state_a = [0.0 for _ in gml.EntryBonded.fstr_suff[(self.header, self.prmtype)]]
+                entry.params_state_a = [0.0 for _ in gml.EntryBonded.fstr_suff[(self.header, self.prmtypes[0])]]
                 print("setting dummy parameters: " + str(entry))
         if entry.types_state_b and not entry.params_state_b:
             for subsections in subsect_params:
@@ -457,13 +457,16 @@ class SubsectionBonded(Subsection):
     
     def _check_parm_type(self):
         """
-        Finds number code for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
-        while Amber uses angletype '1' (simple harmonic)
-        :return: str, interaction type
+        Finds number codes for interaction type, e.g. CHARMM uses angletype '5' (urey-bradley)
+        while Amber uses angletype '1' (simple harmonic); this will usually be one number
+        but if subsections are merged, we can have mixed interaction types
+        :return: list of strs, interaction types
         """
+        types = []
         for entry in self.entries_bonded:
-            return entry.interaction_type
-        return '0'
+            if entry.interaction_type not in types:
+                types.append(entry.interaction_type)
+        return ['-1'] if not types else types
 
     def add_type_labels(self):
         for entry in self.entries_bonded:
@@ -490,15 +493,15 @@ class SubsectionParam(Subsection):
     def __init__(self, content, section):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
-        self.prmtype = self._check_parm_type()
-        self.label = '{}-{}'.format(self.header, self.prmtype)
+        self.prmtypes = self._check_parm_type()
+        self.label = '{}-{}'.format(self.header, self.prmtypes)
         self.ordering = {}
         if self.header == 'cmaptypes':
             self._process_cmap()
         
     def __repr__(self):
-        if self.prmtype != '0' or self.header not in ('atomtypes', 'implicit_genborn_params'):
-            return "Subsection {} with interaction type {}".format(self.header, self.prmtype)
+        if self.prmtypes[0] != '-1' or self.header not in ('atomtypes', 'implicit_genborn_params'):
+            return "Subsection {} with interaction type {}".format(self.header, ' '.join(self.prmtypes))
         else:
             return "Subsection {}".format(self.header)
     
@@ -588,15 +591,11 @@ class SubsectionParam(Subsection):
         :return: str, interaction type
         """
         if self.header not in SubsectionParam.n_atoms.keys() or self.header in ['atomtypes', 'implicit_genborn_params']:
-            return '0'
+            return '-1'
         npar = SubsectionParam.n_atoms[self.header]
-        for entry in self:
-            try:
-                return entry.interaction_type
-            except:
-                if len(entry.content) > npar and isinstance(entry, gml.EntryParam):
-                    return entry.content[npar]
-        return '0'
+        types = list({entry.content[npar] if len(entry.content) > npar else entry.interaction_type
+                      for entry in self.entries_param})
+        return '-1' if not types else types
 
     def get_opt_dih(self, types=False):
         dopts = [entry for entry in self.entries_param if 'DIHOPT' in entry.comment]

@@ -886,7 +886,7 @@ class SectionMol(Section):
         for sub, entries in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
                                 [new_bond, new_pairs, new_angles, new_dihedrals]):
             subsection = self.get_subsection(sub)
-            subsection.add_entries([gml.EntryBonded(subsection.fstring.format(*entry, subsection.prmtype), subsection)
+            subsection.add_entries([gml.EntryBonded(subsection.fstring.format(*entry, subsection.prmtypes[0]), subsection)
                                     for entry in entries])
             try:
                 other.get_subsection(sub)
@@ -1668,11 +1668,10 @@ class SectionParam(Section):
         """
         subsections = self.get_subsections('dihedraltypes')
         for sub in subsections:
-            if str(sub.prmtype) in '149':
-                for entry in sub.entries_param:
-                    if entry.params[-1] == 0:
-                        assert entry.params[-2] == 0
-                        entry.params[-1] = 1
+            for entry in sub.entries_param:
+                if entry.params[-1] == 0 and entry.interaction_type in '149':
+                    assert entry.params[-2] == 0
+                    entry.params[-1] = 1
 
     def clone_type(self, atomtype: str, prefix: str = 'y', new_type: Optional[str] = None):
         """
@@ -1739,15 +1738,15 @@ class SectionParam(Section):
                 sub._remove_symm(new_atomtype)
 
     def get_opt_dih(self, types: bool = False) -> list:
-        ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
+        ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and '9' in sub.prmtypes][0]
         return ss.get_opt_dih(types)
 
     def get_opt_dih_indices(self) -> list:
-        ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
+        ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and '9' in sub.prmtypes][0]
         return ss.get_opt_dih_indices()
 
     def set_opt_dih(self, values):
-        ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and int(sub.prmtype) == 9][0]
+        ss = [sub for sub in self.subsections if sub.header == 'dihedraltypes' and '9' in sub.prmtypes][0]
         ss.set_opt_dih(values)
 
     def add_nbfix(self, type1: str, type2: str, mod_sigma: float = 0.0, mod_epsilon: float = 0.0,

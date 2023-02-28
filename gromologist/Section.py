@@ -167,6 +167,7 @@ class SectionMol(Section):
                 first_ssect = [s for s in self.subsections if s.header == sub.header][0]
                 first_ssect.add_entries([e for e in sub.entries if not e.is_header()])
                 to_remove.append(n)
+                first_ssect.prmtypes = first_ssect._check_parm_type()
         for ssect_index in to_remove[::-1]:
             self.subsections.pop(ssect_index)
 

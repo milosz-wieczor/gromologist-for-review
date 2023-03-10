@@ -2,7 +2,7 @@ from subprocess import run, PIPE
 import os
 from shutil import copy2
 import gromologist as gml
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Union
 from glob import glob
 
 
@@ -386,8 +386,45 @@ def get_solute_group(fname: Optional[str] = None, ndx: Optional[str] = None):
         return 0
 
 
+def obj_or_str(pdb: Optional[Union[str, "gml.Pdb"]] = None, top: Optional[Union[str, "gml.Top"]] = None,
+               return_path=False, **kwargs) -> Union["gml.Pdb", "gml.Top", str]:
+    """
+    Makes sure we can always use either the string (path to file) or the gml.Pdb/gml.Top object
+    and internally we will always handle the desired object anyway (either path or gml object)
+    :param pdb: str (path) or gml.Pdb object
+    :param top: str (path) or gml.Top object
+    :param return_path: bool, whether we should return the path (if True) or a gml obj (if False)
+    :return: str or gml.Pdb or gml.Top
+    """
+    # TODO allow for a instantaneously saved copy + do a backup?
+    if pdb is not None:
+        if isinstance(pdb, str):
+            if return_path:
+                return pdb
+            else:
+                return gml.Pdb(pdb)
+        else:
+            if return_path:
+                return pdb.fname
+            else:
+                return pdb
+    elif top is not None:
+        if isinstance(top, str):
+            if return_path:
+                return top
+            else:
+                return gml.Top(top, **kwargs)
+        else:
+            if return_path:
+                return top.fname
+            else:
+                return top
+    else:
+        raise RuntimeError("Specify either a top or a pdb to be processed")
+
+
 def process_trajectories(mask: str, tpr: str, group_cluster: str = 'Protein', group_output: str = 'non-Water',
-                       pbc: str = 'cluster', stride: int = 1, ndx: Optional[str] = None):
+                         pbc: str = 'cluster', stride: int = 1, ndx: Optional[str] = None):
     """
     A one-step trajectory processor that tries to fix PBC issues, allows to quickly
     remove solvent and stride the trajectory, as well as merge multiple simulation parts into one

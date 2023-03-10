@@ -28,10 +28,12 @@ class SelectionParser:
         rna_selection = "resname RA RG RC RT RA5 RG5 RC5 RT5 RA3 RG3 RC3 RT3"
         solvent_selection = "resname HOH TIP3 SOL K CL NA POT K+ NA+ CLA CL-"
         all_selection = "serial < 10000000"
+        noh_selection = "not element H"
         selection_string = selection_string.replace('solvent', solvent_selection)
         selection_string = selection_string.replace('water', 'resname HOH TIP3 SOL')
         selection_string = selection_string.replace('protein', protein_selection)
         selection_string = selection_string.replace('nucleic', 'dna or rna')
+        selection_string = selection_string.replace('noh', noh_selection)
         selection_string = selection_string.replace('dna', dna_selection)
         selection_string = selection_string.replace('rna', rna_selection)
         selection_string = selection_string.replace('all', all_selection)
@@ -44,53 +46,65 @@ class SelectionParser:
         :return: list of int, output atom indices
         """
         assert isinstance(selection_string, str)
+        selection_string = selection_string.strip()
         parenth_ranges, operators = self._parse_sel_string(selection_string)
+        print(selection_string, parenth_ranges, operators)
+        # if there's just one parenthesis around the full phrase, let's remove it:
+        while len(parenth_ranges) == 1 and selection_string[0] == '(' and selection_string[-1] == ')':
+            selection_string = selection_string[1:-1]
+            parenth_ranges, operators = self._parse_sel_string(selection_string)
+        # simple phrase with no parenthesis and no operators, except for "not":
         if not parenth_ranges and not operators:
             if selection_string.strip().startswith("not "):
                 return self._find_atoms(selection_string.lstrip()[4:], rev=True)
             else:
                 return self._find_atoms(selection_string)
+        # parenthesis but no operators, except for "not":
         elif parenth_ranges and not operators:
             if selection_string.strip().startswith("not "):
                 set_all = {n for n in range(self.nat)}
                 return set_all.difference(self._select_set_atoms(selection_string.strip()[4:].strip('()')))
             else:
                 return self._select_set_atoms(selection_string.strip().strip('()'))
-        else:
-            first_op = selection_string[operators[0][0]:operators[0][1]].strip()
+        else:  # we have operators and (possibly) parentheses
+            if not parenth_ranges:
+                first_op_borders = operators[0]
+                first_op = selection_string[operators[0][0]:operators[0][1]].strip()
+            else:
+                first_op_borders = [opb for opb in operators if all([opb[0] not in range(*par) for par in parenth_ranges])][0]
+                first_op = selection_string[first_op_borders[0]:first_op_borders[1]].strip()
             if first_op == "and":
-                return self._select_set_atoms(selection_string[:operators[0][0]]) \
-                    .intersection(self._select_set_atoms(selection_string[operators[0][1]:]))
+                return self._select_set_atoms(selection_string[:first_op_borders[0]]) \
+                    .intersection(self._select_set_atoms(selection_string[first_op_borders[1]:]))
             elif first_op == "or":
-                return self._select_set_atoms(selection_string[:operators[0][0]]) \
-                    .union(self._select_set_atoms(selection_string[operators[0][1]:]))
+                return self._select_set_atoms(selection_string[:first_op_borders[0]]) \
+                    .union(self._select_set_atoms(selection_string[first_op_borders[1]:]))
             elif first_op.startswith("same"):
-                return self.master.same_residue_as(self._select_set_atoms(selection_string[operators[0][1]:]))
+                return self.master.same_residue_as(self._select_set_atoms(selection_string[first_op_borders[1]:]))
             elif first_op.startswith("within") or first_op.startswith("pbwithin"):
                 if not self.ispdb(self.master):
                     raise ValueError("the within keyword only works for structural data, not topology")
                 nopbc = False if first_op == "pbwithin" else True
                 within = float([x for x in first_op.split() if x.isnumeric()][0])
-                return self.master.within(self._select_set_atoms(selection_string[operators[0][1]:]), within, nopbc=nopbc)
+                return self.master.within(self._select_set_atoms(selection_string[first_op_borders[1]:]), within, nopbc=nopbc)
     
     @staticmethod
     def _parse_sel_string(selection_string):
-        # TODO add same residue as, within ... of, pbwithin ... of as operators
         parenth_ranges = []
         operators = []
         opened_parenth = 0
-        beginning = 0
+        beginning = -1
         for nc, char in enumerate(selection_string):
             if char == '(':
                 opened_parenth += 1
-                if beginning == 0:
+                if beginning == -1:
                     beginning = nc
             elif char == ')':
                 opened_parenth -= 1
                 end = nc
                 if opened_parenth == 0:
                     parenth_ranges.append((beginning, end))
-                    beginning = 0
+                    beginning = -1
             if opened_parenth < 0:
                 raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
             if selection_string[nc:nc + 5] == " and " and opened_parenth == 0:

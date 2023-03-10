@@ -1,10 +1,10 @@
 import gromologist as gml
-from typing import Optional, Iterable
+from typing import Optional, Iterable, Union
 
 # TODO make top always optional between str/path and gml.Top
 
 
-def generate_dftb3_aa(top: "gml.Top", selection: str, pdb: Optional["gml.Pdb"] = None):
+def generate_dftb3_aa(top: "gml.Top", selection: str, pdb: Optional[Union[str, "gml.Pdb"]] = None):
     """
     Prepares a DFT3B-compatible topology and structure, setting up amino acids
     for QM/MM calculations (as defined by the selection)
@@ -47,6 +47,7 @@ def generate_dftb3_aa(top: "gml.Top", selection: str, pdb: Optional["gml.Pdb"] =
         cas_all, cbs_all = [at for at in atoms if at.atomname == 'CA'], [at for at in atoms if at.atomname == 'CB']
         if pdb is not None and top.pdb is None:
             top.add_pdb(pdb)
+
         for ca, cb in zip(cas_all, cbs_all):
             mol = top.get_molecule(ca.molname)
             for pdb_num_ca, last_atom in zip(mol._match_pdb_to_top(ca.num), mol._match_pdb_to_top(len(mol.atoms))):

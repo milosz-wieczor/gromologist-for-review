@@ -186,14 +186,14 @@ class SectionMol(Section):
         if resname is None:
             resnames = list({a.resname for a in self.atoms})
         else:
-            if isinstance(list, resname) or isinstance(tuple, resname):
+            if isinstance(resname, list) or isinstance(resname, tuple):
                 resnames = resname
             else:
                 resnames = [resname]
         if resid is None:
             resids = list({a.resid for a in self.atoms})
         else:
-            if isinstance(list, resid) or isinstance(tuple, resid):
+            if isinstance(resid, list) or isinstance(resid, tuple):
                 resids = resid
             else:
                 resids = [resid]

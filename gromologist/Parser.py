@@ -10,7 +10,7 @@ class SelectionParser:
             raise TypeError("Can only parse selections with PDB or topology data")
         
     @staticmethod
-    def ispdb(obj):
+    def ispdb(obj) -> bool:
         try:
             _ = obj._cryst_format
         except AttributeError:
@@ -18,7 +18,7 @@ class SelectionParser:
         else:
             return True
     
-    def __call__(self, selection_string):
+    def __call__(self, selection_string: str) -> list:
         while "  " in selection_string:
             selection_string = selection_string.replace("  ", " ")
         selection_string = selection_string.strip()
@@ -39,16 +39,15 @@ class SelectionParser:
         selection_string = selection_string.replace('all', all_selection)
         return sorted(list(self._select_set_atoms(selection_string)))
     
-    def _select_set_atoms(self, selection_string):
+    def _select_set_atoms(self, selection_string: str) -> set:
         """
         Main recursive fn taking care of stratifying the input
         :param selection_string: str, selection string
-        :return: list of int, output atom indices
+        :return: set of int, output atom indices
         """
         assert isinstance(selection_string, str)
         selection_string = selection_string.strip()
         parenth_ranges, operators = self._parse_sel_string(selection_string)
-        print(selection_string, parenth_ranges, operators)
         # if there's just one parenthesis around the full phrase, let's remove it:
         while len(parenth_ranges) == 1 and selection_string[0] == '(' and selection_string[-1] == ')':
             selection_string = selection_string[1:-1]
@@ -89,7 +88,7 @@ class SelectionParser:
                 return self.master.within(self._select_set_atoms(selection_string[first_op_borders[1]:]), within, nopbc=nopbc)
     
     @staticmethod
-    def _parse_sel_string(selection_string):
+    def _parse_sel_string(selection_string: str) -> (list, list):
         parenth_ranges = []
         operators = []
         opened_parenth = 0
@@ -120,7 +119,7 @@ class SelectionParser:
             raise ValueError("Improper use of parentheses in selection string {}".format(selection_string))
         return parenth_ranges, operators
     
-    def _find_atoms(self, sel_string, rev=False):
+    def _find_atoms(self, sel_string: str, rev: bool = False) -> set:
         chosen = []
         keyw = sel_string.split()[0]
         if self.ispdb(self.master):

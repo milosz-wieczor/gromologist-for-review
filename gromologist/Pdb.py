@@ -862,6 +862,9 @@ class Pdb:
                                  bondlength=bond_length,
                                  vector=vec, atomname=atom_add, resname=mutant.target_3l)
         self.renumber_atoms()
+        processed_residue = self.get_atoms(f'{chstr}resid {resid}')
+        for atom in processed_residue:
+            atom.resname = mutant.target_3l
 
     def _vector(self, atnames, resid, chain, nopbc=False):
         chstr = 'chain {} and '.format(chain) if chain else ''

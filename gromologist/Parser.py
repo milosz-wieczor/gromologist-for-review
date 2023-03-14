@@ -25,14 +25,14 @@ class SelectionParser:
         protein_selection = "resname ALA ACE CYS ASP ASPP GLU GLUP PHE GLY HIS HID HIE HSD HSE ILE LYS LEU MET " \
                             "NME NMA ASN PRO GLN ARG SER THR VAL TRP"
         dna_selection = "resname DA DG DC DT DA5 DG5 DC5 DT5 DA3 DG3 DC3 DT3"
-        rna_selection = "resname RA RG RC RT RA5 RG5 RC5 RT5 RA3 RG3 RC3 RT3"
+        rna_selection = "resname RA RG RC RU RA5 RG5 RC5 RU5 RA3 RG3 RC3 RU3 A G C U A3 A5 G3 G5 C3 C5 U 3 U5"
         solvent_selection = "resname HOH TIP3 SOL K CL NA POT K+ NA+ CLA CL-"
         all_selection = "serial < 10000000"
         noh_selection = "not element H"
         selection_string = selection_string.replace('solvent', solvent_selection)
         selection_string = selection_string.replace('water', 'resname HOH TIP3 SOL')
         selection_string = selection_string.replace('protein', protein_selection)
-        selection_string = selection_string.replace('nucleic', 'dna or rna')
+        selection_string = selection_string.replace('nucleic', '(dna or rna)')
         selection_string = selection_string.replace('noh', noh_selection)
         selection_string = selection_string.replace('dna', dna_selection)
         selection_string = selection_string.replace('rna', rna_selection)

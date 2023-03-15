@@ -518,8 +518,9 @@ class Top:
         # in case there are #defines at the very beginning (e.g. CHARMM36):
         for lnum in range(0, special_lines[0]):
             if not self._contents[lnum].lstrip().startswith(';') and self._contents[lnum].strip():
-                entry = gml.Entry(self._contents[lnum].strip(), self.sections[0].subsections[0])
-                self.header.append(entry)
+                if not self._contents[lnum].strip().startswith('*'):
+                    entry = gml.Entry(self._contents[lnum].strip(), self.sections[0].subsections[0])
+                    self.header.append(entry)
 
     def _yield_sec(self, content: list) -> "gml.Section":
         """

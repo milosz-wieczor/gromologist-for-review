@@ -89,7 +89,7 @@ class BasicTopTest(unittest.TestCase):
     def test_clear_params(self):
         # checks if parameters are cleared properly
         self.top.clear_ff_params()
-        self.assertEqual(len(self.top.parameters.get_subsections('dihedraltypes')[0]), 93)
+        self.assertEqual(len(self.top.parameters.get_subsections('dihedraltypes')[0].entries_param), 95)
 
     def test_list_bonds(self):
         # checks if bonds are listed

@@ -165,6 +165,9 @@ class SectionMol(Section):
                 parsed_headers.add(sub.header)
             else:
                 first_ssect = [s for s in self.subsections if s.header == sub.header][0]
+                if first_ssect.conditional or sub.conditional:
+                    print(f"Cannot merge sections {sub.header} because at least one is conditional, be careful")
+                    continue
                 first_ssect.add_entries([e for e in sub.entries if not e.is_header()])
                 to_remove.append(n)
                 first_ssect.prmtypes = first_ssect._check_parm_type()
@@ -1603,10 +1606,11 @@ class SectionParam(Section):
         this fn merges them into single sections to avoid searching in all instances
         :return: None
         """
-        subsection_labels = [sub.label for sub in self.subsections]
+        subsection_labels = [sub.header for sub in self.subsections]
         duplicated_subsections = list({label for label in subsection_labels if subsection_labels.count(label) > 1})
+        print(duplicated_subsections)
         for sub in duplicated_subsections:
-            subsections_to_merge = [s for s in self.subsections if s.label == sub and not s.conditional]
+            subsections_to_merge = [s for s in self.subsections if s.header == sub and not s.conditional]
             if not subsections_to_merge:
                 continue
             self.top.print(f"Merging sections {subsections_to_merge} together")
@@ -1751,7 +1755,7 @@ class SectionParam(Section):
         ss.set_opt_dih(values)
 
     def add_nbfix(self, type1: str, type2: str, mod_sigma: float = 0.0, mod_epsilon: float = 0.0,
-                  action_default: str = 'x'):
+                  action_default: str = 'x', new_sigma: Optional[float] = None, new_epsilon: Optional[float] = None):
         """
         Generates NBFIX entries for the chosen pair of atomtypes by modifying the current
         Lorentz-Berthelot rules, or an existing NBFIX
@@ -1759,6 +1763,8 @@ class SectionParam(Section):
         :param type2: str, name of the 2nd atomtype in the pair
         :param mod_sigma: float, by how much to increase the LJ sigma (in nm)
         :param mod_epsilon: float, by how much to increase the LJ epsilon (in kJ/mol)
+        :param new_sigma: float, if specified instead of mod_sigma sets the value directly (in nm)
+        :param new_epsilon: float, if specified instead of mod_epsilon sets the value directly (in kJ/mol)
         :param action_default: str, what to do if an NBFIX already exists (check prompt if that happens)
         :return: None
         """
@@ -1774,8 +1780,8 @@ class SectionParam(Section):
             raise KeyError('Type {} was not found in the atomtype definitions'.format(type1))
         if sigma2 is None:
             raise KeyError('Type {} was not found in the atomtype definitions'.format(type2))
-        new_sigma = 0.5*(sigma1 + sigma2) + mod_sigma
-        new_epsilon = (eps1*eps2)**0.5 + mod_epsilon
+        new_sig = 0.5 * (sigma1 + sigma2) + mod_sigma if new_sigma is None else new_sigma
+        new_eps = (eps1 * eps2) ** 0.5 + mod_epsilon if new_epsilon is None else new_epsilon
         try:
             nbsub = self.get_subsection('nonbond_params')
         except KeyError:
@@ -1791,31 +1797,93 @@ class SectionParam(Section):
                     if action == 't':
                         return
                     elif action == 'm':
-                        new_sigma = entry.params[0] + mod_sigma
-                        new_epsilon = entry.params[1] + mod_epsilon
+                        new_sig = entry.params[0] + mod_sigma if new_sigma is None else new_sigma
+                        new_eps = entry.params[1] + mod_epsilon if new_epsilon is None else new_epsilon
                         comment = entry.comment
                     nbsub.remove_entry(entry)
-        entry_line = "{} {} 1 {} {} ; sigma chg by {}, eps chg by {} {}".format(type1, type2, new_sigma, new_epsilon,
+        entry_line = "{} {} 1 {} {} ; sigma chg by {}, eps chg by {} {}".format(type1, type2, new_sig, new_eps,
                                                                                 mod_sigma, mod_epsilon, comment)
         nbsub.add_entry(gml.Subsection.yield_entry(nbsub, entry_line))
 
-    def edit_atomtype(self, type1: str, mod_sigma: float = 0.0, mod_epsilon: float = 0.0):
+    def edit_atomtype(self, atomtype: str, mod_sigma: float = 0.0, mod_epsilon: float = 0.0,
+                      new_sigma: Optional[float] = None, new_epsilon: Optional[float] = None):
         """
         Modifies the values of sigma or epsilon for a chosen atomtype
-        :param type1: str, type to be edited
+        :param atomtype: str, type to be edited
         :param mod_sigma: float, by how much should sigma be changed (in nm)
         :param mod_epsilon: float, by how much should epsilon be changed (in kJ/mol)
+        :param new_sigma: float, if specified instead of mod_sigma sets the value directly (in nm)
+        :param new_epsilon: float, if specified instead of mod_epsilon sets the value directly (in kJ/mol)
         :return: None
         """
         atp = self.get_subsection('atomtypes')
         for entry in atp:
             if isinstance(entry, gml.EntryParam):
-                if entry.types[0] == type1:
-                    entry.params[0] += mod_sigma
-                    entry.params[1] += mod_epsilon
+                if entry.types[0] == atomtype:
+                    entry.params[0] = entry.params[0] + mod_sigma if new_sigma is None else new_sigma
+                    entry.params[1] = entry.params[1] + mod_epsilon if new_epsilon is None else new_epsilon
+                    # TODO adjust comment if using new_[se]
                     entry.comment = f"; sigma chg by {mod_sigma}, eps chg by {mod_epsilon} {entry.comment}"
                     return
-        raise RuntimeError(f"Couldn't find type {type1}, check your topology")
+        raise RuntimeError(f"Couldn't find type {atomtype}, check your topology")
+
+    def add_atomtype(self, atomtype: str, mass: float, sigma: float, epsilon: float, action_default: str = 'x',
+                     atomic_number: Optional[int] = None):
+        """
+        Adds a new atomtype, defining mass, sigma, epsilon, and (optionally) atomic number
+        :param atomtype: str, name of the type
+        :param mass: float, mass of the atom
+        :param sigma: float, sigma of the Lennard-Jones potential (in nm)
+        :param epsilon: float, epsilon of the Lennard-Jones potential (in kJ/mol)
+        :param action_default: str, what to do if an entry already exists (check prompt if that happens)
+        :param atomic_number: int, optional
+        :return: None
+        """
+        atnum = atomic_number if atomic_number is not None else 0
+        atp = self.get_subsection('atomtypes')
+        if atomtype in self.top.defined_atomtypes:
+            action = action_default
+            while action not in 'rt':
+                action = input("An entry already exists, shall we replace it (r) or terminate (t)?")
+            if action == 't':
+                return
+            else:
+                entry = [ent for ent in atp.entries_param if ent.types[0] == atomtype][0]
+                print(f"Overwriting entry for atomtype {atomtype} with mass {mass}, sigma {sigma}, epsilon {epsilon}")
+                del entry
+        atp.add_entry(gml.EntryParam(f'{atomtype} {atnum} {mass} 0.0000 A {sigma} {epsilon}', subsection=atp))
+
+    def add_bonded_param(self, types: tuple, params: list, interaction_type: int, action_default: str = 'x'):
+        """
+        # TODO fill here
+        :param types:
+        :param params:
+        :param interaction_type:
+        :param action_default:
+        :return:
+        """
+        subsection_dict = {(2, 1): 'bondtypes', (3, 1): 'angletypes', (4, 1): 'dihedraltypes', (4, 9): 'dihedraltypes',
+                           (4, 4): 'dihedraltypes'}
+        subs = self.get_subsection(subsection_dict[(len(types), interaction_type)])
+        matching = [ent for ent in subs.entries_param if ent.types == types or ent.types == types[::-1]]
+        if matching:
+            action = action_default
+            while action not in 'rt':
+                action = input("An entry already exists, shall we replace it (r) or terminate (t)?")
+            if action == 't':
+                return
+            else:
+                while matching:
+                    del matching[-1]
+        if len(params) <= 3:
+            subs.add_entry(gml.EntryParam(f'{" ".join(types)} {str(interaction_type)} '
+                                          f'{" ".join([str(x) for x in params])}', subsection=subs))
+        elif interaction_type == 9:
+            assert len(params) % 3 == 0
+            for i in range(len(params) // 3):
+                param_slice = params[i*3: (i+1)*3]
+                subs.add_entry(gml.EntryParam(f'{" ".join(types)} {str(interaction_type)} '
+                                              f'{" ".join([str(x) for x in param_slice])}', subsection=subs))
 
     @staticmethod
     def gen_clones(entry: "gml.EntryParam", atomtype: str, new_atomtype: str) -> list:

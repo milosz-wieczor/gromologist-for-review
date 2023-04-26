@@ -168,8 +168,8 @@ def frames_count(trajfile: str, gmx: Optional[str] = 'gmx') -> int:
 
 
 def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = False, traj: Optional[str] = None,
-                    terms: str = 'potential', cleanup: bool = True, group_a: Optional[str] = None,
-                    group_b: Optional[str] = None) -> dict:
+                    terms: Optional[Union[str, list]] = None, cleanup: bool = True, group_a: Optional[str] = None,
+                    group_b: Optional[str] = None, sum_output: bool = False, savetxt: Optional[str] = None) -> dict:
     """
     Calculates selected energy terms given a structure/topology pair or structure/topology/trajectory set.
     :param struct: str, path to the structure file
@@ -181,6 +181,7 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
     :param cleanup: bool, whether to remove intermediate files (useful for debugging)
     :param group_a: str, selection defining group A to calculate interactions between group A and B
     :param group_b: str, selection defining group B to calculate interactions between group A and B
+    :param sum_output: bool, whether to add a term "sum" that will contain all terms added up
     :return: dict of lists, one list of per-frame values per each selected term
     """
     if not gmx:
@@ -189,13 +190,20 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
         gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
     if not gmx:
         gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
+    if (group_b or group_a) and not (group_a and group_b):
+        raise RuntimeError("If you're choosing individual groups, please specify both group_a and group_b")
     if group_a and group_b:
         group_names = ndx(gml.Pdb(struct), [group_a, group_b, 'all'])
         gen_mdp('rerun.mdp', energygrps=f"{group_names[0]} {group_names[1]} ")
         gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5, n='gml.ndx')
+        if terms is None:
+            terms = ['coul-sr:g1-g2', 'lj-sr:g1-g2']
+            sum_output = True
     else:
         gen_mdp('rerun.mdp')
         gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5)
+        if terms is None:
+            terms = 'potential'
     gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj)
     legend = get_legend(gmx, 'rerun.edr')
     if terms == 'all':
@@ -214,7 +222,19 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
             to_remove.append('gml.ndx')
         for filename in to_remove:
             os.remove(filename)
-    return {term: [o[onum] for o in out] for term, onum in zip(terms, range(len(out[0])))}
+    values = {term: [o[onum] for o in out] for term, onum in zip(terms, range(len(out[0])))}
+    if sum_output:
+        nframes = len(values[list(values.keys())[0]])
+        values['sum'] = [sum([values[k][n] for k in values.keys()]) for n in range(nframes)]
+    if savetxt is not None:
+        nframes = len(values[list(values.keys())[0]])
+        header = ' '.join(values.keys())
+        entries = [' '.join([f"{values[k][n]:12.5f}" for k in values.keys()]) for n in range(nframes)]
+        with open(savetxt, 'w') as out:
+            out.write(header + '\n')
+            for ent in entries:
+                out.write(ent + '\n')
+    return values
 
 
 def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bool = False,
@@ -269,7 +289,7 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
 def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] = None,
                    box: Optional[str] = 'dodecahedron', box_margin: Optional[float] = 1.5, cation: Optional[str] = 'K',
                    anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15, maxsol: Optional[int] = None,
-                   resize_box=True):
+                   resize_box=True, quiet=True):
     """
     Implements a full system preparation workflow (parsing the structure with pdb2gmx,
     setting the box size, adding solvent and ions, minimizing, generating a final
@@ -283,10 +303,14 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     :param anion: str, the anion to be used (default is CL)
     :param ion_conc: float, the ion concentration to be applied (default 0.15)
     :param resize_box: bool, whether to generate a new box size based on the -d option of gmx editconf
+    :param quiet: bool, whether to print gmx output to the screen
     :return: None
     """
     gmx = gml.find_gmx_dir()
     found = [f'{i} (local)' for i in glob(f'*ff')] + glob(f'{gmx[0]}/*ff')
+    if set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff')):
+        raise RuntimeError(f"Directories {set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff'))} have identical names,"
+                           f"please make them unambiguous e.g. by renaming the local version")
     if ff is None:
         for n, i in enumerate(found):
             print('[', n + 1, '] ', i.split('/')[-1])
@@ -297,7 +321,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
             raise RuntimeError('Not an integer: {}'.format(rtpnum))
         else:
             ff = found[rtpnum - 1].replace(' (local)', '').split('/')[-1]
-    if ff not in [i.split('/')[-1] for i in found]:
+    if ff not in [i.replace(' (local)', '').split('/')[-1] for i in found]:
         raise RuntimeError(
             f"Force field {ff.split('/')[-1]} not found in the list: {[i.split('/')[-1] for i in found]}")
     ff = ff.replace('.ff', '')
@@ -305,35 +329,35 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
         water = \
         [line.split()[0] for line in open(found[rtpnum - 1].replace(' (local)', '') + os.sep + 'watermodels.dat')
          if 'recommended' in line][0]
-    print(gmx_command(gmx[1], 'pdb2gmx', quiet=False, f=struct, ff=ff, water=water,
-                      answer=True, fail_on_error=True))
+    gmx_command(gmx[1], 'pdb2gmx', quiet=quiet, f=struct, ff=ff, water=water,
+                      answer=True, fail_on_error=True)
     if resize_box:
-        print(gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box,
-                          answer=True, fail_on_error=True))
+        gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box, quiet=quiet,
+                          answer=True, fail_on_error=True)
     else:
         copy2('conf.gro', 'box.gro')
     if maxsol is None:
-        print(gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro',
-                          answer=True, fail_on_error=True))
+        gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', quiet=quiet,
+                          answer=True, fail_on_error=True)
     else:
-        print(gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', maxsol=maxsol,
-                          answer=True, fail_on_error=True))
+        gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', maxsol=maxsol, quiet=quiet,
+                          answer=True, fail_on_error=True)
     gen_mdp('do_minimization.mdp', runtype='mini')
-    print(gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1,
-                      answer=True, fail_on_error=True))
+    gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1,
+                      quiet=quiet, answer=True, fail_on_error=True)
     answer = gmx_command(gmx[1], 'genion', pass_values=['a'], s='ions', pname=cation, nname=anion, conc=ion_conc,
-                         neutral=True, p="topol", o='test', answer=True)
+                         quiet=quiet, neutral=True, p="topol", o='test', answer=True)
     sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
-    print(gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
-                      neutral=True, p="topol", o='ions', answer=True, fail_on_error=True))
-    print(gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='ions.gro', o='do_mini',
-                      answer=True, fail_on_error=True))
-    print(gmx_command(gmx[1], 'mdrun', deffnm='do_mini', v=True,
-                      answer=True, fail_on_error=True))
+    gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
+                      quiet=quiet, neutral=True, p="topol", o='ions', answer=True, fail_on_error=True)
+    gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='ions.gro', o='do_mini',
+                      quiet=quiet, answer=True, fail_on_error=True)
+    gmx_command(gmx[1], 'mdrun', deffnm='do_mini', v=True,
+                      quiet=quiet, answer=True, fail_on_error=True)
     ndx(gml.Pdb('do_mini.gro'), selections=['all', 'not solvent'])
-    print(gmx_command(gmx[1], 'trjconv', s='do_mini.tpr', f='do_mini.gro', o='whole.gro', pbc='cluster',
-                      pass_values=[1, 0],
-                      n='gml.ndx', answer=True, fail_on_error=True))
+    gmx_command(gmx[1], 'trjconv', s='do_mini.tpr', f='do_mini.gro', o='whole.gro', pbc='cluster',
+                      pass_values=[1, 0], quiet=quiet,
+                      n='gml.ndx', answer=True, fail_on_error=True)
     t = gml.Top('topol.top')
     t.clear_sections()
     t.save_top('merged_topology.top')
@@ -442,6 +466,7 @@ def process_trajectories(mask: str, tpr: str, group_cluster: str = 'Protein', gr
     outgroup = groups[group_output]
     clustgroup = groups[group_cluster]
     passvals = [clustgroup, outgroup] if pbc == 'cluster' else [outgroup]
+    # TODO dump clustered solute, find COM, center it, cluster/res again?
     for traj in glob(mask):
         if ndx is not None:
             gmx_command(gmx[1], 'trjconv', s=tpr, f=traj, o=f'whole_{traj}', pbc=pbc, pass_values=passvals,

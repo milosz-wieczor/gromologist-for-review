@@ -522,6 +522,18 @@ class SubsectionParam(Subsection):
                                                                                                 other.header))
         return SubsectionParam(["[ {} ]\n".format(self.header)] + self.entries + other.entries, self.section)
 
+    def get_entries_by_types(self, *types):
+        found = []
+        for entry in self.entries_param:
+            if len(types) != len(entry.types):
+                continue
+            if all([query == tp for query, tp in zip(types, entry.types)]) \
+                    or all([query == tp for query, tp in zip(types, entry.types[::-1])]):
+                found.append(entry)
+        if not found:
+            raise RuntimeError(f"No entry found with types: {types}")
+        return found
+
     @property
     def entries_param(self):
         return [e for e in self.entries if isinstance(e, gml.EntryParam)]

@@ -378,11 +378,21 @@ class ThermoDiff:
         elif modtype in 'nm':
             self.mods.append(ModNbfix(top, structure, selections, modtype))
 
-    def add_all_nbfix_mods(self, top: Union[str, gml.Top], structure: str):
+    def add_all_nbfix_mods(self, top: Union[str, gml.Top], structure: str, typelist: Optional[list] = None):
+        """
+        Automatically adds all NBFIX modifications that can be conceived from the parameter set
+        :param top: str or gml.Top, the topology compatible with the system
+        :param structure: str, a path to the Pdb or Gro file
+        :param typelist: optional, only consider the types listed in constructing NBFIXes
+        :return: None
+        """
         topology = gml.Top(top) if isinstance(top, str) else top
         topology.clear_sections()
         topology.clear_ff_params()
-        for type_pair in sorted(list(combinations_with_replacement(topology.defined_atomtypes, 2))):
+        types = topology.defined_atomtypes if typelist is None \
+            else list(set(topology.defined_atomtypes).intersection(set(typelist)))
+        print(f"Finding all combinations between types: {' '.join(types)}")
+        for type_pair in sorted(list(combinations_with_replacement(types, 2))):
             print(f"Adding modification: {type_pair[0]}, {type_pair[1]}")
             self.add_mod(deepcopy(topology), structure, modtype='n',
                          selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
@@ -396,7 +406,18 @@ class ThermoDiff:
         self._add_lj_mods(top, structure, 'epsilon', exclude)
 
     def add_all_dihedral_mods(self, top: Union[str, gml.Top], structure: str, molecules: Optional[list] = None,
-                              selector_type: Optional[str] = None):
+                              selector_type: Optional[Union[str, list]] = None):
+        """
+        Automatically adds all dihedral modifications that can be conceived from the parameter set
+        (one entry at a time, e.g. CA-CT-CT-OH with periodicity 1 produces one modification);
+        can be restricted to dihedrals involving selected atom types
+        :param top: str or gml.Top, the topology compatible with the system
+        :param structure: str, a path to the Pdb or Gro file
+        :param molecules: optional list of str, only add dihedrals from these molecules (default is whole system)
+        :param selector_type: optional, only consider dihedrals that have this type (if str)
+        or any of these types (if list)
+        :return: None
+        """
         topology = gml.Top(top) if isinstance(top, str) else top
         topology.clear_sections()
         topology.clear_ff_params()
@@ -416,11 +437,33 @@ class ThermoDiff:
                 if signature not in dihtypes and signature_rev not in dihtypes:
                     dihtypes.append(signature)
         if selector_type is not None:
-            dihtypes = [d for d in dihtypes if selector_type in d[0]]
+            if isinstance(selector_type, str):
+                selector_type = [selector_type]
+            dihtypes = [d for d in dihtypes if set(selector_type).intersection(set(d[0]))]
         for n, dih in enumerate(dihtypes):
             sels = [f'type {t}' for t in dih[0]]
             print(f"Adding modification: {', '.join(sels)}, {n}/{len(dihtypes)}")
             self.add_mod(deepcopy(topology), structure, 'd', sels, dih[1])
+
+    def add_all_charge_mods(self, top: Union[str, gml.Top], structure: str, molecules: Optional[list] = None):
+        """
+        Automatically adds all dihedral modifications that can be conceived from the parameter set
+        (one entry at a time, e.g. CA-CT-CT-OH with periodicity 1 produces one modification);
+        can be restricted to dihedrals involving selected atom types
+        :param top: str or gml.Top, the topology compatible with the system
+        :param structure: str, a path to the Pdb or Gro file
+        :param molecules: optional list of str, only add dihedrals from these molecules (default is whole system)
+        :return: None
+        """
+        topology = gml.Top(top) if isinstance(top, str) else top
+        topology.clear_sections()
+        topology.clear_ff_params()
+        mols = topology.molecules if molecules is None else [topology.get_molecule(x) for x in molecules]
+        mods_list = list(set([(a.atomname, a.resname) for mol in mols for a in mol.atoms]))
+        for mod in mods_list:
+            print(f"Adding modification: {mod[0]}, {mod[1]}")
+            self.add_mod(deepcopy(topology), structure, modtype='c',
+                         selections=[f'atomname {mod[0]} and resname {mod[1]}'])
 
     def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str, exclude: Optional[list] = None):
         """

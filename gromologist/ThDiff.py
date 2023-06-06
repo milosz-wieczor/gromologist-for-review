@@ -348,7 +348,8 @@ class ThermoDiff:
     your box angles and box side lengths to ensure sufficient space between
     periodic images (PME is not used in reruns anyway, just plain cut-off).
     """
-    def __init__(self, temperature=300):
+    def __init__(self, name: Optional[str] = None, temperature: Optional[float] = 300):
+        self.name = '' if name is None else f'-{name}'
         self.mods = []
         self.temperature = temperature
         self.trajs = []
@@ -555,17 +556,17 @@ class ThermoDiff:
         :return:
         """
         try:
-            os.mkdir('working')
+            os.mkdir(f'working{self.name}')
         except FileExistsError:
-            print("The 'working' directory already exists, will overwrite its contents; clean incomplete 'rerun.xvg' "
-                  "files to avoid problems")
+            print(f"The 'working{self.name}' directory already exists, will overwrite its contents; clean incomplete "
+                  f"'rerun.xvg' files to avoid problems")
         self.path = os.getcwd()
         for mod in self.mods:
             try:
-                os.mkdir(f'working/{str(mod)}')
+                os.mkdir(f'working{self.name}/{str(mod)}')
             except FileExistsError:
                 pass
-            mod.save_mod(f'{self.path}/working/{str(mod)}', str(mod))
+            mod.save_mod(f'{self.path}/working{self.name}/{str(mod)}', str(mod))
 
     def launch_reruns(self):
         """
@@ -797,7 +798,7 @@ class ThermoDiff:
         for key in derivs.keys():
             if key[1] == dataset:
                 mod = key[0]
-                with open(f'working/{mod}/{key[1]}-discrete_sensitivity.dat', 'w') as outfile:
+                with open(f'working{self.name}/{mod}/{key[1]}-discrete_sensitivity.dat', 'w') as outfile:
                     outfile.write(f"{round(derivs[key][1] - derivs[key][0], 3)}\n")
 
     def print_discrete_derivatives(self, dataset: str, free_energy: bool):

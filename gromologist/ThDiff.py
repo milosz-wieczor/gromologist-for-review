@@ -341,6 +341,13 @@ class ModParam(Mod):
 
 
 class ThermoDiff:
+    """
+    PLEASE NOTE: certain box types are not suitable for reruns in Gromacs
+    (e.g. Amber periodic octahedron). If that's your case, make sure your
+    molecules are whole, and use an external tool (e.g. MDTraj) to edit
+    your box angles and box side lengths to ensure sufficient space between
+    periodic images (PME is not used in reruns anyway, just plain cut-off).
+    """
     def __init__(self, temperature=300):
         self.mods = []
         self.temperature = temperature
@@ -351,20 +358,23 @@ class ThermoDiff:
         self.profile_free_energy_derivatives = {}
         self.discrete_observable_derivatives = {}
         self.profile_observable_derivatives = {}
+        self.thresholds = {}
 
-    def add_mod(self, top: Union[str, gml.Top], structure: str, modtype: str, selections: list):
+    def add_mod(self, top: Union[str, gml.Top], structure: str, modtype: str, selections: list,
+                period: Optional[int] = -1):
         """
         Adds a new modified topology for derivative calculation
         :param top: str or gml.Top, the topology compatible with the system
         :param structure: str, a path to the Pdb or Gro file
         :param modtype: str, type of the modification, one of the following: c, s, e, n, m, a, d
         :param selections: list of str, selections that will define atoms to be modified
+        :param period: int, periodicity for a dihedral modification (if applicable)
         :return: None
         """
         if modtype in 'cse':
             self.mods.append(ModAtom(top, structure, selections, modtype))
         elif modtype in 'ad':
-            self.mods.append(ModParam(top, structure, selections, modtype))
+            self.mods.append(ModParam(top, structure, selections, modtype, period))
         elif modtype in 'nm':
             self.mods.append(ModNbfix(top, structure, selections, modtype))
 
@@ -384,6 +394,33 @@ class ThermoDiff:
 
     def add_all_epsilon_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None):
         self._add_lj_mods(top, structure, 'epsilon', exclude)
+
+    def add_all_dihedral_mods(self, top: Union[str, gml.Top], structure: str, molecules: Optional[list] = None,
+                              selector_type: Optional[str] = None):
+        topology = gml.Top(top) if isinstance(top, str) else top
+        topology.clear_sections()
+        topology.clear_ff_params()
+        topology.add_ff_params()
+        topology.explicit_defines()
+        mols = topology.molecules if molecules is None else [topology.get_molecule(x) for x in molecules]
+        dihtypes = []
+        for mol in mols:
+            try:
+                sub = mol.get_subsection('dihedrals')
+            except KeyError:
+                continue
+            for dih_entry in sub.entries_bonded:
+                dih_entry.read_types()
+                signature = (dih_entry.types_state_a, dih_entry.params_state_a[-1])
+                signature_rev = (dih_entry.types_state_a[::-1], dih_entry.params_state_a[-1])
+                if signature not in dihtypes and signature_rev not in dihtypes:
+                    dihtypes.append(signature)
+        if selector_type is not None:
+            dihtypes = [d for d in dihtypes if selector_type in d[0]]
+        for n, dih in enumerate(dihtypes):
+            sels = [f'type {t}' for t in dih[0]]
+            print(f"Adding modification: {', '.join(sels)}, {n}/{len(dihtypes)}")
+            self.add_mod(deepcopy(topology), structure, 'd', sels, dih[1])
 
     def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str, exclude: Optional[list] = None):
         """
@@ -490,6 +527,7 @@ class ThermoDiff:
     def launch_reruns(self):
         """
         Launches reruns for each legal mod-trajectory combination
+        :param nproc: int, optional number of processes
         :return: None
         """
         pairs = []
@@ -632,6 +670,7 @@ class ThermoDiff:
                   zip(threshold[::2], threshold[1::2])] if threshold is not None else \
             sorted(list({data for traj in self.trajs for data in traj['datasets'][dataset]}))
         binning_dset, deriv_dset = (dataset, dataset) if cv_dataset is None else (cv_dataset, dataset)
+        self.thresholds[dataset] = threshold
         for mod in self.mods:
             binning_data, deriv_data, weights, derivs = self.get_flat_data(binning_dset, deriv_dset, mod)
             mean_derivatives = {st: 0 for st in states + [None]}
@@ -717,3 +756,28 @@ class ThermoDiff:
                 mod = key[0]
                 with open(f'working/{mod}/{key[1]}-discrete_sensitivity.dat', 'w') as outfile:
                     outfile.write(f"{round(derivs[key][1] - derivs[key][0], 3)}\n")
+
+    def print_discrete_derivatives(self, dataset: str, free_energy: bool):
+        derivs = self.discrete_free_energy_derivatives if free_energy else self.discrete_observable_derivatives
+        thrs = self.thresholds[dataset]
+        for x in range(len(thrs)//2):
+            x1 = round(thrs[2 * x], 3)
+            x2 = round(thrs[2 * x + 1], 3)
+            xx = f"{x1}-{x2}"
+            print(f'  {xx:20s}', end='|')
+        print(f'{"  others":20s}  |')
+        print(23 * (len(thrs)//2 + 1) * '-')
+        all_ders = [q for q in derivs.keys() if q[1] == dataset]
+        sorted_ders = sorted(all_ders, key=lambda l: abs(derivs[l][1] - derivs[l][0]), reverse=True)
+        strings = {}
+        for n, mod in enumerate(all_ders):
+            strings[mod] = []
+            for d in derivs[mod]:
+                strings[mod].append(f'  {d-derivs[mod][0]:20.5f}|')
+            try:
+                strings[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}  {self.mods[n].period:4d}\n")
+            except:
+                strings[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}\n")
+            strings[mod].append(23 * (len(thrs)//2 + 1) * '-')
+        for sormod in sorted_ders:
+            print(''.join(strings[sormod]))

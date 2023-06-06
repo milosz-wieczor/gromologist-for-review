@@ -70,7 +70,11 @@ class Pdb:
 
     @property
     def chains(self) -> list:
-        return sorted({a.chain for a in self.atoms})
+        chns = []
+        for a in self.atoms:
+            if a.chain not in chns:
+                chns.append(a.chain)
+        return chns
 
     @classmethod
     def from_selection(cls, pdb: "gml.Pdb", selection: str) -> "gml.Pdb":
@@ -331,6 +335,25 @@ class Pdb:
                                               atom_instance.serial, atom_instance.atomname, atom_instance.resname))
             return 1
         return 0
+
+    def permute_chains(self, permute: list, rename: bool = True):
+        """
+        Permutes the atoms in a molecule so that the order of chain is altered
+        :param permute: list, target permutation (0-based)
+        :param rename: bool, whether to adjust chain names after the permutation
+        :return: None
+        """
+        assert sorted(permute) == list(range(len(permute)))
+        assert len(self.chains) == len(permute)
+        new_atoms = []
+        for chnr in permute:
+            chname = self.chains[chnr]
+            new_atoms.extend(self.get_atoms(f'chain {chname}'))
+        new_atoms.extend(self.get_atoms(f'not chain {" ".join(self.chains)}'))
+        if rename:
+            self.renumber_atoms()
+            self.add_chains()
+        self.atoms = new_atoms
 
     def print_mols(self):
         """

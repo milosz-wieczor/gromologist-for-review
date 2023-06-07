@@ -954,7 +954,7 @@ class Pdb:
         self.check_chiral(thr_atoms, 'CG1 CG2', 'CA', 'HB', 'side chain chirality', nopbc=nopbc, fix=fix)
 
     def check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality', printing=True, nopbc=False,
-                     fix=False):
+                     fix=False, values_only=False):
         """
         Decides on correct or wrong chirality of selected chiral
         centers by calculating selected dihedrals
@@ -966,6 +966,7 @@ class Pdb:
         :param printing: bool, whether to print warnings (default) or return True if all checks are passed
         :param nopbc: bool, whether to ignore PBC when calculating vectors
         :param fix: bool, whether to try fixing chirality by switching the position of the hydrogen
+        :param values_only: prints the values of the arbitrarily defined dihedral to spot outliers
         :return: None (if printing), bool (if not printing)
         """
         for at in cent_atoms_list:
@@ -976,12 +977,17 @@ class Pdb:
             h = self.get_atom(f'name {at3} and resnum {resnum} and resname {resname} {chn}')
             chi = self._get_chirality([n, c, h, at], nopbc)
             if chi < -0.9 or 0 > chi > -0.35:
+                if values_only:
+                    print(chi)
+                    continue
                 if printing:
                     print(f"Check {label} for residue {resname} num {resnum}, looks a bit off")
-                    print(chi)
                 else:
                     return False
             elif chi > 0:
+                if values_only:
+                    print(chi)
+                    continue
                 if fix:
                     self.fix_chirality(h_sel=f'name {at3} and resnum {resnum} and resname {resname} {chn}',
                                        c_sel=f'name {at.atomname} and resnum {resnum} and resname {resname} {chn}')

@@ -62,7 +62,7 @@ class Mod:
         :return: None
         """
         self.topname = path
-        final_name = self.topname + '/' + name + '-' + self.top.fname
+        final_name = self.topname + '/' + name + '-' + self.top.fname.split('/')[-1]
         if not os.path.exists(final_name):
             self.top.save_top(final_name)
         else:
@@ -406,7 +406,8 @@ class ThermoDiff:
     def add_all_epsilon_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None):
         self._add_lj_mods(top, structure, 'epsilon', exclude)
 
-    def add_all_dihedral_mods(self, top: Union[str, gml.Top], structure: str, molecules: Optional[list] = None,
+    def add_all_dihedral_mods(self, top: Union[str, gml.Top], structure: str,
+                              molecules: Optional[Union[str, list]] = None,
                               selector_type: Optional[Union[str, list]] = None):
         """
         Automatically adds all dihedral modifications that can be conceived from the parameter set
@@ -424,6 +425,7 @@ class ThermoDiff:
         topology.clear_ff_params()
         topology.add_ff_params()
         topology.explicit_defines()
+        molecules = [molecules] if isinstance(molecules, str) else molecules
         mols = topology.molecules if molecules is None else [topology.get_molecule(x) for x in molecules]
         dihtypes = []
         for mol in mols:
@@ -446,7 +448,8 @@ class ThermoDiff:
             print(f"Adding modification: {', '.join(sels)}, {n}/{len(dihtypes)}")
             self.add_mod(deepcopy(topology), structure, 'd', sels, dih[1])
 
-    def add_all_charge_mods(self, top: Union[str, gml.Top], structure: str, molecules: Optional[list] = None):
+    def add_all_charge_mods(self, top: Union[str, gml.Top], structure: str,
+                            molecules: Optional[Union[str, list]] = None):
         """
         Automatically adds all dihedral modifications that can be conceived from the parameter set
         (one entry at a time, e.g. CA-CT-CT-OH with periodicity 1 produces one modification);
@@ -459,12 +462,13 @@ class ThermoDiff:
         topology = gml.Top(top) if isinstance(top, str) else top
         topology.clear_sections()
         topology.clear_ff_params()
+        molecules = [molecules] if isinstance(molecules, str) else molecules
         mols = topology.molecules if molecules is None else [topology.get_molecule(x) for x in molecules]
         mods_list = list(set([(a.atomname, a.resname) for mol in mols for a in mol.atoms]))
         for mod in mods_list:
             print(f"Adding modification: {mod[0]}, {mod[1]}")
             self.add_mod(deepcopy(topology), structure, modtype='c',
-                         selections=[f'atomname {mod[0]} and resname {mod[1]}'])
+                         selections=[f'name {mod[0]} and resname {mod[1]}'])
 
     def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str, exclude: Optional[list] = None):
         """
@@ -801,16 +805,18 @@ class ThermoDiff:
                 with open(f'working{self.name}/{mod}/{key[1]}-discrete_sensitivity.dat', 'w') as outfile:
                     outfile.write(f"{round(derivs[key][1] - derivs[key][0], 3)}\n")
 
-    def print_discrete_derivatives(self, dataset: str, free_energy: bool):
+    def print_discrete_derivatives(self, dataset: str, free_energy: bool, outfile: Optional[str] = None):
+        if outfile is not None:
+            outfile = open(outfile, mode='w')
         derivs = self.discrete_free_energy_derivatives if free_energy else self.discrete_observable_derivatives
         thrs = self.thresholds[dataset]
         for x in range(len(thrs)//2):
             x1 = round(thrs[2 * x], 3)
             x2 = round(thrs[2 * x + 1], 3)
             xx = f"{x1}-{x2}"
-            print(f'  {xx:20s}', end='|')
-        print(f'{"  others":20s}  |')
-        print(23 * (len(thrs)//2 + 1) * '-')
+            print(f'  {xx:20s}', end='|', file=outfile)
+        print(f'{"  others":20s}  |', file=outfile)
+        print(23 * (len(thrs)//2 + 1) * '-', file=outfile)
         all_ders = [q for q in derivs.keys() if q[1] == dataset]
         sorted_ders = sorted(all_ders, key=lambda l: abs(derivs[l][1] - derivs[l][0]), reverse=True)
         strings = {}
@@ -821,7 +827,12 @@ class ThermoDiff:
             try:
                 strings[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}  {self.mods[n].period:4d}\n")
             except:
-                strings[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}\n")
+                try:
+                    strings[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}\n")
+                except:
+                    strings[mod].append(f"  {str(self.mods[n]):6s}  {self.mods[n].type:16s}\n")
             strings[mod].append(23 * (len(thrs)//2 + 1) * '-')
         for sormod in sorted_ders:
-            print(''.join(strings[sormod]))
+            print(''.join(strings[sormod]), file=outfile)
+        if outfile is not None:
+            outfile.close()

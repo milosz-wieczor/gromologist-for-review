@@ -400,11 +400,13 @@ class ThermoDiff:
             self.add_mod(deepcopy(topology), structure, modtype='m',
                          selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
 
-    def add_all_sigma_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None):
-        self._add_lj_mods(top, structure, 'sigma', exclude)
+    def add_all_sigma_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None,
+                           include: Optional[list] = None):
+        self._add_lj_mods(top, structure, 'sigma', exclude, include)
 
-    def add_all_epsilon_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None):
-        self._add_lj_mods(top, structure, 'epsilon', exclude)
+    def add_all_epsilon_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None,
+                             include: Optional[list] = None):
+        self._add_lj_mods(top, structure, 'epsilon', exclude, include)
 
     def add_all_dihedral_mods(self, top: Union[str, gml.Top], structure: str,
                               molecules: Optional[Union[str, list]] = None,
@@ -470,13 +472,16 @@ class ThermoDiff:
             self.add_mod(deepcopy(topology), structure, modtype='c',
                          selections=[f'name {mod[0]} and resname {mod[1]}'])
 
-    def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str, exclude: Optional[list] = None):
+    def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str, exclude: Optional[list] = None,
+                     include: Optional[list] = None):
         """
         Automatically adds calculations of derivatives with respect to
         all sigma or epsilon values in the system at hand
         :param top: either str (filename) or gml.Top instance
         :param structure: str, filename of the .pdb or .gro corresponding to the .top file
         :param which: str, 'sigma' or 'epsilon'
+        :param exclude: list, optional selection of types to exclude from the calculation
+        :param include: list, optional explicit selection of types to be included in the calculation
         :return: None
         """
         topology = gml.Top(top) if isinstance(top, str) else top
@@ -484,7 +489,9 @@ class ThermoDiff:
         topology.clear_ff_params()
         topology.add_ff_params()
         exclude = [] if exclude is None else exclude
-        for atomtype in sorted(topology.defined_atomtypes):
+        seltypes = sorted(topology.defined_atomtypes) if include is None \
+            else sorted(list(set(topology.defined_atomtypes).intersection(set(include))))
+        for atomtype in seltypes:
             if atomtype in exclude:
                 continue
             assert which in ['sigma', 'epsilon']

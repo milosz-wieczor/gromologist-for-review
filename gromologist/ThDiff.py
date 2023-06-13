@@ -401,12 +401,12 @@ class ThermoDiff:
                          selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
 
     def add_all_sigma_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None,
-                           include: Optional[list] = None):
-        self._add_lj_mods(top, structure, 'sigma', exclude, include)
+                           molecules: Optional[Union[str, list]] = None):
+        self._add_lj_mods(top, structure, 'sigma', exclude, molecules)
 
     def add_all_epsilon_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None,
-                             include: Optional[list] = None):
-        self._add_lj_mods(top, structure, 'epsilon', exclude, include)
+                             molecules: Optional[Union[str, list]] = None):
+        self._add_lj_mods(top, structure, 'epsilon', exclude, molecules)
 
     def add_all_dihedral_mods(self, top: Union[str, gml.Top], structure: str,
                               molecules: Optional[Union[str, list]] = None,
@@ -473,7 +473,7 @@ class ThermoDiff:
                          selections=[f'name {mod[0]} and resname {mod[1]}'])
 
     def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str, exclude: Optional[list] = None,
-                     include: Optional[list] = None):
+                     molecules: Optional[Union[str, list]] = None):
         """
         Automatically adds calculations of derivatives with respect to
         all sigma or epsilon values in the system at hand
@@ -481,16 +481,21 @@ class ThermoDiff:
         :param structure: str, filename of the .pdb or .gro corresponding to the .top file
         :param which: str, 'sigma' or 'epsilon'
         :param exclude: list, optional selection of types to exclude from the calculation
-        :param include: list, optional explicit selection of types to be included in the calculation
+        :param molecules: list or str, optional list of molecules from which the types will be selected
         :return: None
         """
         topology = gml.Top(top) if isinstance(top, str) else top
+        molecules = [molecules] if isinstance(molecules, str) else molecules
+        include = []
+        if molecules is not None:
+            for mol in molecules:
+                section_mol = topology.get_molecule(mol)
+                include.extend(sorted(list({a.type for a in section_mol.atoms})))
         topology.clear_sections()
         topology.clear_ff_params()
         topology.add_ff_params()
         exclude = [] if exclude is None else exclude
-        seltypes = sorted(topology.defined_atomtypes) if include is None \
-            else sorted(list(set(topology.defined_atomtypes).intersection(set(include))))
+        seltypes = sorted(topology.defined_atomtypes) if not include else sorted(include)
         for atomtype in seltypes:
             if atomtype in exclude:
                 continue

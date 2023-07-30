@@ -1414,6 +1414,9 @@ class Traj:
     def __getitem__(self, item):
         return self.structures[item]
 
+    def __len__(self):
+        return len(self.structures)
+
     def save_traj_as_pdb(self, filename=None, end="ENDMDL"):
         filename = self.fname if filename is None else filename
         with open(filename, 'w') as outfile:

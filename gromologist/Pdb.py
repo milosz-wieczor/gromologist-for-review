@@ -95,27 +95,20 @@ class Pdb:
         return new_pdb
 
     @classmethod
-    def from_text(cls, text: str, orig_pdb: "gml.Pdb") -> "gml.Pdb":
+    def from_text(cls, text: str, ftype: str = 'pdb') -> "gml.Pdb":
         """
         Reads coordinates from text, useful for reading trajectories
         :param text: str, contents of the pdb/gro
-        :param orig_pdb: Pdb instance, contains general information about the structure (box size, remarks etc)
+        :param ftype: str, type of file (pdb, gro, bqt)
         :return: a new Pdb instance
         """
         new_pdb = Pdb()
-        try:
-            ftype = orig_pdb.fname[-3:]
-        except AttributeError:
-            ftype = orig_pdb.sfname[-3:]
         if ftype == 'pdb':
-            new_pdb.atoms = cls._parse_contents([line.strip() for line in text.split('\n')], False)
+            new_pdb.atoms, new_pdb.box, new_pdb.remarks = cls._parse_contents([line.strip() for line in text.split('\n')], False)
         elif ftype == 'bqt':
-            new_pdb.atoms = cls._parse_contents([line.strip() for line in text.split('\n')], True)
+            new_pdb.atoms, new_pdb.box, new_pdb.remarks = cls._parse_contents([line.strip() for line in text.split('\n')], True)
         elif ftype == 'gro':
-            new_pdb.atoms = cls._parse_contents_gro([line.strip() for line in text.split('\n')])
-        new_pdb.box = orig_pdb.box
-        new_pdb.remarks = orig_pdb.remarks
-        new_pdb.altloc = orig_pdb.altloc
+            new_pdb.atoms, new_pdb.box, new_pdb.remarks = cls._parse_contents_gro([line.strip() for line in text.split('\n')])
         return new_pdb
 
     def print_protein_sequence(self, gaps: bool = False) -> list:
@@ -1357,78 +1350,64 @@ class Atom:
         return "Atom {} in residue {}{} of chain {}".format(self.atomname, self.resname, self.resnum, chain)
 
 
-class Traj(Pdb):
+class Traj:
     """
-    Still not implemented correctly!
+    A provisional implementation that stores a trajectory as a list of Pdb objects
     """
 
-    def __init__(self, structfile=None, compressed_traj=None, top=None, array=None, altloc='A', **kwargs):
-        super().__init__(structfile, top, altloc, **kwargs)
-        self.sfname = structfile
-        self.ctfname = compressed_traj
-        self.array = array
-        self.box_traj = []
-        if self.sfname is None and self.ctfname is None:
-            self.coords = [[[]]]
-        elif self.sfname is None and self.sfname.endswith('.pdb'):
-            self.coords = self.get_coords_from_pdb()
-        elif self.sfname is None and self.sfname.endswith('.gro'):
-            self.coords = self.get_coords_from_gro()
-        if self.ctfname is not None and self.ctfname.endswith('.xtc') and self.sfname is not None:
-            import mdtraj as md
-            traj = md.load(self.ctfname, top=self.sfname)
-            self.coords = [frame.xyz[0] for frame in traj]
-        if self.array and self.coords:
-            self.coords = self.array
+    def __init__(self, structures=None, top=None, altloc='A', **kwargs):
+        self.fname = 'gmltraj.pdb' if 'name' not in kwargs.keys() else kwargs['name']
+        if isinstance(structures, str):
+            self.structures = self.get_coords_from_file(structures)
+        else:
+            self.structures = [gml.Pdb(struct) for struct in structures]
+        self.check_consistency()
         self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
         if self.top and not self.top.pdb:
             self.top.pdb = self
         self.altloc = altloc
-        self.nframes = len(self.coords)
+        self.nframes = len(self.structures)
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                             "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
 
-    def __repr__(self):
-        return "trajectory file {} with {} frames and {} atoms".format(self.fname, self.nframes, len(self.atoms))
+    def __repr__(self) -> str:
+        return "trajectory file {} with {} frames and {} atoms".format(self.fname, self.nframes,
+                                                                       len(self.structures[0].atoms))
 
-    def get_coords_from_pdb(self):
-        coords = []
-        content = [line for line in open(self.sfname)]
-        term_lines = [0] + [n for n, line in enumerate(content)
-                            if line.startswith('END') or line.startswith('ENDMDL')]
+    def get_coords_from_file(self, infile) -> list:
+        ftype = infile[-3:]
+        structs = []
+        content = [line for line in open(infile)]
+        if ftype == 'pdb':
+            term_lines = [0] + [n for n, line in enumerate(content)
+                                if line.startswith('END') or line.startswith('ENDMDL')]
+        elif ftype == 'gro':
+            natoms = int(content[1].strip())
+            per_frame = natoms + 3
+            term_lines = range(0, len(content) + 1, per_frame)
+        else:
+            raise RuntimeError(f'file type should be pdb or gro, {ftype} was given')
         for i, j in zip(term_lines[:-1], term_lines[1:]):
-            frame = ''.join(content[i:j])
-            struct = Pdb.from_text(frame, self)
-            coords.append(struct.get_coords())
-            # TODO extract box size & append to self.box_traj
-        return coords
+            frame = '\n'.join(content[i:j])
+            structs.append(Pdb.from_text(frame, ftype))
+        return structs
 
-    def get_coords_from_gro(self):
-        coords = []
-        content = [line for line in open(self.sfname)]
-        natoms = int(content[1].strip())
-        per_frame = natoms + 3
-        term_lines = range(0, len(content) + 1, per_frame)
-        for i, j in zip(term_lines[:-1], term_lines[1:]):
-            struct = Pdb.from_text('\n'.join(content[i:j]), self)
-            coords.append(struct.get_coords())
-            # TODO extract box size & append to self.box_traj
-        return coords
+    def check_consistency(self):
+        if not all([len(pdb.atoms) == len(self.structures[0].atoms) for pdb in self.structures]):
+            raise RuntimeError("Not all structures have the same number of atoms")
 
     def __str__(self):
-        if not self.box_traj:
-            text = self._cryst_format.format(*self.box)
-        else:
-            raise NotImplementedError("Variable box size not yet implemented")
-        for frame in range(len(self.coords)):
-            text = text + 'MODEL     {:>4d}\n'.format(frame + 1)
-            self.set_coords(self.coords[frame])
-            for atom in self.atoms:
-                text = text + self._write_atom(atom)
+        text = ''
+        for nframe, frame in enumerate(self.structures, 1):
+            text = text + 'MODEL     {:>4d}\n'.format(nframe)
+            text = text + self._cryst_format.format(*frame.box)
+            for atom in frame.atoms:
+                text = text + frame._write_atom(atom)
             text = text + 'ENDMDL\n'
         return text
 
-    def save_traj_as_pdb(self, filename='traj.pdb'):
+    def save_traj_as_pdb(self, filename=None):
+        filename = self.fname if filename is None else filename
         with open(filename, 'w') as outfile:
             outfile.write(str(self))

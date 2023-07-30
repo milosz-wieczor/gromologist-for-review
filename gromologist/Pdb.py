@@ -1380,7 +1380,7 @@ class Traj:
         structs = []
         content = [line for line in open(infile)]
         if ftype == 'pdb':
-            term_lines = [0] + [n for n, line in enumerate(content)
+            term_lines = [0] + [n+1 for n, line in enumerate(content)
                                 if line.startswith('END') or line.startswith('ENDMDL')]
         elif ftype == 'gro':
             natoms = int(content[1].strip())

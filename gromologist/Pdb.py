@@ -1359,8 +1359,12 @@ class Traj:
         self.fname = 'gmltraj.pdb' if 'name' not in kwargs.keys() else kwargs['name']
         if isinstance(structures, str):
             self.structures = self.get_coords_from_file(structures)
-        else:
+        elif isinstance(structures[0], str):
             self.structures = [gml.Pdb(struct) for struct in structures]
+        elif isinstance(structures[0], gml.Pdb):
+            self.structures = structures
+        else:
+            raise RuntimeError("Cannot understand the format of input")
         self.check_consistency()
         self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
         if self.top and not self.top.pdb:
@@ -1397,20 +1401,20 @@ class Traj:
         if not all([len(pdb.atoms) == len(self.structures[0].atoms) for pdb in self.structures]):
             raise RuntimeError("Not all structures have the same number of atoms")
 
-    def __str__(self):
+    def as_string(self, end="ENDMDL"):
         text = ''
         for nframe, frame in enumerate(self.structures, 1):
             text = text + 'MODEL     {:>4d}\n'.format(nframe)
             text = text + self._cryst_format.format(*frame.box)
             for atom in frame.atoms:
                 text = text + frame._write_atom(atom)
-            text = text + 'ENDMDL\n'
+            text = text + end + '\n'
         return text
 
     def __getitem__(self, item):
         return self.structures[item]
 
-    def save_traj_as_pdb(self, filename=None):
+    def save_traj_as_pdb(self, filename=None, end="ENDMDL"):
         filename = self.fname if filename is None else filename
         with open(filename, 'w') as outfile:
-            outfile.write(str(self))
+            outfile.write(self.as_string(end))

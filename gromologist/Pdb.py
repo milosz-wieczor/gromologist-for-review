@@ -52,6 +52,12 @@ class Pdb:
     def __repr__(self) -> str:
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
 
+    def __len__(self):
+        return len(self.atoms)
+
+    def __getitem__(self, item):
+        return self.atoms[item]
+
     def add_top(self, top: str, **kwargs):
         """
         Adds a Top object to the current Pdb object, enabling some

@@ -1,10 +1,11 @@
+from typing import Optional
 import gromologist as gml
 
 
 class Subsection:
     counter = {}
     
-    def __init__(self, content, section):
+    def __init__(self, content: list, section: "gml.Section"):
         """
         Here we want to have:
           - a unique representation of the section (header/ID)
@@ -32,7 +33,7 @@ class Subsection:
             elif isinstance(element, str) and element.strip() and not element.strip().startswith('['):
                 self.entries.append(self.yield_entry(element))
         
-    def yield_entry(self, line):
+    def yield_entry(self, line: str) -> "gml.Entry":
         """
         Decides which Entry subclass to return
         based on which Subsection subclass evokes this fn
@@ -50,7 +51,7 @@ class Subsection:
         elif isinstance(self, Subsection):
             return gml.Entry(line, self)
     
-    def __str__(self):
+    def __str__(self) -> str:
         """
         As section headers can be repeated, each section is denoted
         by a header and ID (ID corresponding to the consecutive numbering
@@ -59,10 +60,10 @@ class Subsection:
         """
         return "{}-{}".format(self.header, self.id)
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "Subsection {}".format(self.header, self.id)
     
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.entries)
     
     def __iter__(self):
@@ -82,7 +83,7 @@ class Subsection:
         except IndexError:
             raise StopIteration
 
-    def add_entry(self, new_entry, position=None):
+    def add_entry(self, new_entry: "gml.Entry", position: Optional[int] = None):
         """
         Adds a single entry to the subsection, either at the end
         or in a specified position
@@ -97,7 +98,7 @@ class Subsection:
         else:
             self.entries.append(new_entry)
     
-    def add_entries(self, new_entries_list, position=None):
+    def add_entries(self, new_entries_list: list, position: Optional[int] = None):
         """
         Adds multiple entries to the subsection, either at the end
         or in a specified position
@@ -115,7 +116,7 @@ class Subsection:
         else:
             self.entries.extend(new_entries_list)
     
-    def set_entry(self, line_number, new_line):
+    def set_entry(self, line_number: int, new_line: str):
         """
         Sets content of a specified entry
         :param line_number: int, which entry to modify
@@ -124,15 +125,15 @@ class Subsection:
         """
         self.entries[line_number] = new_line
     
-    def get_entry(self, line_number):
+    def get_entry(self, line_number: int) -> "gml.Entry":
         """
         Returns entry specified by line number
         :param line_number: int, which entry to return
-        :return: str, subsection entry
+        :return: gml.Entry, subsection entry
         """
         return self.entries[line_number]
 
-    def remove_entry(self, entry):
+    def remove_entry(self, entry: "gml.Entry"):
         self.entries.remove(entry)
         
         
@@ -145,22 +146,22 @@ class SubsectionBonded(Subsection):
                'cmap': 5, 'settles': 1, 'exclusions': 2, 'position_restraints': 1,
                'virtual_sites2': 3, 'constraints': 2}
     
-    def __init__(self, content, section):
+    def __init__(self, content: list, section: "gml.Section"):
         super().__init__(content, section)
         self.bkp_entries = None
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
         self.prmtypes = self._check_parm_type()
         self.fstring = "{:5} " * (SubsectionBonded.n_atoms[self.header] + 1) + '\n'
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         return "Subsection {} with interaction type {}".format(self.header, ' '.join(self.prmtypes))
 
     @property
-    def label(self):
+    def label(self) -> str:
         return '{}-{}'.format(self.header, '_'.join(self.prmtypes))
 
     @property
-    def entries_bonded(self):
+    def entries_bonded(self) -> list:
         """
         Lists all entries that are of EntryBonded type (i.e. excluding comments,
         headers, empty lines etc)
@@ -175,7 +176,7 @@ class SubsectionBonded(Subsection):
         """
         self.entries.sort(key=self._sorting_fn)
     
-    def _sorting_fn(self, entry):
+    def _sorting_fn(self, entry: "gml.EntryBonded") -> int:
         """
         Comments should go first, then we sort based on first, second,
         ... column of the section
@@ -196,7 +197,7 @@ class SubsectionBonded(Subsection):
         for entry in self.entries_bonded:
             entry.explicit_defines()
     
-    def add_ff_params(self, force_all=False):
+    def add_ff_params(self, force_all: bool = False):
         """
         Adds explicit values of FF parameters in sections 'bonds', 'angles', 'dihedrals'
         :param force_all: bool, whether to add params from scratch if some are assigned already
@@ -219,7 +220,7 @@ class SubsectionBonded(Subsection):
             self._add_ff_params_to_entry(entry, subsect_params)
         self.entries = self.bkp_entries[:]  # now restore the modified copy
 
-    def find_used_ff_params(self):
+    def find_used_ff_params(self) -> list:
         """
         Looks up a list of FF parameters that are actually used in the molecular
         system at hand
@@ -235,12 +236,12 @@ class SubsectionBonded(Subsection):
         return used_parm_entries
 
     @staticmethod
-    def _find_used_ff_params(entry, subsect_params):
+    def _find_used_ff_params(entry: "gml.EntryBonded", subsect_params: list) -> list:
         """
         Identifies the FF parameter(s) that is used for the particular
         bonded interaction entry
-        :param entry: a BondedEntry instance, an entry we're finding the parameter for
-        :param subsect_params: a SubsectionParam instance containing candidate parameters for the entry
+        :param entry: an EntryBonded instance, an entry we're finding the parameter for
+        :param subsect_params: a list of SubsectionParam instances containing candidate parameters for the entry
         :return: list of str, labels of used parameters
         """
         entries = []
@@ -269,8 +270,8 @@ class SubsectionBonded(Subsection):
                                 pass
         return entries
 
-    def find_missing_ff_params(self, fix_by_analogy=False, fix_B_from_A=False, fix_A_from_B=False, fix_dummy=False,
-                               once=False):
+    def find_missing_ff_params(self, fix_by_analogy: bool = False, fix_B_from_A: bool = False,
+                               fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):
         """
         Identifies FF parameters that cannot by matched to the existing set of
         bonded interactions, allowing to find & target these for fixing

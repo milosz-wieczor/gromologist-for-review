@@ -1,3 +1,4 @@
+import gromologist as gml
 
 
 class Entry:
@@ -17,7 +18,7 @@ class Entry:
             self.comment = ''
     
     @staticmethod
-    def float_fmt(flt, fields=11, dpmax=8):
+    def float_fmt(flt: float, fields: int = 11, dpmax: int = 8):
         """
         When a float of unknown precision is read, we do not want
         to clip off significant digits, but neither do we want
@@ -44,7 +45,7 @@ class Entry:
         return "{:>" + str(fields) + "." + str(dpmax) + "f}"
 
     @staticmethod
-    def infer_type(val):
+    def infer_type(val) -> type:
         try:
             _ = int(val)
         except ValueError:
@@ -57,7 +58,7 @@ class Entry:
         else:
             return int
         
-    def __bool__(self):
+    def __bool__(self) -> bool:
         if not self.content and not self.comment:
             return False
         return True
@@ -65,12 +66,12 @@ class Entry:
     def __getitem__(self, item):
         return self.content[item]
 
-    def is_header(self):
+    def is_header(self) -> bool:
         if len(self.content) == 0:
             return False
         return True if (self.content[0].strip().startswith('[') and self.content[-1].strip().endswith(']')) else False
     
-    def __str__(self):
+    def __str__(self) -> str:
         """
         Fallback if no explicit formatting is implemented
         :return: str
@@ -216,7 +217,7 @@ class EntryParam(Entry):
     parameters, e.g. bondtypes, angletypes, cmaptypes, pairtypes etc.
     that map a set of atom types to a set of FF-specific values
     """
-    def __init__(self, content, subsection, processed=False):
+    def __init__(self, content: str, subsection: "gml.Subsection", processed: bool = False):
         super().__init__(content, subsection)
         self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.types = tuple(self.content[:self.atoms_per_entry])
@@ -249,7 +250,7 @@ class EntryParam(Entry):
             self.params[-1] = int(self.params[-1])
         self.identifier = self.subsection.header + '-' + '-'.join(self.types) + '-' + self.interaction_type
             
-    def format(self):
+    def format(self) -> str:
         fmt = {('bondtypes', '1'): "{:>8s} {:>8s} {:>6s} {:>13.8f} {:>13.2f} ",
                ('angletypes', '5'): "{:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>13.8f} {:>13.2f} ",
                ('angletypes', '1'): "{:>8s} {:>8s} {:>8s} {:>6s} {:>13.8f} {:>13.2f} ",
@@ -266,9 +267,15 @@ class EntryParam(Entry):
         if (self.subsection.header, self.interaction_type) in fmt.keys():
             return fmt[(self.subsection.header, self.interaction_type)]
         else:
-            return None
+            return ''
     
-    def match(self, ext_typelist, int_type):
+    def match(self, ext_typelist: list, int_type: str) -> bool:
+        """
+        Checks if the entry matches an external atomtype list, given the interaction type
+        :param ext_typelist: list of str, types to be checked
+        :param int_type: str, integer identifier of the interaction type
+        :return: bool, whether the entry matches the query
+        """
         if not ext_typelist or len(ext_typelist) != len(self.types):
             return False
         if self.interaction_type == int_type:
@@ -283,7 +290,7 @@ class EntryParam(Entry):
                     return True
         return False
     
-    def __repr__(self):
+    def __repr__(self) -> str:
         if len(self.params) <= 4:
             return "Parameters entry with atomtypes {}, interaction type {} " \
                    "and parameters {}".format(self.types,
@@ -295,7 +302,7 @@ class EntryParam(Entry):
                                                  self.interaction_type,
                                                  ', '.join([str(x) for x in self.params[:4]]))
         
-    def __str__(self):
+    def __str__(self) -> str:
         """
         For cmaptypes, we rearrange lines to retrieve the matrix
         format lost during read-in; for other entry types, we
@@ -346,16 +353,44 @@ class EntryAtom(Entry):
         self.fstring = "{:>6d} {:>11s} {:>7d}{:>7s}{:>7s}{:>7d}"
 
     @property
-    def molname(self):
+    def molname(self) -> str:
+        """
+        returns the name of the molecule this atom is part of
+        :return: str, name of the molecule
+        """
         return self.subsection.section.mol_name
 
     @property
-    def sigma(self):
+    def ish(self, refstate: str = 'A') -> bool:
+        """
+        Tells if an atom is a hydrogen (useful e.g. for hydrogen mass repartitioning)
+        WARNING not very relevant but might make mistakes with helium
+        :param refstate: 'A' or 'B', alchemical state to take into account
+        :return: bool, whether the atom is a hydrogen
+        """
+        if refstate == 'A':
+            typecheck = self.type[0] == 'H'
+        elif refstate == 'B':
+            typecheck = self.type_b[0] == 'H'
+        else:
+            raise RuntimeError("refstate should be 'A' or 'B'")
+        return typecheck
+
+    @property
+    def sigma(self) -> float:
+        """
+        Returns the LJ sigma value of an atom (in nm)
+        :return: float, the value of sigma
+        """
         entry = self._get_atomtype_entry()
         return float(entry.params[0])
 
     @property
-    def epsilon(self):
+    def epsilon(self) -> float:
+        """
+        Returns the LJ epsilon value of an atom (in kJ/mol)
+        :return: float, the value of epsilon
+        """
         entry = self._get_atomtype_entry()
         return float(entry.params[1])
 

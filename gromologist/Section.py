@@ -119,7 +119,6 @@ class SectionMol(Section):
     
     def __init__(self, content_list: list, top: "gml.Top"):
         super().__init__(content_list, top)
-        self.bonds = None
         self.mol_name = self.get_subsection('moleculetype').molname
         self.name = '{} molecule'.format(self.mol_name)
         self._merge()
@@ -173,6 +172,20 @@ class SectionMol(Section):
                 first_ssect.prmtypes = first_ssect._check_parm_type()
         for ssect_index in to_remove[::-1]:
             self.subsections.pop(ssect_index)
+
+    def _remove_subsection(self, header):
+        """
+        Removes a subsection with name 'header' (useful e.g. for removing position_restraints subsections)
+        :param header: str, name of the subsection
+        :return: None
+        """
+        # TODO if subs is conditional, remove the ifdefs???
+        try:
+            sub_ind = self.subsections.index(self.get_subsection(header))
+        except KeyError:
+            print(f'Could not find subsection {header}')
+            return
+        _ = self.subsections.pop(sub_ind)
 
     def set_type(self, type_to_set: str, atomname: str, resname: Optional[str] = None, resid: Optional[int] = None,
                  prefix: Optional[str] = None):
@@ -248,6 +261,18 @@ class SectionMol(Section):
             if ent.type_b is not None:
                 return True
         return False
+
+    @property
+    def is_water(self) -> bool:
+        return not self.get_atoms('water')
+
+    @property
+    def is_protein(self) -> bool:
+        return not self.get_atoms('protein')
+
+    @property
+    def is_nucleic(self) -> bool:
+        return not self.get_atoms('nucleic')
 
     def _patch_alch(self):
         self.update_dicts()
@@ -808,25 +833,37 @@ class SectionMol(Section):
                         raise RuntimeError(f"Entry {entry} is invalid, only {self.natoms} atoms in the system")
             except KeyError:
                 pass
-    
-    def _get_bonds(self):
-        """
-        When explicitly asked to, creates a list of bonds stored as
-        ordered tuples of atom numbers
-        :return: None
-        """
+
+    @property
+    def bonds(self):
         subsection = self.get_subsection('bonds')
-        bond_list = []
-        for entry in subsection:
-            if isinstance(entry, gml.EntryBonded):
-                bond_list.append(entry.atom_numbers)
-        self.bonds = bond_list
-        
+        return [entry.atom_numbers for entry in subsection.entries_bonded]
+
     def add_bond(self, first_atom: int, second_atom: int):
         """
         This is just an alias for merge_two if bond is intramolecular
         """
         self.merge_two(self, first_atom, second_atom)
+
+    def select_atoms_bonded_to(self, serial: int) -> list:
+        """
+        Returns indices of atoms that are bonded to atom with a specified number
+        :param serial: int, 1-based index of the central atom
+        :return: list of int, 1-based indices of the atoms bonded to it
+        """
+        bonded = []
+        for bond in self.bonds:
+            if serial in bond:
+                bonded.append([x for x in bond if x != serial][0])
+        return bonded
+
+    def get_atoms_bonded_to(self, serial: int) -> list:
+        """
+        As self.select_atoms_bonded_to(), but instead of indices returns atom instances
+        :param serial: int, 1-based index of the central atom
+        :return: list of gml.EntryAtom, representations of the atoms bonded to it
+        """
+        return [self.atoms[i-1] for i in self.select_atoms_bonded_to(serial)]
 
     def merge_two(self, other: "gml.SectionMol", anchor_own: int, anchor_other: int):
         """
@@ -876,12 +913,10 @@ class SectionMol(Section):
                 pass
     
     def _make_bond(self, atom_own: int, atom_other: int, other: "gml.SectionMol"):
-        self._get_bonds()
         try:
-            other._get_bonds()
+            _ = other.bonds
         except KeyError:
             other.subsections.append(self._yield_sub([f"[ bonds ]\n"]))
-            other._get_bonds()
         new_bond = [tuple(sorted([int(atom_own), int(atom_other)]))]
         new_angles = self._generate_angles(other, atom_own, atom_other)
         new_pairs, new_dihedrals = self._generate_14(other, atom_own, atom_other)
@@ -898,7 +933,6 @@ class SectionMol(Section):
                 other.subsections.append(self._yield_sub([f"[ {sub} ]\n"]))
 
     def remove_bond(self, at1: int, at2: int):
-        self._get_bonds()
         bond_to_remove = [(at1, at2)]
         if not (bond_to_remove[0] in self.bonds or tuple(x for x in bond_to_remove[0][::-1]) in self.bonds):
             raise RuntimeError("Bond between atoms {} and {} not found in the topology".format(at1, at2))
@@ -1053,11 +1087,32 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
-    def add_posres(self, keyword: str = 'POSRES', value: float = 500.0):
+    def hydrogen_mass_repartitioning(self, hmass: float = 4.032):
+        """
+        Repartitions the masses from heavy atoms to hydrogens to ensure that each
+        hydrogen has the desired mass; this enables the use of a 4-fs time step in
+        standard MD simulations
+        :param hmass: float, desired mass of the hydrogen atom; default is 4.032 (as set by -heavyh in pdb2gmx)
+        :return: None
+        """
+        for atom in self.atoms:
+            if not atom.ish:
+                hydrogens = [at for at in self.get_atoms_bonded_to(atom.num) if at.ish]
+                hmasses_diff = [hmass - a.mass for a in hydrogens]
+                atom.mass -= round(sum(hmasses_diff), 6)
+                assert atom.mass > 2, f"After repartitioning atom {atom} has mass lower than 2 Daltons which beats " \
+                                      f"the purpose of repartitioning"
+                for hd, ha in zip(hmasses_diff, hydrogens):
+                    ha.mass += hd
+
+    def add_posres(self, keyword: str = 'POSRES', value: float = 500.0, selection=None):
         """
         Adds a position restraint section to the topology
-        :param keyword: conditional keyword that will be used in the #ifdef directive, default is POSRES
+        :param keyword: conditional keyword that will be used in the #ifdef directive, default is POSRES;
+        if None, the POSRES entry won't be conditional
         :param value: value of the force constant, default is 500
+        :param selection: position_restrains will be added for atoms that fit this selection (e.g. "name CA"); note
+        that hydrogens are excluded anyway
         :return: None
         """
         try:
@@ -1067,12 +1122,14 @@ class SectionMol(Section):
                 _ = value[0]
             except TypeError:
                 value = 3 * [value]
-            content = ['[ position_restraints ]', f'#ifdef {keyword}', '; ai  funct  fcx    fcy    fcz']
-            for atom in self.atoms:
+            content = ['[ position_restraints ]', f'#ifdef {keyword}' if keyword is not None else '',
+                       '; ai  funct  fcx    fcy    fcz']
+            atoms = self.atoms if selection is None else self.get_atoms(selection)
+            for atom in atoms:
                 if len(atom.atomname) > 1:
-                    if not atom.atomname[0] == 'H' and not atom.atomname[1] == 'H':
+                    if not atom.ish:
                         content.append(f"{atom.num:5}    1 {value[0]:5} {value[1]:5} {value[2]:5}")
-            content.append("#endif\n")
+            content.append("#endif\n" if keyword is not None else '')
             self.subsections.append(gml.SubsectionBonded(content, self))
         else:
             self.top.print(f"[ position_restraints ] already present in molecule {self.mol_name}, skipping")

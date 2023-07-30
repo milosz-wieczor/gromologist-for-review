@@ -299,10 +299,33 @@ class Top:
         for mol in self.molecules:
             mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy, once=once)
 
-    def add_posres(self, keyword: str = 'POSRES', value: int = 1000):
+    def hydrogen_mass_repartitioning(self, hmass: float = 4.032):
+        """
+        Repartitions the masses from heavy atoms to hydrogens in the entire system to ensure that each
+        hydrogen has the desired mass; this enables the use of a 4-fs time step in
+        standard MD simulations. Skips molecules up to 5 atoms (e.g. water).
+        :param hmass: float, desired mass of the hydrogen atom; default is 4.032 (as set by -heavyh in pdb2gmx)
+        :return: None
+        """
         for mol in self.molecules:
-            if len(mol.atoms) > 3:
-                mol.add_posres(keyword, value)
+            if len(mol.atoms) > 5:
+                mol.hydrogen_mass_repartitioning(hmass)
+
+    def add_posres(self, keyword: str = 'POSRES', value: int = 1000, selection=None):
+        """
+        Adds a (conditional) position restraint entry for each molecule in the system
+        (only heavy atoms); optionally, POSRES can be set for a subset defined by a selection
+        (for custom POSRES, use the analogous molecule function, e.g. Top.molecules[0].add_posres();
+        by default, only molecules larger than 5 atoms are considered
+        :param keyword: str, will be used for the #IFDEF preprocessor command; default is POSRES, if None the section
+        will not be conditional
+        :param value: force constant for the restraint
+        :param selection: str or None, can be used to set the restraint for a subset of the system
+        :return: None
+        """
+        for mol in self.molecules:
+            if len(mol.atoms) > 5:
+                mol.add_posres(keyword, value, selection)
 
     def add_params_file(self, paramfile: str):
         prmtop = Top._from_text('#include {}\n'.format(paramfile))

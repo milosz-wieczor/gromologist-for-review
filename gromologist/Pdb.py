@@ -772,7 +772,7 @@ class Pdb:
             elif line.startswith("CRYST1"):
                 box = [float(line[6 + 9 * a:6 + 9 * (a + 1)]) for a in range(3)] + \
                       [float(line[33 + 7 * a:33 + 7 * (a + 1)]) for a in range(3)]
-            elif not line.startswith('TER') and not line.startswith('END'):
+            elif not line.startswith('TER') and not line.startswith('END') and line.strip():
                 remarks.append(line)
             elif line.startswith('CONECT'):
                 conect[int(line[6:11].strip())] = []

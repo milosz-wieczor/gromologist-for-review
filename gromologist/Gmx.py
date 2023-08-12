@@ -287,9 +287,9 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
 
 
 def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] = None,
-                   box: Optional[str] = 'dodecahedron', box_margin: Optional[float] = 1.5, cation: Optional[str] = 'K',
+                   box: Optional[str] = 'dodecahedron', cation: Optional[str] = 'K',
                    anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15, maxsol: Optional[int] = None,
-                   resize_box=True, quiet=True):
+                   resize_box=True, box_margin: Optional[float] = 1.5, explicit_box_size=None, quiet=True):
     """
     Implements a full system preparation workflow (parsing the structure with pdb2gmx,
     setting the box size, adding solvent and ions, minimizing, generating a final
@@ -298,15 +298,17 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     :param ff: str, name of the force field to be chosen (by default interactive)
     :param water: str, name of the water model to be used
     :param box: str, box type (default is dodecahedron)
-    :param box_margin: float, box margin passed to editconf to set box size (default is 1.5 nm)
     :param cation: str, the cation to be used (default is K)
     :param anion: str, the anion to be used (default is CL)
     :param ion_conc: float, the ion concentration to be applied (default 0.15)
     :param resize_box: bool, whether to generate a new box size based on the -d option of gmx editconf
+    :param box_margin: float, box margin passed to editconf to set box size (default is 1.5 nm)
+    :param explicit_box_size: list, the a/b/c lengths of the box vector (in nm); this overrides box_margin
     :param quiet: bool, whether to print gmx output to the screen
     :return: None
     """
     gmx = gml.find_gmx_dir()
+    rtpnum = None
     found = [f'{i} (local)' for i in glob(f'*ff')] + glob(f'{gmx[0]}/*ff')
     if set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff')):
         raise RuntimeError(f"Directories {set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff'))} have identical names,"
@@ -326,30 +328,40 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
             f"Force field {ff.split('/')[-1]} not found in the list: {[i.split('/')[-1] for i in found]}")
     ff = ff.replace('.ff', '')
     if water is None:
-        water = \
-        [line.split()[0] for line in open(found[rtpnum - 1].replace(' (local)', '') + os.sep + 'watermodels.dat')
-         if 'recommended' in line][0]
+        if rtpnum is not None:
+            pathtoff = found[rtpnum - 1].replace(' (local)', '')
+        else:
+            pathtoff = [x for x in found if ff in x][0]
+        water = [line.split()[0] for line in open(pathtoff + os.sep + 'watermodels.dat') if 'recommended' in line][0]
     gmx_command(gmx[1], 'pdb2gmx', quiet=quiet, f=struct, ff=ff, water=water,
-                      answer=True, fail_on_error=True)
+                answer=True, fail_on_error=True)
     if resize_box:
-        gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box, quiet=quiet,
-                          answer=True, fail_on_error=True)
+        if explicit_box_size is None:
+            gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box, quiet=quiet,
+                        answer=True, fail_on_error=True)
+        else:
+            gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', bt=box, quiet=quiet, answer=True,
+                        box=' '.join([str(x) for x in explicit_box_size]), fail_on_error=True)
     else:
         copy2('conf.gro', 'box.gro')
+    waterbox = 'spc216.gro' if ('3' in water or 'spc' in water) else 'tip5p.gro' if '5' in water else 'tip4p.gro'
     if maxsol is None:
-        gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', quiet=quiet,
-                          answer=True, fail_on_error=True)
+        gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', cs=waterbox, quiet=quiet,
+                    answer=True, fail_on_error=True)
     else:
-        gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', maxsol=maxsol, quiet=quiet,
-                          answer=True, fail_on_error=True)
+        gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', maxsol=maxsol, cs=waterbox,
+                    quiet=quiet, answer=True, fail_on_error=True)
     gen_mdp('do_minimization.mdp', runtype='mini')
-    gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1,
-                      quiet=quiet, answer=True, fail_on_error=True)
-    answer = gmx_command(gmx[1], 'genion', pass_values=['a'], s='ions', pname=cation, nname=anion, conc=ion_conc,
-                         quiet=quiet, neutral=True, p="topol", o='test', answer=True)
-    sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
-    gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
-                      quiet=quiet, neutral=True, p="topol", o='ions', answer=True, fail_on_error=True)
+    if ion_conc == 0:
+        copy2('water.gro', 'ions.gro')
+    else:
+        gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='water.gro', o='ions', maxwarn=1,
+                          quiet=quiet, answer=True, fail_on_error=True)
+        answer = gmx_command(gmx[1], 'genion', pass_values=['a'], s='ions', pname=cation, nname=anion, conc=ion_conc,
+                             quiet=quiet, neutral=True, p="topol", o='test', answer=True)
+        sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
+        gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
+                          quiet=quiet, neutral=True, p="topol", o='ions', answer=True, fail_on_error=True)
     gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='ions.gro', o='do_mini',
                       quiet=quiet, answer=True, fail_on_error=True)
     gmx_command(gmx[1], 'mdrun', deffnm='do_mini', v=True,

@@ -24,6 +24,7 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Editing the contents of the system](#editing-contents-system)
         * [Modifying Lennard-Jones parameters](#modifying-lj-terms)
         * [Adding NBFIX terms](#adding-nbfix-terms)
+        * [Adding H-mass repartitioning](#adding-hmass-repartitioning)
         * [Explicitly listing parameters in topology & finding missing parameters](#explicitly-listing-parameters-in-topology---finding-missing-parameters)
         * [Preparing REST2 topologies](#preparing-rest2-topologies)
     + [Dihedral optimization](#dihedral-optimization)
@@ -499,6 +500,24 @@ To generate an NBFIX (custom combination rule) entry, use the following snippet:
 
 This will introduce a term modifying the CT-HA Lennard-Jones interaction, increasing the default 
 (Lorenz-Berthelot) sigma by 0.01 nm, and decreasing the default epsilon by 0.1 kJ/mol.
+
+##### Adding H-mass repartitioning
+<a name="adding-hmass-repartitioning"/>
+
+Hydrogen mass repartitioning is a popular method of extending the timestep in atomistic molecular
+simulations to 4 fs by shifting the mass from heavy atoms to hydrogens, thereby slowing down the 
+most rapid oscillations in the system (ones involving hydrogen atoms). 
+
+One can apply hydrogen mass repartitioning in `gmx pdb2gmx` with the `-heavyh` keyword, but occasionally
+it is more convenient to apply it to an existing topology:
+
+```
+>>> t.hydrogen_mass_repartitioning()
+```
+
+By default, the masses of hydrogens are set to 4.032 Da; this can be controlled with the `hmass` keyword.
+The method skips all molecules with up to 5 atoms (intended not to affect water molecules). 
+
 
 ##### Explicitly listing parameters in topology & finding missing parameters
 <a name="explicitly-listing-parameters-in-topology---finding-missing-parameters"/>

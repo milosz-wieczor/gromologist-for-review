@@ -253,9 +253,9 @@ class Top:
                 except KeyError:
                     # if not, let's add it as it is assuming it's non-empty
                     if len(subsection.entries_param) > 0:
-                        self.parameters.subsections.append()
-                else:
-                    own_subs._combine_entries(subsection, overwrite)
+                        self.parameters.subsections.append(self.parameters._yield_sub([f'[ {subsection.header} ]']))
+                        own_subs = self.parameters.get_subsection(subsection.header)
+                own_subs._combine_entries(subsection, overwrite)
 
     def add_molecules_to_system(self, molname: str, nmol: int):
         """

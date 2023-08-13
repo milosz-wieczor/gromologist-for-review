@@ -289,7 +289,8 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
 def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] = None,
                    box: Optional[str] = 'dodecahedron', cation: Optional[str] = 'K',
                    anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15, maxsol: Optional[int] = None,
-                   resize_box=True, box_margin: Optional[float] = 1.5, explicit_box_size=None, quiet=True):
+                   resize_box=True, box_margin: Optional[float] = 1.5, explicit_box_size=None, quiet=True,
+                   **kwargs):
     """
     Implements a full system preparation workflow (parsing the structure with pdb2gmx,
     setting the box size, adding solvent and ions, minimizing, generating a final
@@ -334,7 +335,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
             pathtoff = [x for x in found if ff in x][0]
         water = [line.split()[0] for line in open(pathtoff + os.sep + 'watermodels.dat') if 'recommended' in line][0]
     gmx_command(gmx[1], 'pdb2gmx', quiet=quiet, f=struct, ff=ff, water=water,
-                answer=True, fail_on_error=True)
+                answer=True, fail_on_error=True, **kwargs)
     if resize_box:
         if explicit_box_size is None:
             gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box, quiet=quiet,

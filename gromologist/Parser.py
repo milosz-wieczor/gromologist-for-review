@@ -23,7 +23,7 @@ class SelectionParser:
             selection_string = selection_string.replace("  ", " ")
         selection_string = selection_string.strip()
         protein_selection = "resname ALA ACE CYS ASP ASPP GLU GLUP PHE GLY HIS HID HIE HSD HSE ILE LYS LEU MET " \
-                            "NME NMA ASN PRO GLN ARG SER THR VAL TRP"
+                            "NME NMA ASN PRO GLN ARG SER THR VAL TYR TRP"
         dna_selection = "resname DA DG DC DT DA5 DG5 DC5 DT5 DA3 DG3 DC3 DT3"
         rna_selection = "resname RA RG RC RU RA5 RG5 RC5 RU5 RA3 RG3 RC3 RU3 A G C U A3 A5 G3 G5 C3 C5 U 3 U5"
         solvent_selection = "resname HOH TIP3 SOL OPC SPC WAT K CL NA POT K+ NA+ CLA CL-"

@@ -1380,6 +1380,7 @@ class Traj:
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                             "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
+        self.atoms = self.structures[0].atoms
 
     def __repr__(self) -> str:
         return "trajectory file {} with {} frames and {} atoms".format(self.fname, self.nframes,
@@ -1422,6 +1423,60 @@ class Traj:
 
     def __len__(self):
         return len(self.structures)
+
+    def equal_spacing(self):
+        try:
+            import numpy as np
+        except ImportError:
+            raise RuntimeError("This feature requires numpy")
+
+        def compute_cumulative_distance(points):
+            """Compute the cumulative distance along a path defined by 'points'."""
+            deltas = np.diff(points, axis=0)
+            segment_lengths = np.sqrt(np.sum(deltas ** 2, axis=1))
+            return np.insert(np.cumsum(segment_lengths), 0, 0)
+
+        def interpolate_between_points(point1, point2, fraction):
+            """Interpolate between two points given a fraction."""
+            return point1 + fraction * (point2 - point1)
+
+        def resample_by_distance(points, distance):
+            """Resample a path defined by 'points' such that the new points are approximately 'distance' apart."""
+            cumulative_distances = compute_cumulative_distance(points)
+            max_distance = cumulative_distances[-1]
+            # Start with the first point
+            new_points = [points[0]]
+            current_distance = distance
+            while current_distance < max_distance:
+                # Find two points which are before and after the current distance
+                idx = np.searchsorted(cumulative_distances, current_distance) - 1
+                point_before, point_after = points[idx], points[idx + 1]
+                distance_before, distance_after = cumulative_distances[idx], cumulative_distances[idx + 1]
+                # Interpolate between the two points for the resampled point
+                fraction = (current_distance - distance_before) / (distance_after - distance_before)
+                new_point = interpolate_between_points(point_before, point_after, fraction)
+                new_points.append(new_point)
+                current_distance += distance
+            return np.array(new_points)
+
+        def find_optimal_distance(points, num_points, tolerance=1e-3, max_iterations=100):
+            total_length = compute_cumulative_distance(points)[-1]
+            guessed_distance = total_length / (num_points - 1)
+            for iteration in range(max_iterations):
+                resampled = resample_by_distance(points, guessed_distance)
+                if len(resampled) == num_points:
+                    return guessed_distance
+                elif len(resampled) < num_points:
+                    guessed_distance *= 0.99
+                else:
+                    guessed_distance *= 1.01
+            raise ValueError("Couldn't converge to a solution in given max_iterations.")
+
+        for natom in range(len(self.atoms)):
+            atom_path = np.array([struct.atoms[natom].coords for struct in self.structures])
+            resampled_path = resample_by_distance(atom_path, find_optimal_distance(atom_path, len(self)))
+            for struct, coords in zip(self.structures, resampled_path):
+                struct.atoms[natom].set_coords(coords)
 
     def save_traj_as_pdb(self, filename=None, end="ENDMDL"):
         filename = self.fname if filename is None else filename

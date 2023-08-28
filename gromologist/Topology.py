@@ -10,7 +10,7 @@ from collections import OrderedDict
 
 class Top:
     def __init__(self, filename, gmx_dir=None, gmx_exe=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None,
-                 keep_all=True, suppress=False):
+                 ignore_missing_defines=False, keep_all=True, suppress=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
@@ -37,6 +37,7 @@ class Top:
         with open(self.fname) as top_file:
             self._contents = top_file.readlines()
         self.defines = {}
+        self.ignore_missing_defines = ignore_missing_defines
         if define is not None:
             self.defines.update(define)
         self._preprocess_conditional_includes(ifdef)
@@ -311,7 +312,7 @@ class Top:
             if len(mol.atoms) > 5:
                 mol.hydrogen_mass_repartitioning(hmass)
 
-    def add_posres(self, keyword: str = 'POSRES', value: int = 1000, selection=None):
+    def add_posres(self, keyword: Union[str, None] = 'POSRES', value: int = 1000, selection=None):
         """
         Adds a (conditional) position restraint entry for each molecule in the system
         (only heavy atoms); optionally, POSRES can be set for a subset defined by a selection

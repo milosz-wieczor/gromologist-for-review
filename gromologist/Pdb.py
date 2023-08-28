@@ -1475,7 +1475,7 @@ class Traj:
         for natom in range(len(self.atoms)):
             atom_path = np.array([struct.atoms[natom].coords for struct in self.structures])
             resampled_path = resample_by_distance(atom_path, find_optimal_distance(atom_path, len(self)))
-            for struct, coords in zip(self.structures, resampled_path):
+            for struct, coords in zip(self.structures[1:-1], resampled_path[1:-1]):
                 struct.atoms[natom].set_coords(coords)
 
     def save_traj_as_pdb(self, filename=None, end="ENDMDL"):

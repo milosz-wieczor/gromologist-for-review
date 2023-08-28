@@ -519,7 +519,6 @@ class SectionMol(Section):
             sub = self.get_subsection('atoms')
             dummies = [entry for entry in sub.entries_atom if entry.type_b and entry.type_b[0] == "D"
                        and entry.num in selected]
-            print(dummies)
             while dummies:
                 to_remove = dummies[-1]
                 self.del_atom(to_remove.num)
@@ -1105,7 +1104,7 @@ class SectionMol(Section):
                 for hd, ha in zip(hmasses_diff, hydrogens):
                     ha.mass += hd
 
-    def add_posres(self, keyword: str = 'POSRES', value: float = 500.0, selection=None):
+    def add_posres(self, keyword: Union[str, None] = 'POSRES', value: float = 500.0, selection=None):
         """
         Adds a position restraint section to the topology
         :param keyword: conditional keyword that will be used in the #ifdef directive, default is POSRES;
@@ -1603,15 +1602,21 @@ class SectionMol(Section):
         corresponds to a protonated variant of that residue
         :param resid: int, number of the residue to modify
         :param rtp: str, path to the aminoacids.rtp or merged.rtp file (optional)
-        :param b_is_protonated: bool, whether to make the B-state protonated
+        :param b_is_protonated: bool, whether to make the B-state protonated; default is False (state A is protonated)
         :return: None
         """
         atoms = self.get_atoms(f'resid {resid}')
         resname = atoms[0].resname
-        if resname not in ['ASP', 'GLU']:
-            raise RuntimeError("So far only available for residues ASP and GLU")
+        if resname not in ['ASP', 'GLU', 'GLUP', 'ASPP']:
+            raise RuntimeError("So far only available for residues ASP/GLU, and ASPP/GLUP")
         mut_dict = {'ASP': 'B', 'GLU': 'J'}
-        self.mutate_protein_residue(resid, mut_dict[resname])
+        deprot_dict = {'GLUP': 'GLU'}
+        if resname in ['ASP', 'GLU']:
+            self.mutate_protein_residue(resid, mut_dict[resname])
+        else:
+            for atom in self.get_atoms(f'resid {resid}'):
+                atom.resname = deprot_dict[resname]
+            resname = deprot_dict[resname]
         atoms = self.get_atoms(f'resid {resid}')
         rtp = self.find_rtp(rtp)
         types, charges, dihedrals, impropers, improper_type = self.parse_rtp(rtp)
@@ -1625,7 +1630,8 @@ class SectionMol(Section):
                 atom.charge_b = 0.0
                 atom.mass_b = 1.008
         if 'DH' not in self.top.defined_atomtypes:
-            self.top.parameters.get_subsection('atomtypes').add_entry(gml.EntryParam('DH  0  0.0  0.0  A   0.0  0.0'))
+            subsect = self.top.parameters.get_subsection('atomtypes')
+            subsect.add_entry(gml.EntryParam('DH  0  0.0  0.0  A   0.0  0.0', subsect))
         if b_is_protonated:
             self.swap_states(resid=resid)
         self.update_dicts()
@@ -1665,7 +1671,6 @@ class SectionParam(Section):
         """
         subsection_labels = [sub.header for sub in self.subsections]
         duplicated_subsections = list({label for label in subsection_labels if subsection_labels.count(label) > 1})
-        print(duplicated_subsections)
         for sub in duplicated_subsections:
             subsections_to_merge = [s for s in self.subsections if s.header == sub and not s.conditional]
             if not subsections_to_merge:

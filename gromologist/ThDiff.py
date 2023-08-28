@@ -9,9 +9,8 @@ gmlMod = TypeVar("gmlMod", bound="Mod")
 
 
 class Mod:
-    counter = 0  # only used for naming with unique numbers
 
-    def __init__(self, top: Union[str, gml.Top], structure: str, selections: Optional[list] = None):
+    def __init__(self, td: gml.ThermoDiff, top: Union[str, gml.Top], structure: str, selections: Optional[list] = None):
         """
         Base class to work with parameter modifications.
         The class is actually used for the calculation of original
@@ -21,8 +20,8 @@ class Mod:
         :param structure: str, path to a structure file (.gro or .pdb) compatible with the topology
         :param selections: list of str, selections that will define atoms to be modified
         """
-        Mod.counter += 1
-        self.counter = Mod.counter
+        td.counter += 1
+        self.td = td
         if isinstance(top, str):
             self.top = gml.Top(top)
         elif isinstance(top, gml.Top):
@@ -54,6 +53,10 @@ class Mod:
         """
         return str(self) == str(other)
 
+    @property
+    def counter(self):
+        return self.td.counter
+
     def save_mod(self, path: str, name: str):
         """
         wraps Top's save_mod to catch the file name
@@ -77,7 +80,7 @@ class Mod:
 
 
 class ModAtom(Mod):
-    def __init__(self, top: Union[str, gml.Top], structure: str, selections: list, changes: str):
+    def __init__(self, td: gml.ThermoDiff, top: Union[str, gml.Top], structure: str, selections: list, changes: str):
         """
         Subclass to work with modified atomic params (that is,
         sigma and epsilon defined for individual types, or charge defined
@@ -90,7 +93,7 @@ class ModAtom(Mod):
         :param selections: list of str, selections that will define atoms to be modified
         :param changes: single character denoting the change to be performed
         """
-        super(ModAtom, self).__init__(top, structure, selections)
+        super(ModAtom, self).__init__(td, top, structure, selections)
         self.sigma = 's' if 's' in changes else ''
         self.eps = 'e' if 'e' in changes else ''
         self.chg = 'c' if 'c' in changes else ''
@@ -159,7 +162,7 @@ class ModAtom(Mod):
 
 
 class ModNbfix(Mod):
-    def __init__(self, top: Union[str, gml.Top], structure: str, selections: list, changes: str):
+    def __init__(self, td: gml.ThermoDiff, top: Union[str, gml.Top], structure: str, selections: list, changes: str):
         """
         Subclass to work with modified NBFIX params (pairwise corrections,
         sigma and epsilon defined for pairs of types).
@@ -173,7 +176,7 @@ class ModNbfix(Mod):
         :param selections: list of str, selections that will define atoms to be modified
         :param changes: single character denoting the change to be performed
         """
-        super(ModNbfix, self).__init__(top, structure, selections)
+        super(ModNbfix, self).__init__(td, top, structure, selections)
         self.nbs = 'n' if 'n' in changes else ''
         self.nbe = 'm' if 'm' in changes else ''
         if not (self.nbs or self.nbe):
@@ -243,7 +246,7 @@ class ModNbfix(Mod):
 
 
 class ModParam(Mod):
-    def __init__(self, top: Union[str, gml.Top], structure: str, selections: list, changes: str,
+    def __init__(self, td: gml.ThermoDiff, top: Union[str, gml.Top], structure: str, selections: list, changes: str,
                  period: Optional[int] = -1):
         """
         Subclass to work with modified bonded params (angles and dihedrals).
@@ -257,7 +260,7 @@ class ModParam(Mod):
         :param selections: list of str, selections that will define atoms to be modified
         :param changes: str, single character denoting the change to be performed
         """
-        super(ModParam, self).__init__(top, structure, selections)
+        super(ModParam, self).__init__(td, top, structure, selections)
         self.dih = 'd' if 'd' in changes else ''  # implement add to top line
         self.ang = 'a' if 'a' in changes else ''  # implement add to top line
         self.period = period
@@ -349,6 +352,7 @@ class ThermoDiff:
     periodic images (PME is not used in reruns anyway, just plain cut-off).
     """
     def __init__(self, name: Optional[str] = None, temperature: Optional[float] = 300):
+        self.counter = 0
         self.name = '' if name is None else f'-{name}'
         self.mods = []
         self.temperature = temperature
@@ -373,11 +377,11 @@ class ThermoDiff:
         :return: None
         """
         if modtype in 'cse':
-            self.mods.append(ModAtom(top, structure, selections, modtype))
+            self.mods.append(ModAtom(self, top, structure, selections, modtype))
         elif modtype in 'ad':
-            self.mods.append(ModParam(top, structure, selections, modtype, period))
+            self.mods.append(ModParam(self, top, structure, selections, modtype, period))
         elif modtype in 'nm':
-            self.mods.append(ModNbfix(top, structure, selections, modtype))
+            self.mods.append(ModNbfix(self, top, structure, selections, modtype))
 
     def add_all_nbfix_mods(self, top: Union[str, gml.Top], structure: str, typelist: Optional[list] = None):
         """

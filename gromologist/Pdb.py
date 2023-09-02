@@ -1184,7 +1184,7 @@ class Pdb:
                 struct.save_pdb(f'interpolated_structure_{n}.pdb')
             return
         else:
-            return [self] + inter + [other]
+            return gml.Traj([self] + inter + [other])
 
     def save_pdb(self, outname='out.pdb'):
         """
@@ -1201,6 +1201,19 @@ class Pdb:
             for conect in self.conect.keys():
                 outfile.write(self._write_conect(conect, self.conect[conect]))
             outfile.write('ENDMDL\n')
+
+    def save_from_selection(self, selection, outname='out.pdb', renum=False):
+        """
+        Saves a .pdb of a subset corresponding to a selection
+        :param selection: str, a selection compatible with the gromologist selection language
+        :param outname: str, name of the output file
+        :param renum: bool, whether to renumber atoms in the new structure
+        :return: None
+        """
+        pdb = self.from_selection(self, selection)
+        if renum:
+            pdb.renumber_atoms()
+        pdb.save_pdb(outname)
 
     def save_gro(self, outname='out.gro'):
         """

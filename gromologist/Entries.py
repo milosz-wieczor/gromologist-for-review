@@ -44,6 +44,13 @@ class Entry:
             dpmax = nf
         return "{:>" + str(fields) + "." + str(dpmax) + "f}"
 
+    @property
+    def is_comment(self) -> bool:
+        if not self.content and self.comment:
+            return True
+        else:
+            return False
+
     @staticmethod
     def infer_type(val) -> type:
         try:
@@ -355,6 +362,14 @@ class EntryAtom(Entry):
             self.type_b, self.charge_b, self.mass_b = None, None, None
         self.fstring = "{:>6d} {:>11s} {:>7d}{:>7s}{:>7s}{:>7d}"
 
+    def __eq__(self, other):
+        if not isinstance(other, gml.EntryAtom):
+            return False
+        for attr in ['atomname', 'num', 'resid', 'resname', 'charge', 'mass', 'type', 'type_b', 'charge_b', 'mass_b', 'molname']:
+            if self.__getattribute__(attr) != other.__getattribute__(attr):
+                return False
+        return True
+
     @property
     def molname(self) -> str:
         """
@@ -372,9 +387,9 @@ class EntryAtom(Entry):
         :return: bool, whether the atom is a hydrogen
         """
         if refstate == 'A':
-            typecheck = self.type[0] == 'H'
+            typecheck = self.type[0].upper() == 'H'
         elif refstate == 'B':
-            typecheck = self.type_b[0] == 'H'
+            typecheck = self.type_b[0].upper() == 'H'
         else:
             raise RuntimeError("refstate should be 'A' or 'B'")
         return typecheck

@@ -544,9 +544,15 @@ class SubsectionParam(Subsection):
         In case we want to sort entries after some are added at the end of the section
         :return: None
         """
-        self.ordering = {tuple(str(entry).split()[:SubsectionParam.n_atoms[self.header]])
-                         if isinstance(entry, gml.EntryParam) else str(entry): n
-                         for n, entry in enumerate(self.entries)}
+        for n, entry in enumerate(self.entries):
+            if isinstance(entry, gml.EntryParam):
+                key = tuple(str(entry).split()[:SubsectionParam.n_atoms[self.header]])
+                if 'X' not in key:
+                    self.ordering[key] = n
+                else:
+                    self.ordering[key] = n + 10**6
+            else:
+                self.ordering[str(entry)] = n - 10**6
         self.entries.sort(key=self._sorting_fn)
 
     def find_used_ff_params(self):

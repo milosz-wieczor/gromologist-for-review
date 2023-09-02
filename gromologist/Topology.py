@@ -51,6 +51,26 @@ class Top:
         self.header = []
         self._parse_sections()
 
+    def save_from_selection(self, selection, filename='subsystem.top'):
+        new_top = deepcopy(self)
+        chosen_atoms = self.get_atoms(selection)
+        mols_to_remove = []
+        for mol in new_top.molecules:
+            atoms_to_remove = []
+            for at in mol.atoms:
+                if at not in chosen_atoms:
+                    atoms_to_remove.append(at.num)
+            atoms_to_remove = atoms_to_remove[::-1]
+            for atomnum in atoms_to_remove:
+                mol.del_atom(atomnum)
+            if mol.natoms == 0:
+                mols_to_remove.append(mol.mol_name)
+        for mol_to_remove in mols_to_remove:
+            new_top.remove_molecule(mol_to_remove)
+        new_top.parameters.sort_dihedrals()
+        new_top.clear_ff_params()
+        new_top.save_top(filename)
+
     @property
     def system(self) -> list:
         """

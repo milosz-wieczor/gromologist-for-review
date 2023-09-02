@@ -264,15 +264,15 @@ class SectionMol(Section):
 
     @property
     def is_water(self) -> bool:
-        return not self.get_atoms('water')
+        return bool(self.get_atoms('water'))
 
     @property
     def is_protein(self) -> bool:
-        return not self.get_atoms('protein')
+        return bool(self.get_atoms('protein'))
 
     @property
     def is_nucleic(self) -> bool:
-        return not self.get_atoms('nucleic')
+        return bool(self.get_atoms('nucleic'))
 
     def _patch_alch(self):
         self.update_dicts()
@@ -375,8 +375,11 @@ class SectionMol(Section):
         """
         for sub_name in [s.header for s in self.subsections if s.header != 'atoms']:
             subsection = self.get_subsection(sub_name)
-            for entry in subsection.entries_bonded:
-                entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
+            try:
+                for entry in subsection.entries_bonded:
+                    entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
+            except AttributeError:
+                continue
 
     def add_disulfide(self, resid1: int, resid2: int, other: Optional["gml.SectionMol"] = None, rtp: Optional[str] = None):
         """
@@ -811,7 +814,7 @@ class SectionMol(Section):
         subsect_atoms.entries.remove(chosen)
     
     def _del_params(self, atom_number: int):
-        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap']:
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap', 'position_restraints']:
             try:
                 subsection = self.get_subsection(subs)
                 to_del = []
@@ -824,7 +827,7 @@ class SectionMol(Section):
                 pass
 
     def _check_correct(self):
-        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap']:
+        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap', 'position_restraints']:
             try:
                 subsection = self.get_subsection(subs)
                 for entry in subsection.entries_bonded:
@@ -1399,10 +1402,38 @@ class SectionMol(Section):
     def list_angles(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
         return self._list_bonded('angles', by_types, by_params, returning)
 
-    def list_dihedrals(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
-        return self._list_bonded('dihedrals', by_types, by_params, returning)
+    def list_dihedrals(self, by_types: bool = False, by_params: bool = False, returning: bool = False,
+                       interaction_type: Optional[list]=None):
+        return self._list_bonded('dihedrals', by_types, by_params, returning, interaction_type)
 
-    def _list_bonded(self, term: str, by_types: bool = False, by_params: bool = False, returning: bool = False):
+    def to_rtp(self, outname='out.rtp'):
+        if os.path.exists(outname):
+            mode = 'a'
+            print('Found an existing .rtp file with requested name, will append to it')
+        else:
+            mode = 'w'
+        if not all([self.atoms[0].resname == a.resname for a in self.atoms]):
+            raise RuntimeError(f'Not all atoms in molecule {self.mol_name} have the same residue name, '
+                               f'fix this to write an .rtp entry')
+        resname = self.atoms[0].resname
+        atoms = [(a.atomname, a.type, a.charge, n) for n, a in enumerate(self.atoms, 1)]
+        bonds = self.list_bonds(returning=True)
+        impropers = self.list_dihedrals(returning=True, interaction_type=["2", "4"])
+        with open(outname, mode) as outfile:
+            outfile.write(f"[ {resname} ]\n")
+            outfile.write(f"  [ atoms ]\n")
+            for at in atoms:
+                outfile.write(f"  {at[0]:6s} {at[1]:6s} {at[2]:8.4f} {at[3]:5d}\n")
+            outfile.write(f"  [ bonds ]\n")
+            for bd in bonds:
+                outfile.write(f"  {bd[0]:6s} {bd[1]:6s}\n")
+            if impropers:
+                outfile.write(f"  [ impropers ]\n")
+                for imp in impropers:
+                    outfile.write(f"  {imp[0]:6s} {imp[1]:6s} {imp[2]:6s} {imp[3]:6s}\n")
+
+    def _list_bonded(self, term: str, by_types: bool = False, by_params: bool = False, returning: bool = False,
+                     interaction_type: Optional[list] = None):
         self.update_dicts()
         subsection = self.get_subsection(term)
         tried_adding = False
@@ -1421,6 +1452,9 @@ class SectionMol(Section):
                         tried_adding = True
                     extra = '{:>12.5f} ' * len(entry.params_state_a)
                     params = entry.params_state_a
+                if interaction_type is not None:
+                    if entry.interaction_type not in interaction_type:
+                        continue
                 if not returning:
                     if not by_types:
                         print((formatstring[term] + extra).format(*entry.atom_names, *params))

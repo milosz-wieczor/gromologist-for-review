@@ -6,7 +6,7 @@ from typing import Optional, Iterable, Union
 from glob import glob
 
 
-def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pass_values: Optional[Iterable] = None,
+def _gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pass_values: Optional[Iterable] = None,
                 quiet: bool = False, fail_on_error: bool = False, **params) -> str:
     """
     Runs the specified gmx command, optionally passing keyworded or stdin arguments
@@ -28,12 +28,24 @@ def gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pas
     call_command = f'{gmx_exe} {command} ' + ' '.join(
         [f'-{k} {v}' for k, v in params.items() if not isinstance(v, bool)]) \
                    + ' ' + ' '.join([f'-{k} ' for k, v in params.items() if isinstance(v, bool) and v]) + qui
-    result = run(call_command.split(), input=pv, stderr=PIPE, stdout=PIPE, check=True if fail_on_error else False)
+    result = run(call_command.split(), input=pv, stderr=PIPE, stdout=PIPE, check=False)
     # result = call(call_command, shell=True)
     if not quiet:
         print(result.stdout.decode() + result.stderr.decode())
+        if result.returncode != 0 and fail_on_error:
+            raise RuntimeError(f"Command '{call_command} failed with exit code {result.returncode}")
     if answer:
-        return result.stdout.decode() + result.stderr.decode()
+        ext = "FAILED" if result.returncode != 0 and fail_on_error else ''
+        return result.stdout.decode() + result.stderr.decode() + ext
+
+
+def gmx_command(*args, **kwargs):
+    result = _gmx_command(*args, **kwargs)
+    if isinstance(result, str) and result.endswith('FAILED'):
+        print(result.replace("FAILED", ""))
+        raise RuntimeError(f"Command failed, see output above to understand why")
+    else:
+        return result
 
 
 def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
@@ -290,7 +302,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
                    box: Optional[str] = 'dodecahedron', cation: Optional[str] = 'K',
                    anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15, maxsol: Optional[int] = None,
                    resize_box=True, box_margin: Optional[float] = 1.5, explicit_box_size=None, quiet=True,
-                   **kwargs):
+                   topology: Optional[str] = None, maxwarn=None, **kwargs):
     """
     Implements a full system preparation workflow (parsing the structure with pdb2gmx,
     setting the box size, adding solvent and ions, minimizing, generating a final
@@ -306,36 +318,42 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     :param box_margin: float, box margin passed to editconf to set box size (default is 1.5 nm)
     :param explicit_box_size: list, the a/b/c lengths of the box vector (in nm); this overrides box_margin
     :param quiet: bool, whether to print gmx output to the screen
+    :param topology: str, if passed gmx pdb2gmx will be skipped
     :return: None
     """
     gmx = gml.find_gmx_dir()
-    rtpnum = None
-    found = [f'{i} (local)' for i in glob(f'*ff')] + glob(f'{gmx[0]}/*ff')
-    if set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff')):
-        raise RuntimeError(f"Directories {set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff'))} have identical names,"
-                           f"please make them unambiguous e.g. by renaming the local version")
-    if ff is None:
-        for n, i in enumerate(found):
-            print('[', n + 1, '] ', i.split('/')[-1])
-        rtpnum = input('\nPlease select the force field:\n')
-        try:
-            rtpnum = int(rtpnum)
-        except ValueError:
-            raise RuntimeError('Not an integer: {}'.format(rtpnum))
-        else:
-            ff = found[rtpnum - 1].replace(' (local)', '').split('/')[-1]
-    if ff not in [i.replace(' (local)', '').split('/')[-1] for i in found]:
-        raise RuntimeError(
-            f"Force field {ff.split('/')[-1]} not found in the list: {[i.split('/')[-1] for i in found]}")
-    ff = ff.replace('.ff', '')
-    if water is None:
-        if rtpnum is not None:
-            pathtoff = found[rtpnum - 1].replace(' (local)', '')
-        else:
-            pathtoff = [x for x in found if ff in x][0]
-        water = [line.split()[0] for line in open(pathtoff + os.sep + 'watermodels.dat') if 'recommended' in line][0]
-    gmx_command(gmx[1], 'pdb2gmx', quiet=quiet, f=struct, ff=ff, water=water,
-                answer=True, fail_on_error=True, **kwargs)
+    if not topology:
+        rtpnum = None
+        found = [f'{i} (local)' for i in glob(f'*ff')] + glob(f'{gmx[0]}/*ff')
+        if set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff')):
+            raise RuntimeError(f"Directories {set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff'))} have identical names,"
+                               f"please make them unambiguous e.g. by renaming the local version")
+        if ff is None:
+            for n, i in enumerate(found):
+                print('[', n + 1, '] ', i.split('/')[-1])
+            rtpnum = input('\nPlease select the force field:\n')
+            try:
+                rtpnum = int(rtpnum)
+            except ValueError:
+                raise RuntimeError('Not an integer: {}'.format(rtpnum))
+            else:
+                ff = found[rtpnum - 1].replace(' (local)', '').split('/')[-1]
+        if ff not in [i.replace(' (local)', '').split('/')[-1] for i in found]:
+            raise RuntimeError(
+                f"Force field {ff.split('/')[-1]} not found in the list: {[i.split('/')[-1] for i in found]}")
+        ff = ff.replace('.ff', '')
+        if water is None:
+            if rtpnum is not None:
+                pathtoff = found[rtpnum - 1].replace(' (local)', '')
+            else:
+                pathtoff = [x for x in found if ff in x][0]
+            water = [line.split()[0] for line in open(pathtoff + os.sep + 'watermodels.dat') if 'recommended' in line][0]
+        gmx_command(gmx[1], 'pdb2gmx', quiet=quiet, f=struct, ff=ff, water=water,
+                    answer=True, fail_on_error=True, **kwargs)
+    else:
+        copy2(topology, 'topol.top')
+        gml.Pdb(struct).save_gro('conf.gro')
+        water = 'TIP' + str([mol for mol in gml.Top(topology, suppress=True).molecules if mol.is_water][0].natoms)
     if resize_box:
         if explicit_box_size is None:
             gmx_command(gmx[1], 'editconf', f='conf.gro', o='box.gro', d=box_margin, bt=box, quiet=quiet,
@@ -363,8 +381,10 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
         sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
         gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
                           quiet=quiet, neutral=True, p="topol", o='ions', answer=True, fail_on_error=True)
-    gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='ions.gro', o='do_mini',
-                      quiet=quiet, answer=True, fail_on_error=True)
+    # TODO capture warnings and print them
+    output = gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='ions.gro', o='do_mini',
+                      quiet=quiet, answer=True, maxwarn=1, fail_on_error=True)
+    print(extract_warnings(output))
     gmx_command(gmx[1], 'mdrun', deffnm='do_mini', v=True,
                       quiet=quiet, answer=True, fail_on_error=True)
     ndx(gml.Pdb('do_mini.gro'), selections=['all', 'not solvent'])
@@ -377,6 +397,10 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     p = gml.Pdb('whole.gro', top=t)
     p.add_chains()
     p.save_pdb('minimized_structure.pdb')
+
+
+def extract_warnings(text):
+    return [line for line in text if line.strip().startswith('WARNING')]
 
 
 def get_groups(fname: Optional[str] = None, ndx: Optional[str] = None):

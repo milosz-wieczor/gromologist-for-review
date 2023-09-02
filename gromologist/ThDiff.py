@@ -10,7 +10,7 @@ gmlMod = TypeVar("gmlMod", bound="Mod")
 
 class Mod:
 
-    def __init__(self, td: gml.ThermoDiff, top: Union[str, gml.Top], structure: str, selections: Optional[list] = None):
+    def __init__(self, td: "gml.ThermoDiff", top: Union[str, gml.Top], structure: str, selections: Optional[list] = None):
         """
         Base class to work with parameter modifications.
         The class is actually used for the calculation of original
@@ -80,7 +80,7 @@ class Mod:
 
 
 class ModAtom(Mod):
-    def __init__(self, td: gml.ThermoDiff, top: Union[str, gml.Top], structure: str, selections: list, changes: str):
+    def __init__(self, td: "gml.ThermoDiff", top: Union[str, gml.Top], structure: str, selections: list, changes: str):
         """
         Subclass to work with modified atomic params (that is,
         sigma and epsilon defined for individual types, or charge defined
@@ -162,7 +162,7 @@ class ModAtom(Mod):
 
 
 class ModNbfix(Mod):
-    def __init__(self, td: gml.ThermoDiff, top: Union[str, gml.Top], structure: str, selections: list, changes: str):
+    def __init__(self, td: "gml.ThermoDiff", top: Union[str, gml.Top], structure: str, selections: list, changes: str):
         """
         Subclass to work with modified NBFIX params (pairwise corrections,
         sigma and epsilon defined for pairs of types).
@@ -246,7 +246,7 @@ class ModNbfix(Mod):
 
 
 class ModParam(Mod):
-    def __init__(self, td: gml.ThermoDiff, top: Union[str, gml.Top], structure: str, selections: list, changes: str,
+    def __init__(self, td: "gml.ThermoDiff", top: Union[str, gml.Top], structure: str, selections: list, changes: str,
                  period: Optional[int] = -1):
         """
         Subclass to work with modified bonded params (angles and dihedrals).

@@ -51,7 +51,12 @@ class Top:
         self.header = []
         self._parse_sections()
 
-    def save_from_selection(self, selection, filename='subsystem.top'):
+    def from_selection(self, selection):
+        """
+        Returns a new .top file corresponding to the specified selection
+        :param selection: str, a Gromologist-compatible selection
+        :return: gml.Top, the new topology
+        """
         new_top = deepcopy(self)
         chosen_atoms = self.get_atoms(selection)
         mols_to_remove = []
@@ -69,6 +74,16 @@ class Top:
             new_top.remove_molecule(mol_to_remove)
         new_top.parameters.sort_dihedrals()
         new_top.clear_ff_params()
+        return new_top
+
+    def save_from_selection(self, selection, filename='subsystem.top'):
+        """
+        Generates and saves a new .top file corresponding to the specified selection
+        :param selection: str, a Gromologist-compatible selection
+        :param filename: str, name of the resulting topology file
+        :return: None
+        """
+        new_top = self.from_selection(selection)
         new_top.save_top(filename)
 
     @property

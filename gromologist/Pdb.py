@@ -82,8 +82,7 @@ class Pdb:
                 chns.append(a.chain)
         return chns
 
-    @classmethod
-    def from_selection(cls, pdb: "gml.Pdb", selection: str) -> "gml.Pdb":
+    def from_selection(self, selection: str) -> "gml.Pdb":
         """
         Creates a new Pdb instance as a subset of an existing one,
         given a selection that defines a subset of atoms
@@ -92,12 +91,12 @@ class Pdb:
         :return: Pdb, a subset of the original structure
         """
         # TODO what to do in case of a bound Top object? implement Top.slice()?
-        selected_indices = pdb.get_atom_indices(selection)
+        selected_indices = self.get_atom_indices(selection)
         new_pdb = Pdb()
-        new_pdb.atoms = [atom for n, atom in enumerate(pdb.atoms) if n in selected_indices]
-        new_pdb.box = pdb.box
-        new_pdb.remarks = pdb.remarks
-        new_pdb.altloc = pdb.altloc
+        new_pdb.atoms = [atom for n, atom in enumerate(self.atoms) if n in selected_indices]
+        new_pdb.box = self.box
+        new_pdb.remarks = self.remarks
+        new_pdb.altloc = self.altloc
         return new_pdb
 
     @classmethod
@@ -1210,7 +1209,7 @@ class Pdb:
         :param renum: bool, whether to renumber atoms in the new structure
         :return: None
         """
-        pdb = self.from_selection(self, selection)
+        pdb = self.from_selection(selection)
         if renum:
             pdb.renumber_atoms()
         pdb.save_pdb(outname)

@@ -36,6 +36,8 @@ class Pdb:
                                                                           qt)
         else:
             self.atoms, self.box, self.remarks = [], 3 * [100] + 3 * [90], []
+        if self.fname is None:
+            self.fname = 'NewGmlStructure'
         self.top = top if not isinstance(top, str) else gml.Top(top, **kwargs)
         if self.top and not self.top.pdb:
             self.top.pdb = self

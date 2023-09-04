@@ -42,7 +42,8 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
     + [Access to Gromacs utilities](#access-to-gromacs-utilities)
         * [Energy decomposition for a structure or trajectory](#energy-decomposition-for-a-structure-or-trajectory)
         * [Automated system preparation](#automated-system-preparation)
-        * [Sensitivity analysis](#sensitivity-analysis)
+        * [Miscellanous](#miscellanous)
+    * [Sensitivity analysis](#sensitivity-analysis)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
@@ -896,7 +897,20 @@ To customize or automate the workflow, the following options are available:
 Any additional key:value pairs will be passed to pdb2gmx (e.g. `heavyh='yes'` to turn on
 hydrogen mass repartitioning).
 
-##### Sensitivity analysis
+##### Miscellanous
+<a name="miscellanous"/>
+
+`gml.frames_count('file.xtc')` quickly returns the number of frames in an .xtc file.
+
+`gml.load_frcmod(gml.top, ff.frcmod)` loads all the additional force field entries
+from Amber's `frcmod` files into a Gromacs `.top` topology.
+
+`gml.compare_topologies_by_energy('struct.pdb', 'top1.top', 'top2.top')` checks if
+two topologies yield identical potential energies when evaluated with a chosen structure
+(useful when testing converters or other topology modifiers).
+
+
+### Sensitivity analysis
 <a name="sensitivity-analysis"/>
 To perform a full sensitivity analysis in the NBFIX space, start by calculating
 the energy derivatives for each frame for each possible NBFIX:

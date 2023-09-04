@@ -11,13 +11,15 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Reading and writing files](#reading-and-writing-files)
         * [File inspection, checks and printing](#file-inspection--checks-and-printing)
         * [Producing lightweight files](#producing-lightweight-files)
+        * [Creating subsets of existing systems](#creating-subsets-of-existing-systems)
         * [Dealing with unspecified 'define' keywords in topologies](#dealing-with-unspecified--define--keywords-in-topologies)
     + [Editing topologies](#editing-topologies)
         * [Adding mutations to proteins](#adding-mutations-to-proteins)
         * [Adding bonds within or between molecules](#adding-bonds-within-or-between-molecules)
         * [Adding disulfide bonds and coordination bonds with transition metals](#adding-disulfide-bonds-and-coordination-bonds-with-transition-metals)
         * [Adding and removing atoms while maintaining ordered numbering](#adding-and-removing-atoms-while-maintaining-ordered-numbering)
-        * [Adding alchemical B-states](#adding-alchemical-b-states)
+        * [Adding alchemical B-states (including altered protonation)](#adding-alchemical-b-states)
+        * [Adding position restraints](#adding-position-restraints)
         * [Removing or swapping alchemical states](#removing-or-swapping-alchemical-states)
         * [Duplicating and reassigning types](#duplicating-and-reassigning-types)
         * [Adding parameters or molecules from other topology files](#adding-external-params)
@@ -26,19 +28,20 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Adding NBFIX terms](#adding-nbfix-terms)
         * [Adding H-mass repartitioning](#adding-hmass-repartitioning)
         * [Explicitly listing parameters in topology & finding missing parameters](#explicitly-listing-parameters-in-topology---finding-missing-parameters)
+        * [Making .rtp entries](#making-rtp-entries)
         * [Preparing REST2 topologies](#preparing-rest2-topologies)
     + [Dihedral optimization](#dihedral-optimization)
     + [Editing structures](#editing-structures)
         * [Adding atoms along a vector specified by other atoms, and deleting them](#adding-atoms-along-a-vector-specified-by-other-atoms--and-deleting-them)
         * [Interpolating between two pre-aligned structures](#interpolating-between-two-pre-aligned-structures)
         * [Filling beta-values with custom data (for visualization)](#filling-beta-values-with-custom-data--for-visualization-)
-        * [Creating new PDB as a subset of existing one](#creating-new-pdb-as-a-subset-of-existing-one)
         * [Renumbering atoms or residues in a structure](#renumbering-atoms-or-residues-in-a-structure)
         * [Adding chain, CONECT or element information](#adding-chain--conect-or-element-information)
         * [Converting a 3-point water model to a 4-point one](#converting-a-3-point-water-model-to-a-4-point-one)
     + [Selection language syntax](#selection-language-syntax)
     + [Access to Gromacs utilities](#access-to-gromacs-utilities)
         * [Energy decomposition for a structure or trajectory](#energy-decomposition-for-a-structure-or-trajectory)
+        * [Automated system preparation](#automated-system-preparation)
         * [Sensitivity analysis](#sensitivity-analysis)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
@@ -204,6 +207,13 @@ To list all molecules in the Pdb instance (assigned from chains), use:
 >>> p.print_mols()
 ```
 
+and to simply print atoms in the structure (optionally: atoms corresponding to a selection), use:
+
+```
+>>> p.list_atoms()
+>>> p.list_atoms(selection='within 5 of resid 8')
+```
+
 ##### Producing lightweight files
 <a name="producing-lightweight-files"/>
 
@@ -227,6 +237,33 @@ use the `split` parameter of `Top.save_top`:
 ```
 >>> t.save_top('md/new_topol.top', split=True) 
 ```
+
+##### Creating subsets of existing systems
+<a name="creating-subsets-of-existing-systems"/>
+
+Gromologist features dedicated functions to create/save both topologies and structures 
+of subsets of existing ones, where the subset can be defined with a simple text-based selection.
+
+For example, to produce a structure containing DNA atoms from a protein-DNA complex, use:
+
+```
+>>> dna_structure = p.from_selection('dna')
+# alternatively, if one simply wants to save the subset as PDB, there's another convenience function:
+>>> p.save_from_selection('dna', 'dna_subsystem.pdb', renum=True)
+# the above will save atoms corresponding to the 'dna' selection 
+# in a file called 'dna_subsystem.pdb', renumbering the atoms from 1
+```
+
+Analogous functions exist for topologies. Importantly, the selections can easily cut through
+molecules, and all the bonded terms will be processed correctly, yielding a simulation-ready topology:
+
+```
+>>> trinucleotide = t.from_selection('dna and resid 4 5 6')
+# same convenience function can be used here:
+>>> t.save_from_selection('dna and resid 4 5 6')
+```
+
+Molecules and parameters not relevant to the new subsystem will be removed.
 
 ##### Dealing with unspecified 'define' keywords in topologies
 <a name="dealing-with-unspecified--define--keywords-in-topologies"/>
@@ -381,7 +418,7 @@ y
 If residue data is not specified, Gromologist will attempt to guess the residue based on
 neighboring atoms.
 
-##### Adding alchemical B-states
+##### Adding alchemical B-states (including altered protonation)
 <a name="adding-alchemical-b-states"/>
 
 To generate alchemical states for a subset of atoms, one can use `gen_state_b`:
@@ -400,6 +437,40 @@ The arguments for `gen_state_b` are divided into two subgroups:
 If the selectors point to multiple atoms (e.g. `atomtype=CT` selects all atoms with type CT),
 all will be modified as specified. In turn, if a given setter is not specified, the respective 
 value will be identical to that for state A.
+
+To make an alchemical residue that switches between a protonated and deprotonated version,
+use the following for any Asp or Glu residue (be it protonated or deprotonated in the first place):
+
+```
+>>> protein.alchemical_proton(31)
+```
+
+You will be asked for an .rtp file that contains the respective protonated/deprotonated
+residue pair, and Gromologist will try to make residue number 31 alchemical.
+
+##### Adding position restraints
+<a name="adding-position-restraints"/>
+
+If you want to specify new position restrains for your molecule (or you deleted them previously),
+use:
+
+```
+>>> t.add_posres(keyword = 'POSRES', value = 1000)
+```
+
+will add a position restraint with a force constant of 1000 to all heavy atoms of molecules 
+larger than 5 atoms (to exclude water models), conditional on the `-DPOSRES` directive in .mdp.
+
+The same add_posres() method of a molecule object can be used, and selections can be specified
+to restrict the number of heavy atoms to which the restraint is applied. When `keyword` is omitted,
+the section becomes unconditional (will always be turned on during a simulation). Moreover, a list
+of force constants can be supplied to specify restraints differently in X, Y and Z dimensions:
+
+```
+>>> protein.add_posres(value = [200, 200, 0], selection='resid 47 to 83')
+```
+
+will apply an unconditional restraint in the XY plane to heavy atoms of residues 47-83 in `protein`. 
 
 ##### Removing or swapping alchemical states
 <a name="removing-or-swapping-alchemical-states"/>
@@ -469,7 +540,7 @@ To "import" molecule definitions in the same way, go for:
 
 To add a specified number of molecules to the system (note, this is different than 
 just adding molecule definitions!), use:
-
+ 
 ```
 >>> t.add_molecules_to_system(molname="LIG", nmol=3)
 ```
@@ -538,6 +609,29 @@ To find FF parameters that are missing (e.g. to include them by analogy, or opti
 
 Note that both `add_ff_params()` and `find_missing_ff_params()` have an optional `section` parameter
 that can specify you only want to look at `bonds`, `angles`, `dihedrals` or `impropers`.
+
+Additionally, one can recalculate the cumulative charge ("qtot" comment in molecule definitions)
+by using:
+
+```
+>>> t.recalculate_qtot()
+```
+
+This does not affect the energy of the system in any way, and only serves for informative purposes.
+
+##### Making .rtp entries
+<a name="making-rtp-entries"/>
+
+To convert a residue (possibly defined in an .itp file coming from a parametrization tool) 
+into an .rtp entry (that can be used by `gmx pdb2gmx`), you can load the topology and use:
+
+```
+itp = Top('new_residue.itp')
+itp.molecules[0].tp_rtp('new_entry.rtp')
+```
+
+Then copy the entry to the .rtp database of your chosen force field. Do not forget to update your
+`residuetypes.dat`! 
 
 ##### Preparing REST2 topologies
 <a name="preparing-rest2-topologies"/>
@@ -651,17 +745,8 @@ To use the PDB's beta column for color-mapping of observables e.g. in VMD, use t
 By adding the `smooth=...` parameter to `Pdb.set_beta`, data can be spatially smoothed
 using a Gaussian kernel with a specified standard deviation (in A).
 
-##### Creating new PDB as a subset of existing one
-<a name="creating-new-pdb-as-a-subset-of-existing-one"/>
 
-To choose and save e.g. only the DNA atoms from a protein-DNA complex, use:
-
-```
->>> dna = Pdb.from_selection(p, 'dna')
->>> dna.save_pdb('dna.pdb')
-```
-
-##### Renumbering atoms or residues in a structure
+##### Renumbering atoms, residues or chains in a structure
 <a name="renumbering-atoms-or-residues-in-a-structure"/>
 
 `Pdb.renumber_atoms()` and `Pdb.renumber_residues()` serve to easily reset the numbering
@@ -672,6 +757,14 @@ and `selection` parameters:
 >>> p.renumber_residues(offset=20)  # starts numbering residues from 20
 >>> p.renumber_atoms(selection='chain B')  # only renumbers atoms in chain B
 ```
+
+For when it is desirable to change the order of chains in a system, use `Pdb.permute_chains()`:
+
+```
+>>> p.permute_chains([2, 1, 0], rename=True)
+```
+
+This will put chain nr 3 first, then nr 2, and then nr 1 (C, B, A if they were originally A, B, C).
 
 ##### Adding chain, CONECT or element information
 <a name="adding-chain--conect-or-element-information"/>
@@ -754,6 +847,54 @@ To perform energy decomposition using the Gromacs rerun module, use the
 The `terms` keyword can be "all" (returns all available energy/pressure/volume terms), 
 any specific keyword allowed by `gmx energy` (e.g. "potential"), 
 or a list of these (e.g. ["bonds", "angles", "potential"]).
+
+To specifically calculate the interaction energy between two groups, similarly use:
+
+```
+>>> gml.calc_gmx_energy(struct='md/conf.pdb', topfile='md/topol.top', traj='traj.xtc', group_a = 'protein',
+                    group_b='dna', sum_output=True, savetxt='energies.dat')
+```
+
+This will calculate the Coulombic and Lennard-Jones terms for the interaction between groups defined
+by selections `protein` and `dna`, add a dataset corresponding to their sum, and save these 3 terms
+to a file `energies.dat`.
+
+
+##### Automated system preparation
+<a name="automated-system-preparation"/>
+
+To prepare a standard simulation box starting from a .pdb structure, it is enough to run:
+
+```
+>>> gml.prepare_system('starting.pdb')
+```
+
+You will be prompted to choose a force field based on the .ff directories found in the Gromacs 
+installation and the local directory, and a standard sequence of Gromacs commands will be executed:
++ `gmx pdb2gmx` to generate the topology
++ `gmx editconf` to set boxsize (default is dodecahedron with a 1.5 nm buffer)
++ `gmx solvate` to add the water model compatible with the desired force field
++ `gmx grompp` and `gmx genion` to add selected ions at a specified concentration (by default 150 mM KCl)
++ `gmx grompp` and `gmx mdrun` to perform energy minimization
++ `gmx trjconv` to make the resulting molecule whole, 
+eventually yielding `minimized_structure.pdb` and `merged_topology.top`.
+
+To customize or automate the workflow, the following options are available:
+
++ ff: a string ending with .ff to specify the force field
++ water: a string naming the water model
++ box: a string specifying the box type, e.g. 'cubic
++ cation: a string specifying the cation type, e.g. 'Na' 
++ anion: a string specifying the anion type, e.g. 'Br'
++ ion_conc: a float specifying the ion concentration in molar units
++ maxsol: an int specifying the maximum number of water molecules
++ resize_box: a bool specifying whether or not to set a new size for the box
++ box_margin: a float defining the margin around the solute in nm
++ explicit_box_size: a list containing the a, b, c components of the cubic box vectors in nm 
++ topology: a string with a path to an existing topology of a solute (will skip `gmx pdb2gmx`)
+
+Any additional key:value pairs will be passed to pdb2gmx (e.g. `heavyh='yes'` to turn on
+hydrogen mass repartitioning).
 
 ##### Sensitivity analysis
 <a name="sensitivity-analysis"/>

@@ -379,6 +379,10 @@ class EntryAtom(Entry):
         return self.subsection.section.mol_name
 
     @property
+    def element(self) -> str:
+        return [x for x in self.atomname if not x.isdigit()][0]
+
+    @property
     def ish(self, refstate: str = 'A') -> bool:
         """
         Tells if an atom is a hydrogen (useful e.g. for hydrogen mass repartitioning)

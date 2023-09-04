@@ -126,7 +126,7 @@ class SelectionParser:
             matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
                          "chain": "chain", "resname": "resname", "serial": "serial"}
         else:
-            matchings = {"name": "atomname", "resid": "resid", "resnum": "resid", "mass": "mass",
+            matchings = {"name": "atomname", "resid": "resid", "resnum": "resid", "mass": "mass", "element": "element",
                          "resname": "resname", "serial": "num", "type": "type", "molecule": "molname"}
         try:
             vals = {int(x) for x in sel_string.split()[1:]}

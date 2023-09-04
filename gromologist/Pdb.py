@@ -82,6 +82,16 @@ class Pdb:
                 chns.append(a.chain)
         return chns
 
+    @property
+    def residues(self) -> list:
+        residues = []
+        # TODO make Residue a class that contains atom indices and other properties, like the chain
+        for a in self.atoms:
+            id = f'{a.resname}{a.resnum}{a.chain.strip()}'
+            if not residues or id != str(residues[-1]):
+                residues.append(Residue(self, id=a.resnum, name=a.resname, chain=a.chain.strip()))
+        return residues
+
     def from_selection(self, selection: str) -> "gml.Pdb":
         """
         Creates a new Pdb instance as a subset of an existing one,
@@ -1266,6 +1276,33 @@ class Pdb:
         for atom, coords in zip(self.atoms, new_coords):
             assert len(coords) == 3
             atom.x, atom.y, atom.z = coords
+
+
+class Residue:
+    def __init__(self, pdb, id, name, chain=''):
+        self.pdb = pdb
+        self.id = id
+        self.name = name
+        self.chain = chain
+        chainsel = f'and chain {self.chain}' if self.chain.strip() else ''
+        self.selection = f'resid {self.id} and resname {self.name} {chainsel}'
+
+    @property
+    def atoms(self):
+        return self.pdb.get_atoms(self.selection)
+
+    @property
+    def structure(self):
+        return self.pdb
+
+    def gen_pdb(self):
+        return Pdb.from_selection(self.pdb, self.selection)
+
+    def __repr__(self):
+        return f'{self.name}{self.id}{self.chain.strip()}'
+
+    def __str__(self):
+        return f'{self.name}{self.id}{self.chain.strip()}'
 
 
 class Atom:

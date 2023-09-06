@@ -1316,6 +1316,83 @@ class SectionMol(Section):
         elif mutate_in_pdb and not self.top.pdb:
             print("No .pdb file bound to the topology, use Top.add_pdb() to add one")
 
+    def cleave_protein(self, after_residue: int, rtp: Optional[str] = None, mutate_in_pdb: bool = True):
+        new_c_term = self.get_atom(f'resid {after_residue} and name C')
+        new_n_term = self.get_atom(f'resid {after_residue + 1} and name N')
+        if mutate_in_pdb:
+            if not self.top.pdb:
+                print("No .pdb file bound to the topology, use Top.add_pdb() to add one. Only editing topology for now")
+            else:
+                pass
+        ff = input("Should we use Amber (a) or CHARMM (c) naming for the termini?\n").strip('()').lower()
+        while ff not in ['a', 'c']:
+            ff = input("Could not understand, please repeat (a) or (c).\n").strip('()').lower()
+        if ff == 'a':
+            oterm = 'OC'
+            htype = 'H'
+            otype = 'O2'
+        else:
+            oterm = 'OT'
+            htype = 'HC'
+            otype = 'OC'
+        self.remove_bond(new_c_term.num, new_n_term.num)
+        self.add_atom(new_c_term.num + 1, oterm + '1', otype, 0, new_c_term.resid, new_c_term.resname, 16.0)
+        self.add_bond(new_c_term.num, new_c_term.num + 1)
+        self.add_atom(new_n_term.num + 2, 'H3', htype, 0, new_n_term.resid, new_n_term.resname, 1.008)
+        self.add_bond(new_n_term.num, new_n_term.num + 2)
+        self.add_atom(new_n_term.num + 2, 'H2', htype, 0, new_n_term.resid, new_n_term.resname, 1.008)
+        self.add_bond(new_n_term.num, new_n_term.num + 2)
+        self.atoms[new_c_term.num + 1].atomname = oterm + '2'
+        self.atoms[new_c_term.num + 1].type = otype
+        self.atoms[new_n_term.num].atomname = 'H1'
+        self.atoms[new_n_term.num].type = htype
+        rtp = self.find_rtp(rtp) if rtp is None else rtp
+        if not 'rtp':
+            raise RuntimeError("Failed to locate .rtp files from a local Gromacs installation, please specify"
+                               " a custom .rtp file through rtp='/path/to/rtp/file'")
+        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(rtp, remember=True)
+        if not('N' + new_n_term.resname in types.keys() and 'C' + new_c_term.resname in types.keys()):
+            creplaces, cadds, cimpropers = self.parse_tdb(rtp.replace('rtp', 'c.tdb'), 'COO-')
+            nterm_res = 'GLY-NH3+' if new_n_term.resname == 'GLY' else 'PRO-NH3+' if new_n_term.resname == 'PRO' else 'NH3+'
+            nreplaces, nadds, nimpropers = self.parse_tdb(rtp.replace('rtp', 'n.tdb'), nterm_res)
+            for crep in creplaces:
+                atom = self.get_atom(f'resid {new_c_term.resid} and name {crep[0]}')
+                atom.type = crep[1]
+                atom.mass = float(crep[2])
+                atom.charge = float(crep[3])
+            for nrep in nreplaces:
+                atom = self.get_atom(f'resid {new_n_term.resid} and name {nrep[0]}')
+                atom.type = nrep[1]
+                atom.mass = float(nrep[2])
+                atom.charge = float(nrep[3])
+            cterm_charge = [ad for ad in cadds if ad[-4].startswith('O')][0][-2]
+            self.atoms[new_c_term.num].charge = float(cterm_charge)
+            self.atoms[new_c_term.num + 1].charge = float(cterm_charge)
+            cterm_type = [ad for ad in cadds if ad[-4].startswith('O')][0][-4]
+            self.atoms[new_c_term.num].type = cterm_type
+            self.atoms[new_c_term.num + 1].type = cterm_type
+            nterm_charge = [ad for ad in nadds if ad[-4].startswith('H')][0][-2]
+            self.atoms[new_n_term.num].charge = float(nterm_charge)
+            self.atoms[new_n_term.num + 1].charge = float(nterm_charge)
+            self.atoms[new_n_term.num + 2].charge = float(nterm_charge)
+            nterm_type = [ad for ad in nadds if ad[-4].startswith('H')][0][-4]
+            self.atoms[new_n_term.num].type = nterm_type
+            self.atoms[new_n_term.num + 1].type = nterm_type
+            self.atoms[new_n_term.num + 2].type = nterm_type
+            # TODO add impropers
+        else:
+            ntypes = types['N' + new_n_term.resname]
+            ctypes = types['C' + new_c_term.resname]
+            ncharges = charges['N' + new_n_term.resname]
+            ccharges = charges['C' + new_c_term.resname]
+            for catom in self.get_atoms(f'resid {new_c_term.resid}'):
+                catom.type = ctypes[catom.atomname]
+                catom.charge = ccharges[catom.atomname]
+            for natom in self.get_atoms(f'resid {new_n_term.resid}'):
+                natom.type = ntypes[natom.atomname]
+                natom.charge = ncharges[natom.atomname]
+            # TODO add impropers
+
     def parse_rtp(self, rtp: str, remember: bool = False) -> (dict, dict, dict, dict, dict):
         """
         Reads an .rtp file to extract molecule definitions, separating them into
@@ -1388,6 +1465,42 @@ class SectionMol(Section):
         self.top.rtp['bondedtypes'] = bondedtypes
         return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['dihedrals'], \
             self.top.rtp['impropers'], self.top.rtp['bondedtypes']
+
+    def parse_tdb(self, tdb: str, terminus: str):
+        replaces, adds, impropers = [], [], []
+        tdb_cont = [line for line in open(tdb) if not line.strip().startswith(';')]
+        reading = False
+        reading_adds = False
+        reading_impropers = False
+        reading_replaces = False
+        for line in tdb_cont:
+            if line.strip().startswith('[') and line.strip().split()[1] not in ['replace', 'delete', 'add','impropers']:
+                if line.strip().split()[1] == terminus:
+                    reading = True
+                else:
+                    reading = False
+            if line.strip().startswith('[') and line.strip().split()[1] == 'add':
+                reading_adds = True
+            if line.strip().startswith('[') and line.strip().split()[1] != 'add':
+                reading_adds = False
+            if line.strip().startswith('[') and line.strip().split()[1] == 'impropers':
+                reading_impropers = True
+            if line.strip().startswith('[') and line.strip().split()[1] != 'impropers':
+                reading_impropers = False
+            if line.strip().startswith('[') and line.strip().split()[1] == 'replace':
+                reading_replaces = True
+            if line.strip().startswith('[') and line.strip().split()[1] != 'replace':
+                reading_replaces = False
+            if len(line.strip().split()) > 3 and reading and reading_replaces:
+                replaces.append(line.strip().split())
+            if len(line.strip().split()) > 3 and reading and reading_impropers:
+                impropers.append(line.strip().split())
+            if len(line.strip().split()) > 3 and reading and reading_adds:
+                if line.strip().split()[0] in '123456789':
+                    adds.append(line.strip().split())
+                else:
+                    adds[-1].extend(line.strip().split())
+        return replaces, adds, impropers
 
     def update_dicts(self):
         self.get_subsection('atoms').get_dicts(force_update=True)

@@ -87,7 +87,6 @@ class Pdb:
     @property
     def residues(self) -> list:
         residues = []
-        # TODO make Residue a class that contains atom indices and other properties, like the chain
         for a in self.atoms:
             id = f'{a.resname}{a.resnum}{a.chain.strip()}'
             if not residues or id != str(residues[-1]):

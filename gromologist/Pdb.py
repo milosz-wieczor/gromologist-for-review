@@ -1017,7 +1017,7 @@ class Pdb:
         :param c_sel: str, selection that returns the carbon atom bound to that hydrogen
         :return: None
         """
-        self.reposition_atom_from_hook(h_sel, c_sel, 1.09, h_sel, c_sel)
+        self.reposition_atom_passfrom_hook(h_sel, c_sel, 1.09, h_sel, c_sel)
 
     def _get_chirality(self, atomlist, nopbc=False):
         """
@@ -1105,6 +1105,21 @@ class Pdb:
         else:
             raise RuntimeError('Can\'t read box properties')
         return atoms, tuple(box), remarks
+
+    def make_term(self, term_type, atom_serial):
+        if term_type not in ["C", "N"]:
+            raise RuntimeError(f"term_type has to be either 'C' or 'N', '{term_type}' was passed")
+        atom = self.get_atom(f'serial {atom_serial}')
+        if term_type == "C":
+            self.insert_atom(atom.serial + 2, name='OX', hooksel=f'serial {atom_serial}', bondlength=1.25,
+                             vector=self._vector(['C', 'O', 'CA', 'C'], atom.resnum, atom.chain))
+        else:
+            hname = self.get_atom(f'serial {atom_serial + 1}').atomname
+            self.insert_atom(atom.serial + 2, name='H2', hooksel=f'serial {atom_serial}', bondlength=0.95,
+                             vector=self._vector(['N', hname, 'CB', 'N'], atom.resnum, atom.chain))
+            self.insert_atom(atom.serial + 3, name='H3', hooksel=f'serial {atom_serial}', bondlength=0.95,
+                             vector=self._vector(['N', hname, 'HA', 'N'], atom.resnum, atom.chain))
+
 
     def add_conect(self, cutoff=1.65):
         """

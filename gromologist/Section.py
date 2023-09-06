@@ -1323,7 +1323,11 @@ class SectionMol(Section):
             if not self.top.pdb:
                 print("No .pdb file bound to the topology, use Top.add_pdb() to add one. Only editing topology for now")
             else:
-                pass
+                cterms_pdb = self._match_pdb_to_top(new_c_term.num)
+                nterms_pdb = self._match_pdb_to_top(new_n_term.num)
+                for ct, nt in zip(cterms_pdb[::-1], nterms_pdb[::-1]):
+                    self.top.pdb.make_term('N', nt)
+                    self.top.pdb.make_term('C', ct)
         ff = input("Should we use Amber (a) or CHARMM (c) naming for the termini?\n").strip('()').lower()
         while ff not in ['a', 'c']:
             ff = input("Could not understand, please repeat (a) or (c).\n").strip('()').lower()

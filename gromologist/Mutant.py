@@ -4,11 +4,11 @@ class ProteinMutant:
     # W > Z -> not working
     map_pro = {'ALA': 'A', 'ASH': 'B', 'ASPP': 'B', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E',
                'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I',
-               'GLH': 'J', 'GLPP': 'J', 'LYS': 'K', 'LEU': 'L', 'MET': 'M', 'ASN': 'N', 'PRO': 'P', 'GLN': 'Q',
-               'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'}
+               'GLH': 'J', 'GLPP': 'J', 'LYS': 'K', 'LYN': 'O', 'LEU': 'L', 'MET': 'M', 'ASN': 'N', 'PRO': 'P',
+               'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'}
     map_inv = {'A': 'ALA', 'B': 'ASH', 'C': 'CYS', 'D': 'ASP', 'E': 'GLU', 'F': 'PHE', 'G': 'GLY', 'H': 'HIS',
-               'I': 'ILE', 'J': 'GLH', 'K': 'LYS', 'L': 'LEU', 'M': 'MET', 'N': 'ASN', 'P': 'PRO', 'Q': 'GLN',
-               'R': 'ARG', 'S': 'SER', 'T': 'THR', 'V': 'VAL', 'W': 'TRP', 'Y': 'TYR'}
+               'I': 'ILE', 'J': 'GLH', 'K': 'LYS', 'L': 'LEU', 'M': 'MET', 'N': 'ASN', 'O': 'LYN', 'P': 'PRO',
+               'Q': 'GLN', 'R': 'ARG', 'S': 'SER', 'T': 'THR', 'V': 'VAL', 'W': 'TRP', 'Y': 'TYR'}
 
     def __init__(self, orig: str, target: str):
         try:
@@ -126,6 +126,7 @@ class ProteinMutant:
                  'OY': ['OH', 'HH'],
                  'SM': ['SD', 'CE', 'HE1', 'HE2', 'HE3'],
                  'KH': ['CE', 'HE1', 'HE2', 'NZ', 'HZ1', 'HZ2', 'HZ3'],
+                 'KN': ['CE', 'HE1', 'HE2', 'NZ', 'HZ1', 'HZ2'],
                  'HR': ['CG', 'ND1', 'CD2', 'HD2', 'CE1', 'NE2', 'HE1', 'HD1'],
                  'GG': ['CG1', 'HG11', 'HG12'],
                  'RH': ['NE', 'HE', 'CZ', 'NH1', 'HH11', 'HH12', 'NH2', 'HH21', 'HH22'],
@@ -172,6 +173,7 @@ class ProteinMutant:
                    'OY': ['CZ', 'OH'],
                    'SM': ['HG2', 'SD', 'CE', 'HE1', 'HE2'],
                    'KH': ['HD2', 'CE', 'HE1', 'HE2', 'NZ', 'HZ1', 'HZ2'],
+                   'KN': ['HD2', 'CE', 'HE1', 'HE2', 'NZ', 'HZ1'],
                    'HR': ['HB2', 'CG', 'ND1', 'CD2', 'HD2', 'CE1', 'NE2', 'HE1'],
                    'RH': ['HD2', 'NE', 'HE', 'CZ', 'NH1', 'HH11', 'HH12', 'NH2', 'HH21'],
                    'PH': ['N'],
@@ -211,6 +213,7 @@ class ProteinMutant:
                  'SM': [['CG', 'SD'], ['SD', 'CE'], ['CE', 'HE1'], ['CE', 'HE2'], ['CE', 'HE3']],
                  'KH': [['CD', 'CE'], ['CE', 'HE1'], ['CE', 'HE2'], ['CE', 'NZ'], ['NZ', 'HZ1'], ['NZ', 'HZ2'],
                         ['NZ', 'HZ3']],
+                 'KN': [['CD', 'CE'], ['CE', 'HE1'], ['CE', 'HE2'], ['CE', 'NZ'], ['NZ', 'HZ1'], ['NZ', 'HZ2']],
                  'PH': [['N', 'H']],
                  'HZ': [['CZ', 'HZ']],
                  'HA': [['CA', 'HA2']],
@@ -274,6 +277,7 @@ class ProteinMutant:
                    'SM': [['CA', 'CB'], ['CB', 'CG'], ['CG', 'SD'], ['CG', 'HG1'], ['CG', 'HG2']],
                    'KH': [['CB', 'CG'], ['CG', 'HG1'], ['CG', 'HG2'], ['CG', 'CD'], ['CD', 'CE'], ['CD', 'HD1'],
                           ['CD', 'HD2']],
+                   'KN': [['CB', 'CG'], ['CG', 'HG1'], ['CG', 'HG2'], ['CG', 'CD'], ['CD', 'CE'], ['CD', 'HD1']],
                    'HR': [['CB', 'CA', 'HB1', 'HB2'], ['CB', 'HB1', 'HB1', 'CA', 'CG', 'CG', 'HB1', 'HB1', 'CA', 'CG'],
                           ['CB', 'HB2', 'HB2', 'CA', 'CG', 'CG', 'HB2', 'HB2', 'CA', 'CG'], ['CG', 'CD2', 'CB'],
                           ['CB', 'CG', 'CD2'], ['CB', 'CG', 'ND1'], ['CE1', 'CE1', 'ND1', 'NE2'],
@@ -333,6 +337,7 @@ class ProteinMutant:
               'L': ['CB', 'LH', 'CD', 'HD'],
               'M': ['CB', 'CG', 'SM'],
               'N': ['CB', 'AM'],
+              'O': ['CB', 'CG', 'CD', 'KN'],  # deprotonated LYS
               'Q': ['CB', 'CG', 'AN'],
               'P': ['PB', 'PG', 'PD'],
               'R': ['CB', 'CG', 'CD', 'RH'],

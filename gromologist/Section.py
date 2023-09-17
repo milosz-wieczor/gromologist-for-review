@@ -1758,11 +1758,11 @@ class SectionMol(Section):
         """
         atoms = self.get_atoms(f'resid {resid}')
         resname = atoms[0].resname
-        if resname not in ['ASP', 'GLU', 'GLUP', 'ASPP']:
-            raise RuntimeError("So far only available for residues ASP/GLU, and ASPP/GLUP")
+        if resname not in ['ASP', 'GLU', 'GLUP', 'ASPP', 'LYN', 'LYS']:
+            raise RuntimeError("So far only available for residues ASP/ASPP, GLU/GLUP, LYN/LYS")
         mut_dict = {'ASP': 'B', 'GLU': 'J'}
-        deprot_dict = {'GLUP': 'GLU'}
-        if resname in ['ASP', 'GLU']:
+        deprot_dict = {'GLUP': 'GLU', 'ASPP': 'ASP', 'LYS': 'LYN'}
+        if resname in ['ASP', 'GLU', 'LYN']:
             self.mutate_protein_residue(resid, mut_dict[resname])
         else:
             for atom in self.get_atoms(f'resid {resid}'):

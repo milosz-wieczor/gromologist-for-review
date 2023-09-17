@@ -572,15 +572,20 @@ class SubsectionParam(Subsection):
         :param overwrite: bool, whether to accept new parameters in case of a mismatch
         :return: None
         """
+        # TODO check why cmap doesn't work?
         for entry in other_subsection.entries_param:
             existing = [e for e in self.entries_param if e.types == entry.types]
-            if len(existing) == 1:
+            if len(existing) == 1 or (len(existing) > 1 and self.header == 'dihedraltypes'):
                 ex_entry = existing[0]
-                if ex_entry.params == entry.params and ex_entry.interaction_type == entry.interaction_type \
-                        and ex_entry.modifiers == entry.modifiers:
+                if entry.params in [ee.params for ee in existing] and ex_entry.interaction_type == entry.interaction_type \
+                        and entry.modifiers in [ee.modifiers for ee in existing]:
                     continue
                 else:
                     if overwrite:
+                        if len(existing) > 1:
+                            # TODO fix this
+                            raise RuntimeError(f'Found multiple entries matching the types of {entry.types} in section '
+                                               f'{self.header}, cannot overwrite them all')
                         ex_entry.params = entry.params
                         ex_entry.interaction_type = entry.interaction_type
                         ex_entry.modifiers = entry.modifiers
@@ -590,7 +595,7 @@ class SubsectionParam(Subsection):
             elif len(existing) == 0:
                 self.add_entry(entry)
             else:
-                raise RuntimeError(f"Found multiple entries matching the types of {entry.types} in section"
+                raise RuntimeError(f"Found multiple entries matching the types of {entry.types} in section "
                                    f"{self.header}, make sure this is intentional")
 
     def _sorting_fn(self, entry: "gml.Entry") -> int:
@@ -689,8 +694,9 @@ class SubsectionAtom(Subsection):
     SubsectionAtom contains definitions of all atoms in the molecule;
     should be contained in SectionMol
     """
-    def __init__(self, content, section):
+    def __init__(self, content: list, section: "gml.SectionMol"):
         super().__init__(content, section)
+        assert isinstance(self.section, gml.SectionMol)
         self.fstring = "{:>6}{:>11}{:>7}{:>7}{:>7}{:>7}{:>11}{:>11}   ; " + '\n'
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
 
@@ -709,8 +715,7 @@ class SubsectionAtom(Subsection):
             self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
 
     def check_defined_types(self):
-        defined_types = self.section.top.parameters.get_subsection('atomtypes')
-        typelist = {ent.types[0] for ent in defined_types.entries_param}
+        typelist = self.section.top.defined_atomtypes
         for atom in self.entries_atom:
             if atom.type not in typelist:
                 print(f'Couldn\'t find definition of atom type {atom.type} (atom {atom.num} in molecule '

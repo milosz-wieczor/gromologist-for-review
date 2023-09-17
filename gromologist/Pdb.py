@@ -1181,6 +1181,20 @@ class Pdb:
                     weights /= np.sum(weights)
                     atom.beta = np.sum(values * weights)
 
+    def translate_selection(self, selection='all', vector=(0, 0, 0)):
+        """
+        Translates a subset of atoms defined by the selection by a specified vector in 3D space
+        :param selection: str, selection that will be moved
+        :param vector: iterable of 3 floats, vector specifying the translation
+        :return: None
+        """
+        if len(vector) != 3:
+            raise RuntimeError("Please specify a 3-component vector")
+        for atom in self.get_atoms(selection):
+            atom.x += vector[0]
+            atom.y += vector[1]
+            atom.z += vector[2]
+
     def interpolate_struct(self, other, num_inter, write=False):
         """
         Generates linearly & equally spaced intermediates between two structures,
@@ -1432,7 +1446,7 @@ class Traj:
             self.structures = self.get_coords_from_file(structures)
         elif isinstance(structures[0], str):
             self.structures = [gml.Pdb(struct) for struct in structures]
-        elif isinstance(structures[0], gml.Pdb):
+        elif isinstance(structures[0], gml.Pdb) and isinstance(structures, list):
             self.structures = structures
         else:
             raise RuntimeError("Cannot understand the format of input")
@@ -1441,7 +1455,6 @@ class Traj:
         if self.top and not self.top.pdb:
             self.top.pdb = self
         self.altloc = altloc
-        self.nframes = len(self.structures)
         self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                             "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
@@ -1451,7 +1464,16 @@ class Traj:
         return "trajectory file {} with {} frames and {} atoms".format(self.fname, self.nframes,
                                                                        len(self.structures[0].atoms))
 
-    def get_coords_from_file(self, infile) -> list:
+    @property
+    def nframes(self):
+        return len(self.structures)
+
+    def get_coords_from_file(self, infile: str) -> list:
+        """
+        Reads the full trajectory from a multi-frame .pdb or .gro file
+        :param infile: str, name of the file
+        :return: list of gml.Pdb objects
+        """
         ftype = infile[-3:]
         structs = []
         content = [line for line in open(infile)]
@@ -1466,12 +1488,34 @@ class Traj:
             raise RuntimeError(f'file type should be pdb or gro, {ftype} was given')
         for i, j in zip(term_lines[:-1], term_lines[1:]):
             frame = '\n'.join(content[i:j])
-            structs.append(Pdb.from_text(frame, ftype))
+            new_pdb = Pdb.from_text(frame, ftype)
+            if len(new_pdb.atoms) > 0:
+                structs.append(new_pdb)
         return structs
+
+    def add_frame(self, pdb: Union[str, "gml.Pdb"]):
+        """
+        Adds a frame to the trajectory
+        :param pdb: string or gml.Pdb, structure to be added to the trajectory
+        :return:
+        """
+        if isinstance(pdb, str):
+            self.structures.append(Pdb(pdb))
+        else:
+            self.structures.append(pdb)
+        self.check_consistency()
+
+    def add_frames(self, pdb: Union[str, "gml.Traj"]):
+        if isinstance(pdb, str):
+            self.structures.extend(self.get_coords_from_file(pdb))
+        else:
+            self.structures.extend(pdb.structures)
+        self.check_consistency()
 
     def check_consistency(self):
         if not all([len(pdb.atoms) == len(self.structures[0].atoms) for pdb in self.structures]):
-            raise RuntimeError("Not all structures have the same number of atoms")
+            raise RuntimeError(f"Not all structures have the same number of atoms, "
+                               f"with {[len(pdb.atoms) for pdb in self.structures]}")
 
     def as_string(self, end="ENDMDL"):
         text = ''

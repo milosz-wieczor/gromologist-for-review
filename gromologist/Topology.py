@@ -243,6 +243,7 @@ class Top:
         :param section: str, 'all' or name of the section, e.g. 'bonds'
         :return: None
         """
+        # TODO make sure params are not duplicated
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
 
@@ -277,8 +278,11 @@ class Top:
         :return: None
         """
         other = gml.Top(filename, ignore_ifdef=True)
-        if not all([i == j for i, j in zip(self.parameters.get_subsection('defaults').entries_param[0].content,
-                                           other.parameters.get_subsection('defaults').entries_param[0].content)]):
+        defs_self = self.parameters.get_subsection('defaults').entries_param[0].content
+        defs_other = other.parameters.get_subsection('defaults').entries_param[0].content
+        if not all([int(defs_self[0]) == int(defs_other[0]), int(defs_self[1]) == int(defs_other[1]),
+                    defs_self[2] == defs_other[2], float(defs_self[3]) == float(defs_other[3]),
+                    float(defs_self[4]) == float(defs_other[4])]):
             raise RuntimeError("Can't merge parameters with different [ defaults ] sections, "
                                "make sure they are identical")
         for subsection in other.parameters.subsections:  # TODO make optional selections available

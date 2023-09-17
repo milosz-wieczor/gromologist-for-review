@@ -128,3 +128,39 @@ def load_frcmod(top: "gml.Top", filename: str):
         except KeyError:
             print(f"Skipping NBFIX {n} as at least one of the types is not defined; if you want to keep it, "
                   "create/load the type and run this command again.")
+
+
+def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, outfile: str = 'inp.gau', charge: int = 0,
+                            multiplicity: int = 1, group_a: Optional[str] = None, group_b: Optional[str] = None):
+    """
+    From a .pdb file and an existing Gaussian input, produces a new .gau input
+    with correct atom names, coordinates, and possibly fragment assignment
+    :param pdb: gml.Pdb or str, the structure object/file containing the desired coordinates
+    :param directive_file: str, an existing Gaussian input from which the %- and #-prefixed lines will be taken
+    :param outfile: str, a file to which the new input will be written
+    :param charge: int, charge of the system (by default 0)
+    :param multiplicity: int, multiplicity of the system (by default 1)
+    :param group_a: str, selection to define 1st fragment if the counterpoise correction is used
+    :param group_b: str, selection to define 2nd fragment if the counterpoise correction is used
+    :return: None
+    """
+    gau_content = [line for line in open(directive_file)]
+    pdb = gml.Pdb(pdb) if isinstance(pdb, str) else pdb
+    pdb.add_elements()
+    with open(outfile, 'w') as outf:
+        for line in [ln for ln in gau_content if ln.strip().startswith('%')]:
+            outf.write(line)
+        for line in [ln for ln in gau_content if ln.strip().startswith('#')]:
+            outf.write(line)
+        outf.write(f"\ngromologist input to gaussian\n\n{charge} {multiplicity}\n")
+        if group_a is None and group_b is None:
+            for atom in pdb.atoms:
+                outf.write(f" {atom.element}   {atom.x}  {atom.y}  {atom.z}\n")
+        elif group_a is not None and group_b is not None:
+            for atom in pdb.get_atoms(group_a):
+                outf.write(f" {atom.element}(Fragment=1)   {atom.x:8.3f}  {atom.y:8.3f}  {atom.z:8.3f}\n")
+            for atom in pdb.get_atoms(group_b):
+                outf.write(f" {atom.element}(Fragment=2)   {atom.x:8.3f}  {atom.y:8.3f}  {atom.z:8.3f}\n")
+        else:
+            raise RuntimeError('Specify either both group_a and group_b, or neither')
+        outf.write("\n")

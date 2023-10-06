@@ -84,7 +84,7 @@ class SelectionParser:
                 if not self.ispdb(self.master):
                     raise ValueError("the within keyword only works for structural data, not topology")
                 nopbc = False if first_op == "pbwithin" else True
-                within = float([x for x in first_op.split() if x.isnumeric()][0])
+                within = float([x for x in first_op.split() if x.replace(".", "").isnumeric()][0])
                 return self.master.within(self._select_set_atoms(selection_string[first_op_borders[1]:]), within, nopbc=nopbc)
     
     @staticmethod

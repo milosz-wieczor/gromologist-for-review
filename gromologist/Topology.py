@@ -200,7 +200,8 @@ class Top:
         return result[0]
 
     def get_atoms(self, selection_string: str) -> list:
-        return [self.atoms[i] for i in self.select_atoms(selection_string)]
+        atomlist = self.atoms
+        return [atomlist[i] for i in self.select_atoms(selection_string)]
 
     def get_atom(self, selection_string: str):
         return self.atoms[self.select_atom(selection_string)]
@@ -765,6 +766,7 @@ class Top:
         :param section: a Section object to be written
         :return:
         """
+        # TODO if there are 2 interaction types, split into two separate sections just for safety
         for subsection in section.subsections:
             outfile.write('\n[ {} ]\n'.format(subsection.header))
             for entry in subsection:

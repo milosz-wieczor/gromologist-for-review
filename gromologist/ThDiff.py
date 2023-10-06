@@ -21,6 +21,7 @@ class Mod:
         :param selections: list of str, selections that will define atoms to be modified
         """
         td.counter += 1
+        self.counter = td.counter
         self.td = td
         if isinstance(top, str):
             self.top = gml.Top(top)
@@ -53,9 +54,6 @@ class Mod:
         """
         return str(self) == str(other)
 
-    @property
-    def counter(self):
-        return self.td.counter
 
     def save_mod(self, path: str, name: str):
         """

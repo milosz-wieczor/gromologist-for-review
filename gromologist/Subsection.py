@@ -651,6 +651,7 @@ class SubsectionParam(Subsection):
         for n in range(len(self.entries)):
             if n >= len(self.entries):
                 break
+            # TODO fix this or rewrite from scratch
             if isinstance(self.entries[n], gml.EntryParam) and any([x.startswith(prefix)
                                                                     for x in self.entries[n].types]):
                 limit = min(8, len(self.entries)-n-1)

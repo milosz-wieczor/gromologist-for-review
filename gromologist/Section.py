@@ -1891,20 +1891,24 @@ class SectionParam(Section):
                     assert entry.params[-2] == 0
                     entry.params[-1] = 1
 
-    def clone_type(self, atomtype: str, prefix: str = 'y', new_type: Optional[str] = None):
+    def clone_type(self, atomtype: str, prefix: str = 'y', new_type: Optional[str] = None, only_bonded: bool = False):
         """
         Generates an exact type of a selected atomtype,
         preserving all interactions with other types
         :param atomtype: str, atomtype to be duplicated
         :param prefix: str, new name will be generated as prefix + original atomtype
         :param new_type: str, directly specify the new name (optional)
+        :param only_bonded: bool, if the atomtype exists, will only copy bonded terms
         :return: None
         """
         new_atomtype = prefix + atomtype if new_type is None else new_type
         existing_types = {e.types[0] for e in self.top.parameters.get_subsection('atomtypes').entries_param}
-        if new_atomtype in existing_types:
-            raise RuntimeError(f"Type {new_atomtype} already exists")
-        for sub in self.subsections:
+        if new_atomtype in existing_types and not only_bonded:
+            raise RuntimeError(f"Type {new_atomtype} already exists, if you want to add bonded terms only, "
+                               f"specify only_bonded=True")
+        subsect = self.subsections if not only_bonded else [sub for sub in self.subsections
+                                                            if not sub.header == "atomtypes"]
+        for sub in subsect:
             to_add = []
             for ent in sub:
                 if isinstance(ent, gml.EntryParam) and atomtype in ent.types and new_atomtype not in ent.types:
@@ -2061,9 +2065,9 @@ class SectionParam(Section):
             if action == 't':
                 return
             else:
-                entry = [ent for ent in atp.entries_param if ent.types[0] == atomtype][0]
+                atp.entries = [ent for ent in atp.entries if isinstance(ent, gml.EntryParam)
+                               and ent.types[0] != atomtype]
                 print(f"Overwriting entry for atomtype {atomtype} with mass {mass}, sigma {sigma}, epsilon {epsilon}")
-                del entry
         atp.add_entry(gml.EntryParam(f'{atomtype} {atnum} {mass} 0.0000 A {sigma} {epsilon}', subsection=atp))
 
     def add_bonded_param(self, types: tuple, params: list, interaction_type: int, action_default: str = 'x'):
@@ -2086,8 +2090,7 @@ class SectionParam(Section):
             if action == 't':
                 return
             else:
-                while matching:
-                    del matching[-1]
+                subs.entries = [ent for ent in subs.entries if ent not in matching]
         if len(params) <= 3:
             subs.add_entry(gml.EntryParam(f'{" ".join(types)} {str(interaction_type)} '
                                           f'{" ".join([str(x) for x in params])}', subsection=subs))

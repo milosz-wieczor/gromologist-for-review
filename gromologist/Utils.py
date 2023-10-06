@@ -80,12 +80,18 @@ def parse_frcmod(filename):
         elif current == 'MASS':
             types = line.split()[0]
             mass = float(line.split()[1])
-            atomtypes[types] = [mass]
+            if types in atomtypes.keys():
+                atomtypes[types][0] = mass
+            else:
+                atomtypes[types] = [mass]
         elif current == 'NONB':
             types = line.split()[0]
             rmin = float(line.split()[1])
             eps = float(line.split()[2])
-            atomtypes[types].extend([rmin * 0.2 * 2**(-1/6), eps * 4.184])
+            if types in atomtypes.keys() and len(atomtypes[types]) == 1:
+                atomtypes[types].extend([rmin * 0.2 * 2**(-1/6), eps * 4.184])
+            else:
+                atomtypes[types] = [0, rmin * 0.2 * 2 ** (-1 / 6), eps * 4.184]
         elif current == 'LJED':
             types = tuple(line.split()[:2])
             vals = tuple(line.split()[2:])
@@ -128,6 +134,57 @@ def load_frcmod(top: "gml.Top", filename: str):
         except KeyError:
             print(f"Skipping NBFIX {n} as at least one of the types is not defined; if you want to keep it, "
                   "create/load the type and run this command again.")
+
+
+def lib_to_rtp(lib: str, outfile: str = "new.rtp"):
+    curr_resname = None
+    atoms = {}
+    bonds = {}
+    connector = {}
+    reading_atoms = False
+    reading_bonds = False
+    content = [line for line in open(lib) if line.strip()]
+    for n, ln in enumerate(content):
+        if not ln.startswith('!'):
+            if reading_atoms:
+                atoms[curr_resname].append((ln.strip().split()[0].strip('"'), ln.strip().split()[1].strip('"'),
+                                            float(ln.strip().split()[7]), int(ln.strip().split()[5])))
+            elif reading_bonds:
+                bonds[curr_resname].append((int(ln.strip().split()[0]), int(ln.strip().split()[1])))
+        if ln.startswith('!'):
+            if len(ln.strip('!').split()[0].split('.')) < 3:
+                continue
+            else:
+                reading_bonds, reading_atoms = False, False
+                if ln.strip('!').split()[0].split('.')[3] == 'atoms':
+                    reading_atoms = True
+                    curr_resname = ln.strip('!').split()[0].split('.')[1]
+                    atoms[curr_resname] = []
+                    bonds[curr_resname] = []
+                    connector[curr_resname] = []
+                elif ln.strip('!').split()[0].split('.')[3] == 'connectivity':
+                    reading_bonds = True
+                elif ln.strip('!').split()[0].split('.')[3] == 'connect':
+                    connector[curr_resname].append(int(content[n+1].strip()))
+
+    with open(outfile, 'w') as out:
+        for res in atoms.keys():
+            out.write(f"[ {res} ]\n [ atoms ]\n")
+            for at in atoms[res]:
+                out.write(f"  {at[0]:4s}   {at[1]:4s}          {at[2]:8.5f}     {at[3]:3d}\n")
+            out.write(f" [ bonds ]\n")
+            for bd in bonds[res]:
+                out.write(f"  {atoms[res][bd[0] - 1][0]:4s}   {atoms[res][bd[1] - 1][0]:4s}\n")
+            if len(connector[res]) > 0 and connector[res][0] > 0:
+                atomlist = [at[0] for at in atoms[res]]
+                is_prot = True if 'CA' in atomlist else False
+                is_na = True if "O4'" in atomlist else False
+                if is_prot:
+                    out.write(f"  -C  {atoms[res][connector[res][0] - 1][0]}\n")
+                elif is_na:
+                    out.write(f"  -O3'  {atoms[res][connector[res][0] - 1][0]}\n")
+            out.write("\n\n")
+            # TODO no idea how this is encoded in AMBER files
 
 
 def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, outfile: str = 'inp.gau', charge: int = 0,

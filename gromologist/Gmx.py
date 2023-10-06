@@ -351,7 +351,8 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
         gmx_command(gmx[1], 'pdb2gmx', quiet=quiet, f=struct, ff=ff, water=water,
                     answer=True, fail_on_error=True, **kwargs)
     else:
-        copy2(topology, 'topol.top')
+        if topology != 'topol.top':
+            copy2(topology, 'topol.top')
         gml.Pdb(struct).save_gro('conf.gro')
         water = 'TIP' + str([mol for mol in gml.Top(topology, suppress=True).molecules if mol.is_water][0].natoms)
     if resize_box:

@@ -250,6 +250,8 @@ class Pdb:
             return
         if not self.top:
             for atom in self.atoms:
+                if protein_only and atom.resname not in Pdb.prot_map.keys():
+                    continue
                 if not prev_atom:
                     prev_atom = atom
                     curr_resid = atom.resnum
@@ -261,12 +263,10 @@ class Pdb:
                     prev_atom = atom
                     curr_resid = atom.resnum
                     if dist > cutoff:
-                        if (protein_only and atom.resname in Pdb.prot_map.keys()) or not protein_only:
-                            base_char += 1
+                        base_char += 1
                 if base_char > 90:
                     break
-                if (protein_only and atom.resname in Pdb.prot_map.keys()) or not protein_only:
-                    atom.chain = chr(base_char)
+                atom.chain = chr(base_char)
         else:
             self.check_top(maxwarn=maxwarn)
             excluded = {'SOL', 'HOH', 'TIP3', 'WAT', 'OPC', 'K', 'NA', 'CL', 'POT', 'SOD', 'NA+', 'K+', 'CLA'}
@@ -641,14 +641,27 @@ class Pdb:
             if not a.element:
                 a.element = [x for x in a.atomname if not x.isdigit()][0]
 
-    def get_atom_indices(self, selection_string: str) -> list:
+    def get_atom_indices(self, selection_string: str, as_plumed: bool = False, as_ndx: bool = False) -> [list, str]:
         """
         Applies a selection to the structure and returns the 0-based indices of selected atoms
         :param selection_string: str, consistent with the selection language syntax (see README)
-        :return: list of int, 0-based (!!!) indices of atoms
+        :param as_plumed: bool, whether to format as a PLUMED-compatible atom selection
+        :param as_ndx: bool, whether to format as an .ndx-compatible atom selection
+        :return: list of int, 0-based (!!!) indices of atoms, or a formatted string
         """
         sel = gml.SelectionParser(self)
-        return sel(selection_string)
+        indices = sel(selection_string)
+        if not as_plumed and not as_ndx:
+            return indices
+        elif as_plumed:
+            return f"ATOMS={','.join([str(ind+1) for ind in indices])}"
+        elif as_ndx:
+            outstr = '[ groupname ]\n'
+            for n, ind in enumerate(indices, 1):
+                outstr += f'{ind+1:7d}'
+                if n % 10 == 0:
+                    outstr += '\n'
+            return outstr
 
     def get_atom_index(self, selection_string):
         """

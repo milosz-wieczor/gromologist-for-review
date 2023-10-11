@@ -159,7 +159,7 @@ class Pdb:
                 sequences.append(''.join(seq))
         return sequences
 
-    def print_nucleic_sequence(self) -> list:
+    def print_nucleic_sequence(self, as_modeller=False) -> list:
         """
         Prints nucleic acid sequences chain by chain, recognizing nucleotides
         as residues that contain an O4' atom; unrecognized residues are written as X
@@ -176,6 +176,9 @@ class Pdb:
             cas = set(self.get_atom_indices(f"name O4' and chain {ch}"))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
             sequences.append(''.join([mapping[i.resname] if i.resname in mapping.keys() else 'X' for i in atoms]))
+        if as_modeller:
+            codes = {"A": 'e', "T": 't', "C": 'j', "G": 'l'}
+            sequences = [''.join([codes[i] for i in seq]) for seq in sequences]
         return sequences
 
     def find_missing(self):
@@ -490,19 +493,29 @@ class Pdb:
         for n, atom in enumerate(ats, offset):
             atom.serial = n
 
-    def renumber_residues(self, offset: int = 1, selection: Optional[str] = None, per_chain: bool = False):
+    def renumber_residues(self, offset: Union[int, list] = 1, selection: Optional[str] = None, per_chain: bool = False):
         """
         Consecutively renumbers all residues in the structure
-        :param offset: int, number of the first residue to be set
+        :param offset: int or list, number of the first residue to be set (can be per-chain)
         :param selection: str, will only renumber residues matching the selection
         :param per_chain: bool, whether numbering of each chain should start from `offset`
         :return: None
         """
-        count = offset
+        if per_chain:
+            if isinstance(offset, int):
+                offset = [offset] * len(self.chains)
+            else:
+                assert len(offset) == len(self.chains)
+            count = offset[0]
+        else:
+            count = offset
         ats = range(len(self.atoms)) if selection is None else self.get_atom_indices(selection)
         for n in ats:
             if per_chain and n > 1 and self.atoms[n].chain != self.atoms[n-1].chain:
-                count = offset
+                try:
+                    count = offset[self.chains.index(self.atoms[n].chain)]
+                except:
+                    count = 1
             temp = count
             try:
                 if self.atoms[n].resnum != self.atoms[n + 1].resnum or self.atoms[n].chain != self.atoms[n + 1].chain:

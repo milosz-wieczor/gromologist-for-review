@@ -23,6 +23,7 @@ class Mod:
         td.counter += 1
         self.counter = td.counter
         self.td = td
+        # TODO rethink if topologies shouldn't be stored in text files instead of in memory (makes it hard to run massive analyses locally)
         if isinstance(top, str):
             self.top = gml.Top(top)
         elif isinstance(top, gml.Top):
@@ -586,7 +587,7 @@ class ThermoDiff:
                 pass
             mod.save_mod(f'{self.path}/working{self.name}/{str(mod)}', str(mod))
 
-    def launch_reruns(self):
+    def launch_reruns(self, parallel):
         """
         Launches reruns for each legal mod-trajectory combination
         :param nproc: int, optional number of processes
@@ -599,8 +600,11 @@ class ThermoDiff:
                     datasets = self.get_traj(traj['id'])['datasets']
                     print(f"Calculating rerun for {str(mod)}, traj {traj['path']}")
                     pairs.append((mod, traj, datasets))
-        with ProcessPoolExecutor() as p:
-            deriv_dicts = p.map(self.launch_rerun, pairs)
+        if parallel:
+            with ProcessPoolExecutor() as p:
+                deriv_dicts = p.map(self.launch_rerun, pairs)
+        else:
+            deriv_dicts = [self.launch_rerun(p) for p in pairs]
         for dd in deriv_dicts:
             self.derivatives.update(dd)
 
@@ -634,19 +638,19 @@ class ThermoDiff:
         :return: None
         """
         for traj in self.trajs:
-            if not traj['weights']:
+            if len(traj['weights']) == 0:
                 traj['weights'] = [1] * self.get_length(traj['id'])
             wsum = sum(traj['weights'])
             traj['weights'] = [w / wsum for w in traj['weights']]
 
-    def run(self):
+    def run(self, parallel=True):
         """
         Runs the set of calculations and prepares everything
         for data extraction
         :return: None
         """
         self.prep_files()
-        self.launch_reruns()
+        self.launch_reruns(parallel)
         self.calc_weights()
 
     def get_mod(self, counter: int):

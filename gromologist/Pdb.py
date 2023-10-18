@@ -1265,7 +1265,7 @@ class Pdb:
                 outfile.write(self._write_atom(atom))
             for conect in self.conect.keys():
                 outfile.write(self._write_conect(conect, self.conect[conect]))
-            outfile.write('ENDMDL\n')
+            outfile.write('END\n')
 
     def save_from_selection(self, selection, outname='out.pdb', renum=False):
         """
@@ -1558,6 +1558,19 @@ class Traj:
 
     def __len__(self):
         return len(self.structures)
+
+    def atom_properties_from(self, pdb: Union[str, "gml.Pdb"], names=True, indices=True, chains=True):
+        if isinstance(pdb, str):
+            pdb = gml.Pdb(pdb)
+        assert len(pdb.atoms) == len(self.atoms)
+        for fr in self.structures:
+            for af, ar in zip(fr.atoms, pdb.atoms):
+                if names:
+                    af.atomname = ar.atomname
+                if indices:
+                    af.serial = ar.serial
+                if chains:
+                    af.chain = ar.chain
 
     def equal_spacing(self):
         try:

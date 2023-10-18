@@ -395,6 +395,7 @@ class ThermoDiff:
         topology.clear_ff_params()
         types = topology.defined_atomtypes if typelist is None \
             else list(set(topology.defined_atomtypes).intersection(set(typelist)))
+        types = sorted(types)
         print(f"Finding all combinations between types: {' '.join(types)}")
         for type_pair in sorted(list(combinations_with_replacement(types, 2))):
             print(f"Adding modification: {type_pair[0]}, {type_pair[1]}")

@@ -1311,25 +1311,28 @@ class Pdb:
             gbox[5] = self.box[1] / 10 * math.cos(self.box[5] * conv)
             return gbox
 
-    def get_coords(self, subset=None):
+    def get_coords(self, selection=None):
         """
         Returns all atomic coordinates
-        :param subset: list of int, 0-based indices of atoms for which coordinates should be retrieved
+        :param selection: str, selection for the coordinates to be retreived
         :return: list of list of float, coordinates of all atoms
         """
-        if subset:
+        if selection is not None:
+            subset = self.get_atom_indices(selection)
             return [[a.x, a.y, a.z] for a in [self.atoms[q] for q in subset]]
         else:
             return [[a.x, a.y, a.z] for a in self.atoms]
 
-    def set_coords(self, new_coords):
+    def set_coords(self, new_coords, selection=None):
         """
         Sets all atomic coordinates
         :param new_coords: list of list of int, new coordinates to be set
+        :param selection: str, selection for the coordinates to be retreived
         :return: None
         """
-        assert len(new_coords) == len(self.atoms)
-        for atom, coords in zip(self.atoms, new_coords):
+        atoms = self.atoms if selection is None else self.get_atoms(selection)
+        assert len(new_coords) == len(atoms)
+        for atom, coords in zip(atoms, new_coords):
             assert len(coords) == 3
             atom.x, atom.y, atom.z = coords
 

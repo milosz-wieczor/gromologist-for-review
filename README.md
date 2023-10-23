@@ -609,9 +609,24 @@ To find FF parameters that are missing (e.g. to include them by analogy, or opti
 ```
 
 Note that both `add_ff_params()` and `find_missing_ff_params()` have an optional `section` parameter
-that can specify you only want to look at `bonds`, `angles`, `dihedrals` or `impropers`.
+that can specify you only want to look at `bonds`, `angles`, `dihedrals` or `impropers`. To try to
+fill in parameters by analogy, you need to define a dictionary of analogous types, where the key refers
+to the missing type (e.g. `c` and `n` here), and the value to a type that might have the corresponding parameter 
+assigned (`CT` and `NA` here):
 
-Additionally, one can recalculate the cumulative charge ("qtot" comment in molecule definitions)
+```
+>>> t.find_missing_ff_params(fix_by_analogy={'c': 'CT', 'n': 'NA'})
+```
+For example, if you are missing an angle between (`c`, `n`, `CA`) but have parameters for (`CT`, `NA`, `CA`),
+the latter will be used to fill the values in the `[ angles ]` subsection of your `[ moleculetype ]`.
+
+If the missing parameters are due to the presence of dummies, you can set `fix_dummy=True`, and the respective parameters
+will be set to zero.
+
+Alternatively, if the parameters are missing in one of the alchemical states but not in the other, one can copy them
+from the other alchemical state by setting either `fix_B_from_A` or `fix_A_from_B`.
+
+Finally, one can recalculate the cumulative charge ("qtot" comment in molecule definitions)
 by using:
 
 ```

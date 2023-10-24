@@ -1393,8 +1393,8 @@ class Atom:
         self.insert = line[26:27]
         self.x, self.y, self.z = [float(line[30 + 8 * a:30 + 8 * (a + 1)]) for a in range(3)]
         if not qt:
-            self.occ = float(line[54:60].strip())
-            self.beta = float(line[60:66].strip())
+            self.occ = float(line[54:60].strip()) if line[54:60].strip() else 1.0
+            self.beta = float(line[60:66].strip()) if line[60:66].strip() else 0.0
             self.q = 0.0
             self.type = 'X'
         else:

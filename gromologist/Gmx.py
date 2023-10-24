@@ -63,7 +63,7 @@ def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
                     "rlist": 1.2, "rcoulomb": 1.2, "vdw-type": "Cut-off", "rvdw_switch": 0.8, "rvdw": 1.2,
                     "ld_seed": -1, "compressibility": "4.5e-5", "tau-p": 1.0,
                     "tc-grps": "System", "gen-vel": "yes", "gen-temp": 300, "pcoupl": "Berendsen",
-                    "separate-dhdl-file": "no", "nsteps": 1000, "nstxout": 10000, "nstvout": 10000}
+                    "separate-dhdl-file": "no", "nsteps": 1000, "nstxout": 0, "nstvout": 0, "nstfout": 0}
     mini_defaults = {"integrator": "steep", "nsteps": 1000, "emtol": 200, "emstep": 0.001, "nstlist": 10,
                      "pbc": "xyz", "coulombtype": "PME", "vdw-type": "Cut-off"}
     mdp_defaults.update(extra_args)

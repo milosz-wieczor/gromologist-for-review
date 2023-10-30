@@ -631,6 +631,7 @@ class ThermoDiff:
                 raise RuntimeError(f"The number of points in dataset {key} for trajectory num {traj['id']} "
                                    f"({len(datasets[key])}) does not match the derivatives "
                                    f"({len(derivatives[(mod.counter, traj['id'])])})")
+        os.chdir('..')
         return derivatives
 
     def calc_weights(self):

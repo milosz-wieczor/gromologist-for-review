@@ -588,10 +588,11 @@ class ThermoDiff:
                 pass
             mod.save_mod(f'{self.path}/working{self.name}/{str(mod)}', str(mod))
 
-    def launch_reruns(self, parallel):
+    def launch_reruns(self, parallel, maxcores):
         """
         Launches reruns for each legal mod-trajectory combination
-        :param nproc: int, optional number of processes
+        :param parallel: bool, whether to use parallel calculations
+        :param maxcores: int, optional number of processes
         :return: None
         """
         pairs = []
@@ -602,7 +603,7 @@ class ThermoDiff:
                     print(f"Calculating rerun for {str(mod)}, traj {traj['path']}")
                     pairs.append((mod, traj, datasets))
         if parallel:
-            with ProcessPoolExecutor() as p:
+            with ProcessPoolExecutor(maxcores) as p:
                 deriv_dicts = p.map(self.launch_rerun, pairs)
         else:
             deriv_dicts = [self.launch_rerun(p) for p in pairs]
@@ -645,14 +646,14 @@ class ThermoDiff:
             wsum = sum(traj['weights'])
             traj['weights'] = [w / wsum for w in traj['weights']]
 
-    def run(self, parallel=True):
+    def run(self, parallel=True, maxcores=None):
         """
         Runs the set of calculations and prepares everything
         for data extraction
         :return: None
         """
         self.prep_files()
-        self.launch_reruns(parallel)
+        self.launch_reruns(parallel, maxcores)
         self.calc_weights()
 
     def get_mod(self, counter: int):

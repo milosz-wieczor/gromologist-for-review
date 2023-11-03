@@ -233,7 +233,10 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
         if group_a and group_b:
             to_remove.append('gml.ndx')
         for filename in to_remove:
-            os.remove(filename)
+            try:
+                os.remove(filename)
+            except:
+                pass
     values = {term: [o[onum] for o in out] for term, onum in zip(terms, range(len(out[0])))}
     if sum_output:
         nframes = len(values[list(values.keys())[0]])
@@ -278,7 +281,10 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
     if cleanup:
         to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log']
         for filename in to_remove:
-            os.remove(filename)
+            try:
+                os.remove(filename)
+            except:
+                pass
     return out
 
 

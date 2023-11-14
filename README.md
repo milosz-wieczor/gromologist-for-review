@@ -15,7 +15,7 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Dealing with unspecified 'define' keywords in topologies](#dealing-with-unspecified--define--keywords-in-topologies)
     + [Editing topologies](#editing-topologies)
         * [Adding mutations to proteins](#adding-mutations-to-proteins)
-        * [Adding bonds within or between molecules](#adding-bonds-within-or-between-molecules)
+        * [Adding or removing bonds within or between molecules](#adding-or-removing-bonds-within-or-between-molecules)
         * [Adding disulfide bonds and coordination bonds with transition metals](#adding-disulfide-bonds-and-coordination-bonds-with-transition-metals)
         * [Adding and removing atoms while maintaining ordered numbering](#adding-and-removing-atoms-while-maintaining-ordered-numbering)
         * [Adding alchemical B-states (including altered protonation)](#adding-alchemical-b-states)
@@ -334,8 +334,8 @@ make sure your final structure is acceptable and run an energy minimization prio
 dynamics (note the double precision version of Gromacs, `gmx_d`, works better for atoms 
 that almost overlap in space).
 
-##### Adding bonds within or between molecules
-<a name="adding-bonds-within-or-between-molecules"/>
+##### Adding or removing bonds within or between molecules
+<a name="adding-or-removing-bonds-within-or-between-molecules"/>
 
 One useful application of Gromologist is adding bonds (and, automatically, other bonded terms)
 either within a molecule or between them:
@@ -357,6 +357,12 @@ to numbering in .itp files).
 
 To add a bond within a single e.g. Protein molecule, one can use `protein.merge_two(protein, anchor_own=2, anchor_other=3)`
 or, more simply, `protein.add_bond(5,3)`.
+
+To remove a bond, and all the related bonded terms (angles, dihedrals etc.), use the `remove_bond` method of a molecule object:
+
+```
+protein.remove_bond(at1=5, at2=6)
+```
 
 ##### Adding disulfide bonds and coordination bonds with transition metals
 <a name="adding-disulfide-bonds-and-coordination-bonds-with-transition-metals"/>

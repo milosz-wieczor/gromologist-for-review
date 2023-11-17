@@ -861,7 +861,10 @@ class ThermoDiff:
         for n, mod in enumerate(all_ders):
             strings[mod] = []
             for d in derivs[mod]:
-                strings[mod].append(f'  {d-derivs[mod][0]:20.5f}|')
+                if free_energy:
+                    strings[mod].append(f'  {d-derivs[mod][0]:20.5f}|')
+                else:
+                    strings[mod].append(f'  {d:20.5f}|')
             try:
                 strings[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}  {self.mods[n].period:4d}\n")
             except:

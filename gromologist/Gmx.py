@@ -181,7 +181,8 @@ def frames_count(trajfile: str, gmx: Optional[str] = 'gmx') -> int:
 
 def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = False, traj: Optional[str] = None,
                     terms: Optional[Union[str, list]] = None, cleanup: bool = True, group_a: Optional[str] = None,
-                    group_b: Optional[str] = None, sum_output: bool = False, savetxt: Optional[str] = None) -> dict:
+                    group_b: Optional[str] = None, sum_output: bool = False, savetxt: Optional[str] = None,
+                    **kwargs) -> dict:
     """
     Calculates selected energy terms given a structure/topology pair or structure/topology/trajectory set.
     :param struct: str, path to the structure file
@@ -194,6 +195,7 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
     :param group_a: str, selection defining group A to calculate interactions between group A and B
     :param group_b: str, selection defining group B to calculate interactions between group A and B
     :param sum_output: bool, whether to add a term "sum" that will contain all terms added up
+    :param kwargs: dict, options that will be added to the .mdp file
     :return: dict of lists, one list of per-frame values per each selected term
     """
     if not gmx:
@@ -206,13 +208,13 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
         raise RuntimeError("If you're choosing individual groups, please specify both group_a and group_b")
     if group_a and group_b:
         group_names = ndx(gml.Pdb(struct), [group_a, group_b, 'all'])
-        gen_mdp('rerun.mdp', energygrps=f"{group_names[0]} {group_names[1]} ")
+        gen_mdp('rerun.mdp', energygrps=f"{group_names[0]} {group_names[1]} ", **kwargs)
         gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5, n='gml.ndx')
         if terms is None:
             terms = ['coul-sr:g1-g2', 'lj-sr:g1-g2']
             sum_output = True
     else:
-        gen_mdp('rerun.mdp')
+        gen_mdp('rerun.mdp', **kwargs)
         gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5)
         if terms is None:
             terms = 'potential'

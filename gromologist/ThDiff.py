@@ -713,13 +713,15 @@ class ThermoDiff:
         return flat_bin_data, flat_deriv_data, flat_weights, flat_derivs
 
     def calc_discrete_derivatives(self, dataset: Optional[str] = None, free_energy: Optional[bool] = True,
-                                  threshold: Optional[list] = None, cv_dataset: Optional[str] = None):
+                                  threshold: Optional[list] = None, cv_dataset: Optional[str] = None,
+                                  noe: Optional[bool] = True):
         """
         Calculates selected derivatives for a number of discrete states
         :param dataset: str, alias for the dataset
         :param free_energy: bool, whether the derivative should be of free energy or of observable/CV
         :param threshold: list, for continues dataset specifies 2N boundaries used to define N discrete states
         :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be
+        :param noe: bool, if free_energy is False, then this switches on calculations based on averaging the -6th power (use one state)
         performed based on 'cv_dataset'
         :return: None
         """
@@ -746,6 +748,8 @@ class ThermoDiff:
             mean_product = {st: 0 for st in states + [None]}
             mean_data = {st: 0 for st in states + [None]}
             counter = {st: 0 for st in states + [None]}
+            if not free_energy and noe:
+                deriv_data = [x ** (-6) for x in deriv_data]
             for n in range(len(binning_data)):
                 state_index = None
                 if threshold is not None:
@@ -760,16 +764,25 @@ class ThermoDiff:
                 if not free_energy:
                     mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n]
                     mean_data[state_index] += deriv_data[n]
+            for state_index in counter.keys():
+                if counter[state_index] > 0:
+                    mean_derivatives[state_index] /= counter[state_index]
+                    mean_product[state_index] /= counter[state_index]
+                    mean_data[state_index] /= counter[state_index]
             if free_energy:
-                self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / (mod.dpar * counter[x])
+                self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar
                                                                               for x in mean_derivatives.keys() if counter[x] > 0]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
-                for key in mean_derivatives.keys():
-                    mean_obs[key] = (1 / 0.008314 * self.temperature) * (
-                            mean_data[key] * mean_derivatives[key] - mean_product[key])
-                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] / (mod.dpar * counter[x])
-                                                                             for x in mean_obs.keys() if counter[x] > 0]
+                if not noe:
+                    for key in mean_derivatives.keys():
+                        mean_obs[key] = (1 / 0.008314 * self.temperature) * (mean_data[key] * mean_derivatives[key] - mean_product[key])
+                else:
+                    for key in mean_derivatives.keys():
+                        mean_der = (1 / 0.008314 * self.temperature) * (mean_data[key] * mean_derivatives[key] - mean_product[key])
+                        mean_obs[key] = -1/6 * mean_data[key] ** (-7/6) * mean_der
+                ders = [mean_obs[x] / mod.dpar for x in mean_obs.keys() if counter[x] > 0]
+                self.discrete_observable_derivatives[(str(mod), dataset)] = ders
 
     def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50,
                                  cv_dataset: Optional[str] = None):

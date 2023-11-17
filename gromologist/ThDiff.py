@@ -853,7 +853,10 @@ class ThermoDiff:
         print(f'{"  others":20s}  |', file=outfile)
         print(23 * (len(thrs)//2 + 1) * '-', file=outfile)
         all_ders = [q for q in derivs.keys() if q[1] == dataset]
-        sorted_ders = sorted(all_ders, key=lambda l: abs(derivs[l][1] - derivs[l][0]), reverse=True)
+        if free_energy:
+            sorted_ders = sorted(all_ders, key=lambda l: abs(derivs[l][1] - derivs[l][0]), reverse=True)
+        else:
+            sorted_ders = sorted(all_ders, key=lambda l: abs(derivs[l][0]), reverse=True)
         strings = {}
         for n, mod in enumerate(all_ders):
             strings[mod] = []

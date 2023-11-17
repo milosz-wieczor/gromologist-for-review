@@ -763,7 +763,7 @@ class ThermoDiff:
                 counter[state_index] += weights[n]
                 if not free_energy:
                     mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n]
-                    mean_data[state_index] += deriv_data[n]
+                    mean_data[state_index] += deriv_data[n] * weights[n]
             for state_index in counter.keys():
                 if counter[state_index] > 0:
                     mean_derivatives[state_index] /= counter[state_index]

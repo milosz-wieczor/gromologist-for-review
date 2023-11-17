@@ -780,7 +780,8 @@ class ThermoDiff:
                 else:
                     for key in mean_derivatives.keys():
                         mean_der = (1 / 0.008314 * self.temperature) * (mean_data[key] * mean_derivatives[key] - mean_product[key])
-                        mean_obs[key] = -1/6 * mean_data[key] ** (-7/6) * mean_der
+                        mdk = mean_data[key] ** (-7/6) if mean_data[key] != 0 else 0
+                        mean_obs[key] = -1/6 * mdk * mean_der
                 ders = [mean_obs[x] / mod.dpar for x in mean_obs.keys() if counter[x] > 0]
                 self.discrete_observable_derivatives[(str(mod), dataset)] = ders
 

@@ -705,11 +705,11 @@ class ThermoDiff:
         active_counters_trajids = [ct for ct in counters_trajids if ct[1] in active_dataset_trajids
                                    and ct[0] == mod.counter]
         flat_bin_data = [data for ct in active_counters_trajids for data in
-                         self.get_traj(ct[1])['datasets'][binning_dataset]]
+                         self.get_traj(ct[1])['datasets'][binning_dataset]] # ids of the bins
         flat_deriv_data = [data for ct in active_counters_trajids for data in
-                           self.get_traj(ct[1])['datasets'][deriv_dataset]]
-        flat_weights = [wght for ct in active_counters_trajids for wght in self.get_traj(ct[1])['weights']]
-        flat_derivs = [der for ct in active_counters_trajids for der in self.derivatives[ct]]
+                           self.get_traj(ct[1])['datasets'][deriv_dataset]] # the property
+        flat_weights = [wght for ct in active_counters_trajids for wght in self.get_traj(ct[1])['weights']] # normalized
+        flat_derivs = [der for ct in active_counters_trajids for der in self.derivatives[ct]] # the dU/d(sigma) values
         return flat_bin_data, flat_deriv_data, flat_weights, flat_derivs
 
     def calc_discrete_derivatives(self, dataset: Optional[str] = None, free_energy: Optional[bool] = True,
@@ -748,7 +748,7 @@ class ThermoDiff:
             mean_product = {st: 0 for st in states + [None]}
             mean_data = {st: 0 for st in states + [None]}
             counter = {st: 0 for st in states + [None]}
-            if not free_energy and noe:
+            if noe and not free_energy:
                 deriv_data = [x ** (-6) for x in deriv_data]
             for n in range(len(binning_data)):
                 state_index = None
@@ -759,10 +759,10 @@ class ThermoDiff:
                             break
                 else:
                     state_index = binning_data[n]
-                mean_derivatives[state_index] += weights[n] * derivs[n]
+                mean_derivatives[state_index] += weights[n] * derivs[n] / mod.dpar
                 counter[state_index] += weights[n]
                 if not free_energy:
-                    mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n]
+                    mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n] / mod.dpar
                     mean_data[state_index] += deriv_data[n] * weights[n]
             for state_index in counter.keys():
                 if counter[state_index] > 0:
@@ -770,19 +770,18 @@ class ThermoDiff:
                     mean_product[state_index] /= counter[state_index]
                     mean_data[state_index] /= counter[state_index]
             if free_energy:
-                self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x] / mod.dpar
+                self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x]
                                                                               for x in mean_derivatives.keys() if counter[x] > 0]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
-                if not noe:
-                    for key in mean_derivatives.keys():
-                        mean_obs[key] = (1 / 0.008314 * self.temperature) * (mean_data[key] * mean_derivatives[key] - mean_product[key])
-                else:
-                    for key in mean_derivatives.keys():
-                        mean_der = (1 / 0.008314 * self.temperature) * (mean_data[key] * mean_derivatives[key] - mean_product[key])
+                for key in mean_derivatives.keys():
+                    mean_der = (1 / (0.008314 * self.temperature)) * (mean_data[key] * mean_derivatives[key] - mean_product[key])
+                    if not noe:
+                        mean_obs[key] = mean_der
+                    else:
                         mdk = mean_data[key] ** (-7/6) if mean_data[key] != 0 else 0
                         mean_obs[key] = -1/6 * mdk * mean_der
-                ders = [mean_obs[x] / mod.dpar for x in mean_obs.keys() if counter[x] > 0]
+                ders = [mean_obs[x] for x in mean_obs.keys() if counter[x] > 0]
                 self.discrete_observable_derivatives[(str(mod), dataset)] = ders
 
     def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50,

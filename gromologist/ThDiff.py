@@ -1,4 +1,7 @@
 import os
+
+import numpy as np
+
 import gromologist as gml
 from typing import Union, Optional, TypeVar, Tuple
 from itertools import combinations_with_replacement
@@ -362,6 +365,10 @@ class ThermoDiff:
         self.profile_free_energy_derivatives = {}
         self.discrete_observable_derivatives = {}
         self.profile_observable_derivatives = {}
+        self.discrete_free_energy_derivative_uncertainties = {}
+        self.profile_free_energy_derivative_uncertainties = {}
+        self.discrete_observable_derivative_uncertainties = {}
+        self.profile_observable_derivative_uncertainties = {}
         self.thresholds = {}
 
     def add_mod(self, top: Union[str, gml.Top], structure: str, modtype: str, selections: list,
@@ -714,7 +721,7 @@ class ThermoDiff:
 
     def calc_discrete_derivatives(self, dataset: Optional[str] = None, free_energy: Optional[bool] = True,
                                   threshold: Optional[list] = None, cv_dataset: Optional[str] = None,
-                                  noe: Optional[bool] = True):
+                                  noe: Optional[bool] = True, bootstrap = False):
         """
         Calculates selected derivatives for a number of discrete states
         :param dataset: str, alias for the dataset
@@ -722,6 +729,7 @@ class ThermoDiff:
         :param threshold: list, for continues dataset specifies 2N boundaries used to define N discrete states
         :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be
         :param noe: bool, if free_energy is False, then this switches on calculations based on averaging the -6th power (use one state)
+        :param bootstrap: bool, whether to estimate uncertainty using bootstrap
         performed based on 'cv_dataset'
         :return: None
         """
@@ -744,12 +752,19 @@ class ThermoDiff:
         self.thresholds[dataset] = threshold
         for mod in self.mods:
             binning_data, deriv_data, weights, derivs = self.get_flat_data(binning_dset, deriv_dset, mod)
+            vals_derivatives = {st: [] for st in states + [None]}
+            vals_data = {st: [] for st in states + [None]}
+            vals_weights = {st: [] for st in states + [None]}
             mean_derivatives = {st: 0 for st in states + [None]}
             mean_product = {st: 0 for st in states + [None]}
             mean_data = {st: 0 for st in states + [None]}
+            unc_derivatives = {st: 0 for st in states + [None]}
+            unc_product = {st: 0 for st in states + [None]}
+            unc_data = {st: 0 for st in states + [None]}
             counter = {st: 0 for st in states + [None]}
             if noe and not free_energy:
                 deriv_data = [x ** (-6) for x in deriv_data]
+            # first preparing/sorting values into different states
             for n in range(len(binning_data)):
                 state_index = None
                 if threshold is not None:
@@ -759,30 +774,61 @@ class ThermoDiff:
                             break
                 else:
                     state_index = binning_data[n]
-                mean_derivatives[state_index] += weights[n] * derivs[n] / mod.dpar
+                vals_derivatives[state_index].append(derivs[n])
+                vals_data[state_index].append(deriv_data[n])
+                vals_weights[state_index].append(weights[n])
                 counter[state_index] += weights[n]
-                if not free_energy:
-                    mean_product[state_index] += deriv_data[n] * weights[n] * derivs[n] / mod.dpar
-                    mean_data[state_index] += deriv_data[n] * weights[n]
+            # then calculating the weighted means of all components
             for state_index in counter.keys():
                 if counter[state_index] > 0:
-                    mean_derivatives[state_index] /= counter[state_index]
-                    mean_product[state_index] /= counter[state_index]
-                    mean_data[state_index] /= counter[state_index]
+                    mean_derivatives[state_index] = sum([w*dr for w, dr in zip(vals_weights[state_index], vals_derivatives[state_index])]) / (counter[state_index] * mod.dpar)
+                    mean_product[state_index] = sum([w*d*dr for w, d, dr in zip(vals_weights[state_index], vals_data[state_index], vals_derivatives[state_index])]) / (counter[state_index] * mod.dpar)
+                    mean_data[state_index] = sum([w*d for w, d in zip(vals_weights[state_index], vals_data[state_index])]) / counter[state_index]
+                    # finally, if needed, computing the uncertainties with bootstrap
+                    if bootstrap:
+                        unc_derivatives[state_index] = self.bootstrap(vals_derivatives[state_index], weights=vals_weights[state_index]) / mod.dpar
+                        unc_data[state_index] = self.bootstrap(vals_data[state_index], weights=vals_weights[state_index])
+                        unc_product[state_index] = self.bootstrap(sum([d*dr for d, dr in zip(vals_data[state_index], vals_derivatives[state_index])]), weights=vals_weights[state_index]) / mod.dpar
+            # here just writing the results to the final dictionaries
             if free_energy:
                 self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x]
                                                                               for x in mean_derivatives.keys() if counter[x] > 0]
+                if bootstrap:
+                    self.discrete_free_energy_derivative_uncertainties[(str(mod), dataset)] = [unc_derivatives[x]
+                                                                              for x in unc_derivatives.keys() if counter[x] > 0]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
+                final_unc = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
-                    mean_der = (1 / (0.008314 * self.temperature)) * (mean_data[key] * mean_derivatives[key] - mean_product[key])
+                    mean_obs_der = (1 / (0.008314 * self.temperature)) * (mean_data[key] * mean_derivatives[key] - mean_product[key])
                     if not noe:
-                        mean_obs[key] = mean_der
+                        mean_obs[key] = mean_obs_der
                     else:
                         mdk = mean_data[key] ** (-7/6) if mean_data[key] != 0 else 0
-                        mean_obs[key] = -1/6 * mdk * mean_der
-                ders = [mean_obs[x] for x in mean_obs.keys() if counter[x] > 0]
-                self.discrete_observable_derivatives[(str(mod), dataset)] = ders
+                        mean_obs[key] = -1/6 * mdk * mean_obs_der
+                    if bootstrap:
+                        rel_data = unc_data[key]/mean_data[key]
+                        rel_der = unc_derivatives[key]/mean_derivatives[key]
+                        unc_obs = np.sqrt(unc_product[key] ** 2 + (mean_data[key] * mean_derivatives[key] * (rel_der + rel_data))**2)
+                        if not noe:
+                            final_unc[key] = unc_obs
+                        else:
+                            final_unc[key] = mean_obs[key] * (unc_obs/mean_obs_der + 7/6 * mean_data[key]**(-13/6) * rel_data)
+                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] for x in mean_obs.keys() if counter[x] > 0]
+                if bootstrap:
+                    self.discrete_observable_derivative_uncertainties[(str(mod), dataset)] = [final_unc[x] for x in final_unc.keys() if counter[x] > 0]
+
+
+    def bootstrap(self, orig_sample, n_resamples=100, weights=None):
+        import numpy as np
+        sample = np.array(orig_sample)
+        weights = np.ones(len(sample))/len(sample) if weights is None else weights/np.sum(weights)
+        means = []
+        for i in range(n_resamples):
+            new_sample = np.random.choice(sample, size=len(sample), replace=True, p=weights)
+            means.append(np.mean(new_sample))
+        return np.std(means)
+
 
     def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50,
                                  cv_dataset: Optional[str] = None):

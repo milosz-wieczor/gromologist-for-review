@@ -800,9 +800,9 @@ class ThermoDiff:
                                                                       weights=vals_weights[state_index]) / mod.dpar
                         unc_data[state_index] = self.bootstrap(vals_data[state_index],
                                                                weights=vals_weights[state_index])
-                        unc_product[state_index] = self.bootstrap(sum([d*dr for d, dr
-                                                                       in zip(vals_data[state_index],
-                                                                              vals_derivatives[state_index])]),
+                        unc_product[state_index] = self.bootstrap([d*dr for d, dr
+                                                                   in zip(vals_data[state_index],
+                                                                          vals_derivatives[state_index])],
                                                                   weights=vals_weights[state_index]) / mod.dpar
             # here just writing the results to the final dictionaries
             if free_energy:

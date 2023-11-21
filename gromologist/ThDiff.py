@@ -781,26 +781,44 @@ class ThermoDiff:
             # then calculating the weighted means of all components
             for state_index in counter.keys():
                 if counter[state_index] > 0:
-                    mean_derivatives[state_index] = sum([w*dr for w, dr in zip(vals_weights[state_index], vals_derivatives[state_index])]) / (counter[state_index] * mod.dpar)
-                    mean_product[state_index] = sum([w*d*dr for w, d, dr in zip(vals_weights[state_index], vals_data[state_index], vals_derivatives[state_index])]) / (counter[state_index] * mod.dpar)
-                    mean_data[state_index] = sum([w*d for w, d in zip(vals_weights[state_index], vals_data[state_index])]) / counter[state_index]
+                    mean_derivatives[state_index] = (sum([w*dr for w, dr
+                                                         in zip(vals_weights[state_index],
+                                                                vals_derivatives[state_index])]) /
+                                                     (counter[state_index] * mod.dpar))
+                    mean_product[state_index] = (sum([w*d*dr for w, d, dr
+                                                     in zip(vals_weights[state_index],
+                                                            vals_data[state_index],
+                                                            vals_derivatives[state_index])]) /
+                                                 (counter[state_index] * mod.dpar))
+                    mean_data[state_index] = (sum([w*d for w, d
+                                                  in zip(vals_weights[state_index],
+                                                         vals_data[state_index])]) /
+                                              counter[state_index])
                     # finally, if needed, computing the uncertainties with bootstrap
                     if bootstrap:
-                        unc_derivatives[state_index] = self.bootstrap(vals_derivatives[state_index], weights=vals_weights[state_index]) / mod.dpar
-                        unc_data[state_index] = self.bootstrap(vals_data[state_index], weights=vals_weights[state_index])
-                        unc_product[state_index] = self.bootstrap(sum([d*dr for d, dr in zip(vals_data[state_index], vals_derivatives[state_index])]), weights=vals_weights[state_index]) / mod.dpar
+                        unc_derivatives[state_index] = self.bootstrap(vals_derivatives[state_index],
+                                                                      weights=vals_weights[state_index]) / mod.dpar
+                        unc_data[state_index] = self.bootstrap(vals_data[state_index],
+                                                               weights=vals_weights[state_index])
+                        unc_product[state_index] = self.bootstrap(sum([d*dr for d, dr
+                                                                       in zip(vals_data[state_index],
+                                                                              vals_derivatives[state_index])]),
+                                                                  weights=vals_weights[state_index]) / mod.dpar
             # here just writing the results to the final dictionaries
             if free_energy:
                 self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x]
-                                                                              for x in mean_derivatives.keys() if counter[x] > 0]
+                                                                              for x in mean_derivatives.keys()
+                                                                              if counter[x] > 0]
                 if bootstrap:
                     self.discrete_free_energy_derivative_uncertainties[(str(mod), dataset)] = [unc_derivatives[x]
-                                                                              for x in unc_derivatives.keys() if counter[x] > 0]
+                                                                                               for x in unc_derivatives.keys()
+                                                                                               if counter[x] > 0]
             else:
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 final_unc = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
-                    mean_obs_der = (1 / (0.008314 * self.temperature)) * (mean_data[key] * mean_derivatives[key] - mean_product[key])
+                    mean_obs_der = (1 / (0.008314 * self.temperature)) * (mean_data[key] * mean_derivatives[key] -
+                                                                          mean_product[key])
                     if not noe:
                         mean_obs[key] = mean_obs_der
                     else:
@@ -809,15 +827,19 @@ class ThermoDiff:
                     if bootstrap:
                         rel_data = unc_data[key]/mean_data[key]
                         rel_der = unc_derivatives[key]/mean_derivatives[key]
-                        unc_obs = np.sqrt(unc_product[key] ** 2 + (mean_data[key] * mean_derivatives[key] * (rel_der + rel_data))**2)
+                        unc_obs = np.sqrt(unc_product[key] ** 2 +
+                                          (mean_data[key] * mean_derivatives[key] * (rel_der + rel_data))**2)
                         if not noe:
                             final_unc[key] = unc_obs
                         else:
-                            final_unc[key] = mean_obs[key] * (unc_obs/mean_obs_der + 7/6 * mean_data[key]**(-13/6) * rel_data)
-                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] for x in mean_obs.keys() if counter[x] > 0]
+                            final_unc[key] = mean_obs[key] * (unc_obs/mean_obs_der +
+                                                              7/6 * mean_data[key]**(-13/6) * rel_data)
+                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] for x in mean_obs.keys()
+                                                                             if counter[x] > 0]
                 if bootstrap:
-                    self.discrete_observable_derivative_uncertainties[(str(mod), dataset)] = [final_unc[x] for x in final_unc.keys() if counter[x] > 0]
-
+                    self.discrete_observable_derivative_uncertainties[(str(mod), dataset)] = [final_unc[x] for x
+                                                                                              in final_unc.keys()
+                                                                                              if counter[x] > 0]
 
     def bootstrap(self, orig_sample, n_resamples=100, weights=None):
         import numpy as np
@@ -828,7 +850,6 @@ class ThermoDiff:
             new_sample = np.random.choice(sample, size=len(sample), replace=True, p=weights)
             means.append(np.mean(new_sample))
         return np.std(means)
-
 
     def calc_profile_derivatives(self, dataset: str, free_energy: Optional[bool] = True, nbins: Optional[int] = 50,
                                  cv_dataset: Optional[str] = None):
@@ -871,11 +892,12 @@ class ThermoDiff:
                                                                             [mean_obs[x] / mod.dpar
                                                                              for x in mean_obs.keys()])
 
-    def write_discrete_derivatives(self, dataset: str, free_energy: bool):
+    def write_discrete_derivatives(self, dataset: str, free_energy: bool, bootstrap: bool = False):
         """
-
+        Writes the derivatives to individual files in each working subdirectory
         :param dataset:
         :param free_energy:
+        :param bootstrap:
         :return:
         """
         derivs = self.discrete_free_energy_derivatives if free_energy else self.discrete_observable_derivatives
@@ -885,10 +907,19 @@ class ThermoDiff:
                 with open(f'working{self.name}/{mod}/{key[1]}-discrete_sensitivity.dat', 'w') as outfile:
                     outfile.write(f"{round(derivs[key][1] - derivs[key][0], 3)}\n")
 
-    def print_discrete_derivatives(self, dataset: str, free_energy: bool, outfile: Optional[str] = None):
+    def print_discrete_derivatives(self, dataset: str, free_energy: bool, outfile: Optional[str] = None, bootstrap: bool = False):
+        """
+        Prints discrete derivatives to the screen or a file
+        :param dataset: str, for which dataset the derivatives should be selected
+        :param free_energy: bool, whether the 1st state should be set to reference (equal to 0.0)
+        :param outfile: str, optional filename if the result is to be printed to a file
+        :param bootstrap: bool, whether to add uncertainty
+        :return: None
+        """
         if outfile is not None:
             outfile = open(outfile, mode='w')
         derivs = self.discrete_free_energy_derivatives if free_energy else self.discrete_observable_derivatives
+        uncerts = self.discrete_free_energy_derivative_uncertainties if free_energy else self.discrete_observable_derivative_uncertainties
         thrs = self.thresholds[dataset]
         for x in range(len(thrs)//2):
             x1 = round(thrs[2 * x], 3)
@@ -905,11 +936,15 @@ class ThermoDiff:
         strings = {}
         for n, mod in enumerate(all_ders):
             strings[mod] = []
-            for d in derivs[mod]:
-                if free_energy:
-                    strings[mod].append(f'  {d-derivs[mod][0]:20.5f}|')
+            for nd, d in enumerate(derivs[mod]):
+                if bootstrap:
+                    err = f' +/- {uncerts[mod][nd]}'
                 else:
-                    strings[mod].append(f'  {d:20.5f}|')
+                    err = ''
+                if free_energy:
+                    strings[mod].append(f'  {d-derivs[mod][0]:20.5f}{err}|')
+                else:
+                    strings[mod].append(f'  {d:20.5f}{err}|')
             try:
                 strings[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}  {self.mods[n].period:4d}\n")
             except:

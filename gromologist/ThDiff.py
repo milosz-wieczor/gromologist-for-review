@@ -825,15 +825,16 @@ class ThermoDiff:
                         mdk = mean_data[key] ** (-7/6) if mean_data[key] != 0 else 0
                         mean_obs[key] = -1/6 * mdk * mean_obs_der
                     if bootstrap:
-                        rel_data = unc_data[key]/mean_data[key]
-                        rel_der = unc_derivatives[key]/mean_derivatives[key]
-                        unc_obs = np.sqrt(unc_product[key] ** 2 +
-                                          (mean_data[key] * mean_derivatives[key] * (rel_der + rel_data))**2)
-                        if not noe:
-                            final_unc[key] = unc_obs
-                        else:
-                            final_unc[key] = mean_obs[key] * (unc_obs/mean_obs_der +
-                                                              7/6 * mean_data[key]**(-13/6) * rel_data)
+                        if counter[key] > 0:
+                            rel_data = unc_data[key]/mean_data[key]
+                            rel_der = unc_derivatives[key]/mean_derivatives[key]
+                            unc_obs = np.sqrt(unc_product[key] ** 2 +
+                                              (mean_data[key] * mean_derivatives[key] * (rel_der + rel_data))**2)
+                            if not noe:
+                                final_unc[key] = unc_obs
+                            else:
+                                final_unc[key] = mean_obs[key] * (unc_obs/mean_obs_der +
+                                                                  7/6 * mean_data[key]**(-13/6) * rel_data)
                 self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] for x in mean_obs.keys()
                                                                              if counter[x] > 0]
                 if bootstrap:

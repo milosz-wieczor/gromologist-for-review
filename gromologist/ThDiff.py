@@ -956,7 +956,7 @@ class ThermoDiff:
                         strings[mod].append(f"  {str(self.mods[n]):6s}  {self.mods[n].atoms[0].atomname:6s}  {self.mods[n].atoms[0].resname:6s}\n")
                     else:
                         strings[mod].append(f"  {str(self.mods[n]):6s}  {self.mods[n].type:16s}\n")
-            strings[mod].append(23 * (len(thrs)//2 + 1) * '-')
+            # strings[mod].append(23 * (len(thrs)//2 + 1) * '-')
         for sormod in sorted_ders:
             print(''.join(strings[sormod]), file=outfile)
         if outfile is not None:

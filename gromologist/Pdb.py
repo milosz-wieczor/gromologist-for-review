@@ -925,6 +925,18 @@ class Pdb:
             atom.resname = mutant.target_3l
 
     def _vector(self, atnames, resid, chain, nopbc=False):
+        """
+        Defines a vector based on a number of atoms within a residue. There are 2 cases:
+        (a) if 3 atoms are passed, the vector will be defining a missing 4th atom in an sp2 arrangement,
+            assuming the 1st atom passed is the center of the triangle
+        (b) if 2 or 4+ atoms are passed, the 1st atom is assumed to be the reference, and vectors to all
+            the other atoms will be simply added
+        :param atnames: list of str, names of the atoms
+        :param resid: int, number of the residue
+        :param chain:
+        :param nopbc:
+        :return:
+        """
         chstr = 'chain {} and '.format(chain) if chain else ''
         atoms = [self.get_atom('{}resid {} and name {}'.format(chstr, resid, at)) for at in atnames]
         if nopbc:
@@ -1133,6 +1145,12 @@ class Pdb:
         return atoms, tuple(box), remarks
 
     def make_term(self, term_type, atom_serial):
+        """
+        For introducing protein chain breaks, this adds terminal atoms to N- and C-terminal residues
+        :param term_type: str, "C" or "N" for the type of the terminus
+        :param atom_serial: int, the atom that defines the split
+        :return: None
+        """
         if term_type not in ["C", "N"]:
             raise RuntimeError(f"term_type has to be either 'C' or 'N', '{term_type}' was passed")
         atom = self.get_atom(f'serial {atom_serial}')
@@ -1297,6 +1315,10 @@ class Pdb:
                 outfile.write((3 * "{:10.5f}" + "\n").format(*gbox[:3]))
 
     def _calc_gro_box(self):
+        """
+        Converter function to the matrix-based .gro box definition
+        :return: list of float, matrix entries
+        """
         if self.box[3] == self.box[4] == self.box[5] == 90.0:
             return [x / 10 for x in self.box[:3]] + 6 * [0.0]
         else:
@@ -1348,13 +1370,25 @@ class Residue:
 
     @property
     def atoms(self):
+        """
+        Returns a list of gml.Atom objects that are part of this residue
+        :return: list of gml.Atom objects
+        """
         return self.pdb.get_atoms(self.selection)
 
     @property
     def structure(self):
+        """
+        Returns the whole PDB to which the residue is bound
+        :return: gml.Pdb
+        """
         return self.pdb
 
     def gen_pdb(self):
+        """
+        Generates a PDB that only contains this residue
+        :return: gml.Pdb with the isolated residue
+        """
         return Pdb.from_selection(self.pdb, self.selection)
 
     def __repr__(self):
@@ -1495,6 +1529,10 @@ class Traj:
 
     @property
     def nframes(self):
+        """
+        Simply the number of frames in the trajectory
+        :return: int, no of frames
+        """
         return len(self.structures)
 
     def get_coords_from_file(self, infile: str) -> list:
@@ -1535,6 +1573,11 @@ class Traj:
         self.check_consistency()
 
     def add_frames(self, pdb: Union[str, "gml.Traj"]):
+        """
+        Adds a frame to the trajectory
+        :param pdb: either str or gml.Traj, frames to add to the current traj
+        :return: None
+        """
         if isinstance(pdb, str):
             self.structures.extend(self.get_coords_from_file(pdb))
         else:
@@ -1542,11 +1585,20 @@ class Traj:
         self.check_consistency()
 
     def check_consistency(self):
+        """
+        Checks whether all frames have the same number of atoms (and only this)
+        :return: None
+        """
         if not all([len(pdb.atoms) == len(self.structures[0].atoms) for pdb in self.structures]):
             raise RuntimeError(f"Not all structures have the same number of atoms, "
                                f"with {[len(pdb.atoms) for pdb in self.structures]}")
 
     def as_string(self, end="ENDMDL"):
+        """
+        A printer function to facilitate writing to PDBs
+        :param end: how to end each MODEL entry, some softwares can be sensitive to this
+        :return: str, text-based content of the trajectory in multi-PDB format
+        """
         text = ''
         for nframe, frame in enumerate(self.structures, 1):
             text = text + 'MODEL     {:>4d}\n'.format(nframe)
@@ -1562,7 +1614,17 @@ class Traj:
     def __len__(self):
         return len(self.structures)
 
-    def atom_properties_from(self, pdb: Union[str, "gml.Pdb"], names=True, indices=True, chains=True):
+    def atom_properties_from(self, pdb: Union[str, "gml.Pdb"], names=True, indices=True, chains=True, resid=True):
+        """
+        Sets the properties of all atoms from a given trajectory based on a specified PDB;
+        by default, atom names, atom indices, chains, and residue IDs will be copied
+        :param pdb: str or gml.Pdb, the source PDB from which data should be copied
+        :param names: bool, whether to copy atom names
+        :param indices: bool, whether to copy atom indices
+        :param chains: bool, whether to copy chains
+        :param resid: bool, whether to copy residue numbers
+        :return:
+        """
         if isinstance(pdb, str):
             pdb = gml.Pdb(pdb)
         assert len(pdb.atoms) == len(self.atoms)
@@ -1574,8 +1636,16 @@ class Traj:
                     af.serial = ar.serial
                 if chains:
                     af.chain = ar.chain
+                if resid:
+                    af.resnum = ar.resnum
 
     def equal_spacing(self):
+        """
+        A special function that converts a trajectory defining a conformational transition
+        into a similar trajectory but (roughly) equally spaced in RMSD space; used for
+        the string method with "structural" intermediates
+        :return: None
+        """
         try:
             import numpy as np
         except ImportError:
@@ -1630,6 +1700,23 @@ class Traj:
                 struct.atoms[natom].set_coords(coords)
 
     def save_traj_as_pdb(self, filename=None, end="ENDMDL"):
+        """
+        Saves all frames to a single PDB file
+        :param filename: str, name of the file; if not specified, will overwrite the source file
+        :param end: how to end each MODEL entry, some softwares can be sensitive to this
+        :return: None
+        """
         filename = self.fname if filename is None else filename
         with open(filename, 'w') as outfile:
             outfile.write(self.as_string(end))
+
+    def save_traj_as_many_pdbs(self, core_filename=None):
+        """
+        Saves all frames to individual PDB files
+        :param core_filename: str, all filenames will be based on this name
+        :return: None
+        """
+        if core_filename is None:
+            core_filename = '.'.join(self.fname.split('.')[:-1])
+        for num, frame in enumerate(self.structures):
+            frame.save_pdb(f'{core_filename}{num}.pdb')

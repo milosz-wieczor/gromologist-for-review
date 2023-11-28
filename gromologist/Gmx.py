@@ -310,7 +310,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
                    box: Optional[str] = 'dodecahedron', cation: Optional[str] = 'K',
                    anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15, maxsol: Optional[int] = None,
                    resize_box=True, box_margin: Optional[float] = 1.5, explicit_box_size=None, quiet=True,
-                   topology: Optional[str] = None, maxwarn=None, **kwargs):
+                   topology: Optional[str] = None, maxwarn=None, minimize=True, **kwargs):
     """
     Implements a full system preparation workflow (parsing the structure with pdb2gmx,
     setting the box size, adding solvent and ions, minimizing, generating a final
@@ -327,6 +327,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     :param explicit_box_size: list, the a/b/c lengths of the box vector (in nm); this overrides box_margin
     :param quiet: bool, whether to print gmx output to the screen
     :param topology: str, if passed gmx pdb2gmx will be skipped
+    :param minimize: bool, whether to do energy minimization at the end
     :return: None
     """
     gmx = gml.find_gmx_dir()
@@ -390,22 +391,27 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
         sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
         gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
                           quiet=quiet, neutral=True, p="topol", o='ions', answer=True, fail_on_error=True)
-    # TODO capture warnings and print them
     output = gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='ions.gro', o='do_mini',
                       quiet=quiet, answer=True, maxwarn=1, fail_on_error=True)
     print(extract_warnings(output))
-    gmx_command(gmx[1], 'mdrun', deffnm='do_mini', v=True,
-                      quiet=quiet, answer=True, fail_on_error=True)
+    if minimize:
+        gmx_command(gmx[1], 'mdrun', deffnm='do_mini', v=True,
+                          quiet=quiet, answer=True, fail_on_error=True)
+        final_str_name = 'minimized_structure.pdb'
+    else:
+        copy2('ions.gro', 'do_mini.gro')
+        final_str_name = 'pre-minimized_structure.pdb'
     ndx(gml.Pdb('do_mini.gro'), selections=['all', 'not solvent'])
     gmx_command(gmx[1], 'trjconv', s='do_mini.tpr', f='do_mini.gro', o='whole.gro', pbc='cluster',
                       pass_values=[1, 0], quiet=quiet,
                       n='gml.ndx', answer=True, fail_on_error=True)
+
     t = gml.Top('topol.top')
     t.clear_sections()
     t.save_top('merged_topology.top')
     p = gml.Pdb('whole.gro', top=t)
     p.add_chains()
-    p.save_pdb('minimized_structure.pdb')
+    p.save_pdb(final_str_name)
 
 
 def extract_warnings(text):

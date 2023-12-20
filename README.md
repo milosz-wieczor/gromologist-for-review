@@ -36,7 +36,7 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Interpolating between two pre-aligned structures](#interpolating-between-two-pre-aligned-structures)
         * [Filling beta-values with custom data (for visualization)](#filling-beta-values-with-custom-data--for-visualization-)
         * [Renumbering atoms or residues in a structure](#renumbering-atoms-or-residues-in-a-structure)
-        * [Adding chain, CONECT or element information](#adding-chain--conect-or-element-information)
+        * [Adding chain, CONECT, QT or element information](#adding-chain--conect-qt-or-element-information)
         * [Converting a 3-point water model to a 4-point one](#converting-a-3-point-water-model-to-a-4-point-one)
     + [Selection language syntax](#selection-language-syntax)
     + [Access to Gromacs utilities](#access-to-gromacs-utilities)
@@ -788,8 +788,8 @@ For when it is desirable to change the order of chains in a system, use `Pdb.per
 
 This will put chain nr 3 first, then nr 2, and then nr 1 (C, B, A if they were originally A, B, C).
 
-##### Adding chain, CONECT or element information
-<a name="adding-chain--conect-or-element-information"/>
+##### Adding chain, CONECT, QT or element information
+<a name="adding-chain--conect-qt-or-element-information"/>
 
 When chain information goes missing (common issue with conversion between .pdb and .gro),
 this information can be easily recovered with `Pdb.add_chains()`. Note: if the `Pdb` instance
@@ -813,6 +813,18 @@ use:
 ```
 >>> p.add_elements()
 ```
+
+If one needs to prepare the .pdb file in the QT (charge/type) format, the charge and type information
+has to be supplied from the topology. You can load both structure and topology files at once,
+or, if you already loaded the structure file (can also be `.gro`), topology can be added later 
+with `add_top()`. QT data can then be loaded with the `Pdb.add_qt()` method:
+
+```
+>>> p.add_top('topol.top')
+>>> p.add_qt()
+```
+
+The formatting will be automatically adjusted to include the charge and type columns.
 
 Finally, if CONECT entries are needed in the PDB (as required by some programs), one can run:
 

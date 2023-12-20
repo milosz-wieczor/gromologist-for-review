@@ -535,6 +535,41 @@ class SubsectionParam(Subsection):
             raise RuntimeError(f"No entry found with types: {types}")
         return found
 
+    def plot_term_energy(self, atomtypes, interaction_type=None, label=None, color='C0'):
+        import matplotlib.pyplot as plt
+        import numpy as np
+        if isinstance(atomtypes, str):
+            atomtypes = atomtypes.split()
+        entries = self.get_entries_by_types(*atomtypes)
+        assert all([e.subsection.header == entries[0].subsection.header for e in entries])
+        if entries[0].subsection.header == "bondtypes":
+            assert entries[0].interaction_type == '1' and len(entries) == 1
+            x0, k = entries[0].params
+            x = np.linspace(x0-0.025, x0+0.025, 100)
+            plt.plot(x, 0.5 * k * (x-x0)**2, label=label, color=color)
+        elif entries[0].subsection.header == "angletypes":
+            assert len(entries) == 1
+            if entries[0].interaction_type == '1':
+                x0, k = entries[0].params
+                x = np.linspace(x0-5, x0+5, 100)
+                plt.plot(x, 0.5 * k * (x-x0)**2, label=label, color=color)
+            elif entries[0].interaction_type == '5':
+                raise NotImplementedError
+        elif entries[0].subsection.header == "dihedraltypes":
+            if entries[0].interaction_type == '9':
+                x = np.linspace(-180, 180, 100)
+                y = np.zeros(100)
+                for entry in entries:
+                    print(f'adding component {entry.params} from dihedral {entry.types} {entry.interaction_type}')
+                    phi0, k, mult = entry.params
+                    if mult == 0:
+                        continue
+                    y += k * (1 + np.cos(np.deg2rad(mult * x - phi0)))
+                y -= np.min(y)
+                plt.plot(x, y, label=label, color=color)
+            else:
+                raise NotImplementedError
+
     @property
     def entries_param(self):
         return [e for e in self.entries if isinstance(e, gml.EntryParam)]
@@ -574,7 +609,7 @@ class SubsectionParam(Subsection):
         """
         # TODO check why cmap doesn't work?
         for entry in other_subsection.entries_param:
-            existing = [e for e in self.entries_param if e.types == entry.types]
+            existing = [e for e in self.entries_param if e.types == entry.types or e.types == entry.types[::-1]]
             if len(existing) == 1 or (len(existing) > 1 and self.header == 'dihedraltypes'):
                 ex_entry = existing[0]
                 if entry.params in [ee.params for ee in existing] and ex_entry.interaction_type == entry.interaction_type \
@@ -593,7 +628,14 @@ class SubsectionParam(Subsection):
                         print(f"Found mismatch between original entry {str(ex_entry)} and new {entry}, keeping the "
                               f"original; if this is not desired, set overwrite=True")
             elif len(existing) == 0:
-                self.add_entry(entry)
+                if other_subsection.header != 'dihedraltypes':
+                    self.add_entry(entry)
+                else:
+                    # a separate case if these are multiple dihedral entries to be added at once:
+                    other_all = [e for e in other_subsection.entries_param if e.types == entry.types
+                                 or e.types == entry.types[::-1]]
+                    for dih_entry in other_all:
+                        self.add_entry(dih_entry)
             else:
                 raise RuntimeError(f"Found multiple entries matching the types of {entry.types} in section "
                                    f"{self.header}, make sure this is intentional")

@@ -46,8 +46,7 @@ class Pdb:
         self.gbox = self._calc_gro_box()
         self.altloc = altloc
         self.conect = {}
-        self._atom_format = "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
-                            "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
+        self.qt = qt
         self._atom_format_gro = "{:>5d}{:5s}{:>5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
 
@@ -59,6 +58,15 @@ class Pdb:
 
     def __getitem__(self, item):
         return self.atoms[item]
+
+    @property
+    def _atom_format(self):
+        if self.qt:
+            return "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
+                   "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}{:9.3f} {:>2s}\n"
+        else:
+            return "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
+                   "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
 
     def add_top(self, top: str, **kwargs):
         """
@@ -434,9 +442,14 @@ class Pdb:
         if atom.beta > 1000:
             atom.beta %= 1000
         if pdb:
-            return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain,
-                                            atom.resnum, atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta,
-                                            atom.element)
+            if self.qt:
+                return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain,
+                                                atom.resnum, atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta,
+                                                atom.q, atom.type)
+            else:
+                return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain,
+                                                atom.resnum, atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta,
+                                                atom.element)
         else:
             return self._atom_format_gro.format(atom.resnum, atom.resname, atom.atomname, atom.serial, atom.x / 10,
                                                 atom.y / 10, atom.z / 10)
@@ -653,6 +666,18 @@ class Pdb:
         for a in self.atoms:
             if not a.element:
                 a.element = [x for x in a.atomname if not x.isdigit()][0]
+
+    def add_qt(self):
+        """
+        Adds charge (q) and type from an associated topology
+        :return: None
+        """
+        if self.top is None:
+            raise RuntimeError("Add .top to this structure to read charges/types, e.g. using the .add_top() method")
+        for ap, at in zip(self.atoms, self.top.atoms):
+            ap.q = at.charge
+            ap.type = at.type
+        self.qt = True
 
     def get_atom_indices(self, selection_string: str, as_plumed: bool = False, as_ndx: bool = False) -> [list, str]:
         """

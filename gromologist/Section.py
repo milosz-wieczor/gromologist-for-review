@@ -1813,6 +1813,18 @@ class SectionParam(Section):
         self.defines = {}
         self._merge()
         self._get_defines()
+
+    @property
+    def bondtypes(self):
+        return self.get_subsection('bondtypes')
+
+    @property
+    def angletypes(self):
+        return self.get_subsection('angletypes')
+
+    @property
+    def dihedraltypes(self):
+        return self.get_subsection('dihedraltypes')
     
     def _merge(self):
         """

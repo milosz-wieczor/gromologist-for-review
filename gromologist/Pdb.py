@@ -1307,7 +1307,7 @@ class Pdb:
                 outfile.write(line.strip() + '\n')
             for n, atom in enumerate(self.atoms):
                 outfile.write(self._write_atom(atom))
-                if add_ter and n < self.natoms and atom.chain != self.atoms[n+1].chain:
+                if add_ter and n < self.natoms-1 and atom.chain != self.atoms[n+1].chain:
                     outfile.write(self._ter_format.format(atom.serial, atom.resname, atom.chain, atom.resnum))
             for conect in self.conect.keys():
                 outfile.write(self._write_conect(conect, self.conect[conect]))

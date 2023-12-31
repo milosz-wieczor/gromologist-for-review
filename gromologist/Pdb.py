@@ -47,6 +47,7 @@ class Pdb:
         self.altloc = altloc
         self.conect = {}
         self.qt = qt
+        self._ter_format = "TER   {:>5d}      {:3s} {:1s}{:>4d}   \n"
         self._atom_format_gro = "{:>5d}{:5s}{:>5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
 
@@ -1294,7 +1295,7 @@ class Pdb:
         else:
             return gml.Traj([self] + inter + [other])
 
-    def save_pdb(self, outname='out.pdb'):
+    def save_pdb(self, outname='out.pdb', add_ter=False):
         """
         Saves the structure in the PDB format
         :param outname: str, name of the file being produced
@@ -1304,8 +1305,10 @@ class Pdb:
             outfile.write(self._cryst_format.format(*self.box))
             for line in self.remarks:
                 outfile.write(line.strip() + '\n')
-            for atom in self.atoms:
+            for n, atom in enumerate(self.atoms):
                 outfile.write(self._write_atom(atom))
+                if add_ter and n < self.natoms and atom.chain != self.atoms[n+1].chain:
+                    outfile.write(self._ter_format.format(atom.serial, atom.resname, atom.chain, atom.resnum))
             for conect in self.conect.keys():
                 outfile.write(self._write_conect(conect, self.conect[conect]))
             outfile.write('END\n')

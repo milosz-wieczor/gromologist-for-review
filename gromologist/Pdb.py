@@ -232,6 +232,18 @@ class Pdb:
                 atomlist = []
             atomlist.append(at.atomname)
 
+    def names_from_top(self):
+        """
+        Sets names from the associated topology file
+        :return: None
+        """
+        if self.top is None:
+            raise RuntimeError("No .top is bound to this structure, add 'top=...' when loading molecule")
+        if self.top.natoms != self.natoms:
+            raise RuntimeError("Different numbers of atoms between .pdb and .top")
+        for at, ap in zip(self.top.atoms, self.atoms):
+            ap.atomname = at.atomname
+
     def add_chains(self, selection: str = None, chain: str = None, offset: int = 0, maxwarn: int = 100,
                    cutoff: float = 10, protein_only: bool = False, nopbc: bool = False):
         """

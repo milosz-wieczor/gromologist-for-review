@@ -351,7 +351,14 @@ class Pdb:
             if err > maxwarn > -1:
                 raise RuntimeError("Error: too many warnings; use maxwarn=N to allow for up to N exceptions,"
                                    "or maxwarn=-1 to allow for any number of them")
-        print("Check passed, all names match")
+        if self.natoms == self.top.natoms:
+            print("Check passed, all names match")
+        elif self.natoms > self.top.natoms:
+            raise RuntimeError(f"All atom names match, but there are {self.natoms - self.top.natoms} extra atoms at "
+                               f"the end of your structure file")
+        else:
+            raise RuntimeError(f"All atom names match, but there are {self.top.natoms - self.natoms} extra atoms at "
+                               f"the end of your topology file")
 
     @staticmethod
     def _check_mismatch(atom_entry: "gml.EntryAtom", atom_instance: "gml.Atom", mol_name: str) -> int:

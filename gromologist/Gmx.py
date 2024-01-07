@@ -129,7 +129,8 @@ def get_legend(gmx: str, fname: str) -> dict:
             if output[i].isnumeric()}
 
 
-def ndx(struct: gml.Pdb, selections: list, fname: Optional[str] = None, append: Optional[str] = None) -> list:
+def ndx(struct: gml.Pdb, selections: list, fname: Optional[str] = None, append: Optional[str] = None,
+        group_names: Optional[list] = None) -> list:
     """
     Writes a .ndx file with groups g1, g2, ... defined by the
     list of selections passed as input
@@ -137,10 +138,11 @@ def ndx(struct: gml.Pdb, selections: list, fname: Optional[str] = None, append: 
     :param selections: list of str, selections compatible with `struct`
     :param fname: str, name of the resulting .ndx file (default is 'gml.ndx'
     :param append: str, if provided then the groups will be appended to an existing file
+    :param group_names: list of str, groups will be named with these names
     :return: list of str, names of the group
     """
     groups = []
-    group_names = []
+    grnames = []
     if append is not None and fname is not None:
         raise RuntimeError("Specify either 'append' or 'fname'")
     elif fname is None:
@@ -149,23 +151,25 @@ def ndx(struct: gml.Pdb, selections: list, fname: Optional[str] = None, append: 
         raise RuntimeError(f"Cannot append to {append}: no such file")
     for n, sel in enumerate(selections, 1):
         groups.append([x + 1 for x in struct.get_atom_indices(sel)])
+        if group_names is not None:
+            grnames = group_names
         if sel == 'all':
-            group_names.append('System')
+            grnames.append('System')
         else:
-            group_names.append(f'g{n}')
+            grnames.append(f'g{n}')
     if append is not None:
         flink = open(append, 'a')
     else:
         flink = open(fname, 'w')
     with flink as out:
-        for gname, gat in zip(group_names, groups):
+        for gname, gat in zip(grnames, groups):
             out.write(f'[ {gname} ]\n')
             for n, at in enumerate(gat):
                 out.write(f'{at:8d}')
                 if n % 15 == 14:
                     out.write('\n')
             out.write('\n')
-    return group_names
+    return grnames
 
 
 def frames_count(trajfile: str, gmx: Optional[str] = 'gmx') -> int:

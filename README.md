@@ -876,10 +876,11 @@ selection syntax described above (VMD-like):
 >>> gml.ndx("protein.pdb", selections = ["backbone", "within 5 of resid 1"], group_names = ["bb", "sphere"])
 ```
 
-When needed, the new group(s) can also be added to an existing `.ndx` file:
+When needed, the new group(s) can also be added to an existing `.ndx` file. When a name is not specified, by default 
+groups will be named `g1`, `g2` etc. Selections can be single strings or lists of strings.
 
 ```
->>> gml.ndx("protein.pdb", selections = ["not backbone"], group_names = ["sc"], append='index.ndx')
+>>> gml.ndx("protein.pdb", selections = "not backbone", append='index.ndx')
 ```
 
 For quick printing of selections in .ndx-compatible format, use the `Pdb.get_atom_indices()` function with `as_ndx=True`:

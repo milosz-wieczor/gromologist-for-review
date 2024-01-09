@@ -39,6 +39,7 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Adding chain, CONECT, QT or element information](#adding-chain--conect-qt-or-element-information)
         * [Converting a 3-point water model to a 4-point one](#converting-a-3-point-water-model-to-a-4-point-one)
     + [Selection language syntax](#selection-language-syntax)
+        * [Creating index groups](#creating-index-groups)
     + [Access to Gromacs utilities](#access-to-gromacs-utilities)
         * [Energy decomposition for a structure or trajectory](#energy-decomposition-for-a-structure-or-trajectory)
         * [Automated system preparation](#automated-system-preparation)
@@ -855,14 +856,39 @@ The custom selection language was meant to be as similar as possible to that
 available in VMD: 
 + keywords such as "name", "resid", "resname", "serial", "chain" (for structures) or "type" (for topologies)
 + phrases "same residue as ..." and "within ... of" 
-+ predefined selections include "protein", "dna", "rna" and "solvent"
-+ logical operators as "or" & "and" work on sets of atoms; "not" inverses the selection
-+ ranges can be specified as e.g. "resid 5 to 25" or by simple enumeration
++ predefined selections include "protein", "dna", "rna", "backbone" and "solvent"
++ logical operators as "or" & "and" work on sets of atoms; "not" inverts the selection
++ ranges can be specified as e.g. "resid 5 to 25" or by simple enumeration "resid 5 6 7 8 9"
 + parentheses can be used to customize order of operations
 
 Examples: 
 + "(resid 1 to 100 and name CA) or (same residue as within 5 of resname LIG)"
 + "chain A B D and not solvent"
+
+##### Creating index groups
+<a name="#creating-index-groups"/>
+
+When the capabilities of `gmx make_ndx` are not sufficient, Gromologist allows to create groups based on its 
+selection syntax described above (VMD-like):
+
+```
+>>> import gromologist as gml
+>>> gml.ndx("protein.pdb", selections = ["backbone", "within 5 of resid 1"], group_names = ["bb", "sphere"])
+```
+
+When needed, the new group(s) can also be added to an existing `.ndx` file:
+
+```
+>>> gml.ndx("protein.pdb", selections = ["not backbone"], group_names = ["sc"], append='index.ndx')
+```
+
+For quick printing of selections in .ndx-compatible format, use the `Pdb.get_atom_indices()` function with `as_ndx=True`:
+
+```
+>>> p = Pdb("protein.pdb")
+>>> print(p.get_atom_indices('name CA CB CG', as_ndx=True))
+```
+
 
 ### Access to Gromacs utilities
 <a name="access-to-gromacs-utilities"/>

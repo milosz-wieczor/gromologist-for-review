@@ -147,6 +147,18 @@ class SectionMol(Section):
         return sum([a.mass for a in self.atoms])
 
     @property
+    def bonds_section(self):
+        return self.get_subsection('bonds')
+
+    @property
+    def angles_section(self):
+        return self.get_subsection('angles')
+
+    @property
+    def dihedral_section(self):
+        return self.get_subsection('dihedrals')
+
+    @property
     def residues(self) -> list:
         resid = None
         reslist = []

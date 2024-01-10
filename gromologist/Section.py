@@ -155,7 +155,7 @@ class SectionMol(Section):
         return self.get_subsection('angles')
 
     @property
-    def dihedral_section(self):
+    def dihedrals_section(self):
         return self.get_subsection('dihedrals')
 
     @property

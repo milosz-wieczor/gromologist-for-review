@@ -877,6 +877,9 @@ class SectionMol(Section):
         :param anchor_other: int, number of the atom that will form the new bond in other (or self, if other is self)
         :return: None
         """
+        for anch, mol in zip([anchor_own, anchor_other], [self, other]):
+            if anch > mol.natoms:
+                raise RuntimeError(f"Index {anch} exceeding atom count ({mol.natoms}) in molecule {mol.mol_name}")
         anchor_other = int(anchor_other)
         anchor_own = int(anchor_own)
         if other is not self:

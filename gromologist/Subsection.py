@@ -175,7 +175,23 @@ class SubsectionBonded(Subsection):
         :return: None
         """
         self.entries.sort(key=self._sorting_fn)
-    
+
+    def change_interaction_type(self, change_from, change_to):
+        """
+        Changes interaction type of the whole section
+        :param change_from: str/int, original interaction type
+        :param change_to: str/int, target interaction type
+        :return: None
+        """
+        change_from, change_to = str(change_from), str(change_to)
+        for entry in self.entries_bonded:
+            if entry.interaction_type == change_from:
+                if entry.params_state_a:
+                    self.section.top.print(f"Entry {str(entry)} has parameters explicitly assigned, skipping to "
+                                           f"avoid errors")
+                    continue
+                entry.interaction_type = change_to
+
     def _sorting_fn(self, entry: "gml.EntryBonded") -> int:
         """
         Comments should go first, then we sort based on first, second,

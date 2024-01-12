@@ -1946,7 +1946,7 @@ class SectionParam(Section):
         self.sort_dihedrals()
         self._remove_symm_dupl(new_atomtype)
 
-    def clean_unused(self, used_params: str, section: str = 'all'):
+    def clean_unused(self, used_params: list, section: str = 'all'):
         """
         Cleans up FF parameters that are not used by the given system
         :param used_params: list of str, identifiers of parameters we already know are being used

@@ -222,6 +222,14 @@ class Top:
         used_params = []
         for mol in self.molecules:
             used_params.extend(mol.find_used_ff_params(section=section))
+        for pairsect in ['nonbond_params', 'pairtypes']:
+            try:
+                ssect = self.parameters.get_subsection(pairsect)
+                for ent in ssect.entries_param:
+                    if not (ent.types[0] in self.defined_atomtypes and ent[1] in self.defined_atomtypes):
+                        used_params.append(ent.identifier)
+            except KeyError:
+                continue
         used_params.extend(self.parameters.find_used_ff_params(section=section))
         self.parameters.clean_unused(used_params, section=section)
 

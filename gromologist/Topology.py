@@ -9,8 +9,8 @@ from collections import OrderedDict
 
 
 class Top:
-    def __init__(self, filename, gmx_dir=None, gmx_exe=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None,
-                 ignore_missing_defines=False, keep_all=True, suppress=False):
+    def __init__(self, filename='', gmx_dir=None, gmx_exe=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None,
+                 ignore_missing_defines=False, keep_all=True, suppress=False, amber=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
@@ -34,8 +34,12 @@ class Top:
             self.dir = os.sep.join(self.fname.split(os.sep)[:-1])
         else:
             self.dir = os.getcwd() + os.sep + os.sep.join(self.fname.split(os.sep)[:-1])
-        with open(self.fname) as top_file:
-            self._contents = top_file.readlines()
+        try:
+            with open(self.fname) as top_file:
+                self._contents = top_file.readlines()
+        except self.fname == '' and amber:
+            self.print("Creating an empty amber topology file")
+            self._contents = ['#define _FF_AMBER\n', '[ defaults ]\n', '1 2 yes 0.5 0.8333\n', '[ atomtypes ]\n']
         self.defines = {}
         self.ignore_missing_defines = ignore_missing_defines
         if define is not None:

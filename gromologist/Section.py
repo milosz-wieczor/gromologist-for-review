@@ -1882,7 +1882,6 @@ class SectionParam(Section):
         if not dummy_entries:
             atomtypes.add_entry(gml.EntryParam('   {}     0        1.008  0.0000  A  0.000000000000  0.0000  '
                                                '\n'.format(dummy_type), atomtypes))
-
     def find_used_ff_params(self, section: str = 'all') -> list:
         """
         Finds FF parameters that are used by the system

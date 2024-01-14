@@ -1,5 +1,8 @@
+import os
+
 import gromologist as gml
 from typing import Optional, Iterable, Union
+
 
 # TODO make top always optional between str/path and gml.Top
 
@@ -72,7 +75,7 @@ def parse_frcmod(filename):
         if current == 'BOND':
             types = tuple(x.strip() for x in line[:5].split('-'))
             vals = tuple(float(x) for x in line[5:].split()[:2])
-            bondtypes[types] = [vals[1]/10, vals[0] * 200 * 4.184]
+            bondtypes[types] = [vals[1] / 10, vals[0] * 200 * 4.184]
         elif current == 'ANGL':
             types = tuple(x.strip() for x in line[:8].split('-'))
             vals = tuple(float(x) for x in line[8:].split()[:2])
@@ -89,18 +92,18 @@ def parse_frcmod(filename):
             rmin = float(line.split()[1])
             eps = float(line.split()[2])
             if types in atomtypes.keys() and len(atomtypes[types]) == 1:
-                atomtypes[types].extend([rmin * 0.2 * 2**(-1/6), eps * 4.184])
+                atomtypes[types].extend([rmin * 0.2 * 2 ** (-1 / 6), eps * 4.184])
             else:
                 atomtypes[types] = [0, rmin * 0.2 * 2 ** (-1 / 6), eps * 4.184]
         elif current == 'LJED':
             types = tuple(line.split()[:2])
             vals = tuple(line.split()[2:])
             assert vals[0] == vals[2] and vals[1] == vals[3]
-            nonbonded[types] = [float(vals[0]) * 0.2 * 2**(-1/6), float(vals[1]) * 4.184]
+            nonbonded[types] = [float(vals[0]) * 0.2 * 2 ** (-1 / 6), float(vals[1]) * 4.184]
         elif current == 'DIHE':
             types = tuple(x.strip() for x in line[:12].split('-'))
             vals = tuple(float(x) for x in line[12:].split()[:4])
-            entry = [vals[2], 4.184 * vals[1] / vals[0], int((vals[3]**2)**0.5)]
+            entry = [vals[2], 4.184 * vals[1] / vals[0], int((vals[3] ** 2) ** 0.5)]
             if types in dihedraltypes.keys():
                 dihedraltypes[types].extend(entry)
             else:
@@ -108,9 +111,9 @@ def parse_frcmod(filename):
         elif current == 'IMPR':
             types = tuple(x.strip() for x in line[:12].split('-'))
             vals = tuple(float(x) for x in line[12:].split()[:3])
-            entry = [vals[1], 4.184 * vals[0], int((vals[2]**2)**0.5)]
+            entry = [vals[1], 4.184 * vals[0], int((vals[2] ** 2) ** 0.5)]
             impropertypes[types] = entry
-    assert(all([len(val) == 3 for val in atomtypes.values()]))
+    assert (all([len(val) == 3 for val in atomtypes.values()]))
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded
 
 
@@ -136,7 +139,7 @@ def load_frcmod(top: "gml.Top", filename: str):
                   "create/load the type and run this command again.")
 
 
-def lib_to_rtp(lib: str, outfile: str = "new.rtp"):
+def read_lib(lib: str) -> (dict, dict, dict):
     curr_resname = None
     atoms = {}
     bonds = {}
@@ -165,8 +168,11 @@ def lib_to_rtp(lib: str, outfile: str = "new.rtp"):
                 elif ln.strip('!').split()[0].split('.')[3] == 'connectivity':
                     reading_bonds = True
                 elif ln.strip('!').split()[0].split('.')[3] == 'connect':
-                    connector[curr_resname].append(int(content[n+1].strip()))
+                    connector[curr_resname].append(int(content[n + 1].strip()))
+    return atoms, bonds, connector
 
+
+def write_rtp(atoms, bonds, connector, outfile: str = "new.rtp"):
     with open(outfile, 'w') as out:
         for res in atoms.keys():
             out.write(f"[ {res} ]\n [ atoms ]\n")
@@ -184,7 +190,7 @@ def lib_to_rtp(lib: str, outfile: str = "new.rtp"):
                 elif is_na:
                     out.write(f"  -O3'  {atoms[res][connector[res][0] - 1][0]}\n")
             out.write("\n\n")
-            # TODO no idea how this is encoded in AMBER files
+        # TODO no idea how this is encoded in AMBER files
 
 
 def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, outfile: str = 'inp.gau', charge: int = 0,
@@ -221,3 +227,51 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, out
         else:
             raise RuntimeError('Specify either both group_a and group_b, or neither')
         outf.write("\n")
+
+
+def amber2gmxFF(leaprc: str, outdir: str):
+    content = [line.strip() for line in open(leaprc)]
+    new_types = gml.read_addAtomTypes(content)
+    orig_dir = os.path.join(*leaprc.split(os.path.sep)[:-1]) if os.path.sep in leaprc else ''
+    libs = [f'{orig_dir}../lib' + line.split()[1] for line in content if len(line.split()) >= 2 and
+            line.split()[0] == "loadOff"]
+    dats = [f'{orig_dir}../parm' + line.split()[-1] for line in content if len(line.split()) >= 2 and
+            line.split()[-2] == "loadamberparams"]
+    atoms, bonds, connectors = {}, {}, {}
+    for lib in libs:
+        a, b, c = gml.read_lib(lib)
+        atoms.update(a)
+        bonds.update(b)
+        connectors.update(c)
+    new_top = gml.Top(amber=True)
+    for new_type in new_types.keys():
+        atnrs = {"C": 6, "H": 1, "O": 8, "N": 7, "S": 16, "P": 15, "F": 9, "Cl": 17, "Br": 35, "Na": 11, "Mg": 12,
+                 "Ca": 20, "K": 19, "Li": 3, "I": 53}
+        masses = {"C": 12.011, "H": 1.008, "O": 15.9994, "N": 14.007, "S": 32.06, "P": 30.9738, "F": 18.998,
+                  "Cl": 35.45, "Br": 79.904, "Na": 22.98977, "Mg": 24.305, "Ca": 40.08, "K": 39.09830, "Li": 6.941,
+                  "I": 126.90447}
+        nr = atnrs[new_type] if new_type in new_type in atnrs.keys() else 0
+        mss = masses[new_type] if new_type in new_type in atnrs.keys() else 0
+        new_top.parameters.add_atomtype(new_type, mass=mss, sigma=0, epsilon=0, atomic_number=nr)
+    for dat in dats:
+        load_frcmod(new_top, dat)
+    os.mkdir(outdir)
+    os.chdir(outdir)
+    new_top.save_top('forcefield.itp', split=True)
+    gml.write_rtp(atoms, bonds, connectors, 'aminoacids.rtp')
+
+
+def read_addAtomTypes(text: list) -> dict:
+    reading, brack = False, 0
+    types = {}
+    for line in text:
+        if line.strip().startswith('addAtomTypes'):
+            reading = True
+        if reading:
+            brack += line.count('{')
+            brack -= line.count('}')
+        if reading and brack == 0:
+            reading = False
+        data = line.strip().strip(['{', '}']).strip().split()
+        types[data[0].strip('"')] = data[1].strip('"')
+    return types

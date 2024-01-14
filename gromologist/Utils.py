@@ -62,17 +62,30 @@ def generate_dftb3_aa(top: "gml.Top", selection: str, pdb: Optional[Union[str, "
 # TODO move REST2 preparation here
 
 def parse_frcmod(filename):
+    dat = True if filename.endswith('dat') else False
     content = open(filename).readlines()
+    if any(['MOD4' in l and 'AC' in l for l in content]):
+        raise RuntimeError("LJ type A/C not supported, terminating")
+    content = content[1:] if dat else content
     atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded = {}, {}, {}, {}, {}, {}
     headers = ['MASS', 'BOND', 'ANGL', 'DIHE', 'IMPR', 'NONB', 'LJED']
-    current = None
+    iterator = 0
+    current = headers[iterator] if dat else None
     for line in content:
-        if any([line.strip().startswith(i) for i in headers]):
-            current = line.strip()[:4]
-            continue
-        if current is None or not line.strip() or line.strip().startswith('#'):
-            continue
+        if not dat:
+            if any([line.strip().startswith(i) for i in headers]):
+                current = line.strip()[:4]
+                continue
+            if current is None or not line.strip() or line.strip().startswith('#'):
+                continue
+        else:
+            if not line.strip():
+                iterator += 1
+                current = headers[iterator]
+                continue
         if current == 'BOND':
+            if dat and '-' not in line[:5]:
+                continue
             types = tuple(x.strip() for x in line[:5].split('-'))
             vals = tuple(float(x) for x in line[5:].split()[:2])
             bondtypes[types] = [vals[1] / 10, vals[0] * 200 * 4.184]
@@ -88,6 +101,11 @@ def parse_frcmod(filename):
             else:
                 atomtypes[types] = [mass]
         elif current == 'NONB':
+            if dat:
+                try:
+                   _ = float(line.split()[1])
+                except:
+                    continue
             types = line.split()[0]
             rmin = float(line.split()[1])
             eps = float(line.split()[2])
@@ -229,11 +247,9 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, out
         outf.write("\n")
 
 
-def amber2gmxFF(leaprc: str, outdir: str):
+def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     content = [line.strip() for line in open(leaprc)]
-    new_types = gml.read_addAtomTypes(content)
-    init = os.path.sep if leaprc.startswith(os.path.sep) else ''
-    orig_dir = init + os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + os.path.sep if os.path.sep in leaprc else ''
+    orig_dir = os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + os.path.sep if os.path.sep in leaprc else ''
     libs = [f'{orig_dir}../lib/' + line.split()[1] for line in content if len(line.split()) >= 2 and
             line.split()[0] == "loadOff"]
     dats = [f'{orig_dir}../parm/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
@@ -246,15 +262,6 @@ def amber2gmxFF(leaprc: str, outdir: str):
         bonds.update(b)
         connectors.update(c)
     new_top = gml.Top(amber=True)
-    for new_type in new_types.keys():
-        atnrs = {"C": 6, "H": 1, "O": 8, "N": 7, "S": 16, "P": 15, "F": 9, "Cl": 17, "Br": 35, "Na": 11, "Mg": 12,
-                 "Ca": 20, "K": 19, "Li": 3, "I": 53}
-        masses = {"C": 12.011, "H": 1.008, "O": 15.9994, "N": 14.007, "S": 32.06, "P": 30.9738, "F": 18.998,
-                  "Cl": 35.45, "Br": 79.904, "Na": 22.98977, "Mg": 24.305, "Ca": 40.08, "K": 39.09830, "Li": 6.941,
-                  "I": 126.90447}
-        nr = atnrs[new_type] if new_type in new_type in atnrs.keys() else 0
-        mss = masses[new_type] if new_type in new_type in atnrs.keys() else 0
-        new_top.parameters.add_atomtype(new_type, mass=mss, sigma=0, epsilon=0, atomic_number=nr)
     for dat in dats:
         print(f"Adding parameters from {dat}")
         load_frcmod(new_top, dat)

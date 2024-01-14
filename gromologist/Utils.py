@@ -232,10 +232,11 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, out
 def amber2gmxFF(leaprc: str, outdir: str):
     content = [line.strip() for line in open(leaprc)]
     new_types = gml.read_addAtomTypes(content)
-    orig_dir = os.path.join(*leaprc.split(os.path.sep)[:-1]) if os.path.sep in leaprc else ''
-    libs = [f'{orig_dir}../lib' + line.split()[1] for line in content if len(line.split()) >= 2 and
+    init = os.path.sep if leaprc.startswith(os.path.sep) else ''
+    orig_dir = init + os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + os.path.sep if os.path.sep in leaprc else ''
+    libs = [f'{orig_dir}../lib/' + line.split()[1] for line in content if len(line.split()) >= 2 and
             line.split()[0] == "loadOff"]
-    dats = [f'{orig_dir}../parm' + line.split()[-1] for line in content if len(line.split()) >= 2 and
+    dats = [f'{orig_dir}../parm/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
             line.split()[-2] == "loadamberparams"]
     atoms, bonds, connectors = {}, {}, {}
     for lib in libs:
@@ -270,8 +271,10 @@ def read_addAtomTypes(text: list) -> dict:
         if reading:
             brack += line.count('{')
             brack -= line.count('}')
-        if reading and brack == 0:
+        else:
+            continue
+        if brack == 0:
             reading = False
-        data = line.strip().strip(['{', '}']).strip().split()
+        data = line.strip().strip('{}').strip().split()
         types[data[0].strip('"')] = data[1].strip('"')
     return types

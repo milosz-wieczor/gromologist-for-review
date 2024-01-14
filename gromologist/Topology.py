@@ -34,10 +34,10 @@ class Top:
             self.dir = os.sep.join(self.fname.split(os.sep)[:-1])
         else:
             self.dir = os.getcwd() + os.sep + os.sep.join(self.fname.split(os.sep)[:-1])
-        try:
+        if not (self.fname == '' and amber):
             with open(self.fname) as top_file:
                 self._contents = top_file.readlines()
-        except self.fname == '' and amber:
+        else:
             self.print("Creating an empty amber topology file")
             self._contents = ['#define _FF_AMBER\n', '[ defaults ]\n', '1 2 yes 0.5 0.8333\n', '[ atomtypes ]\n']
         self.defines = {}

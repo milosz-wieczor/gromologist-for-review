@@ -240,6 +240,7 @@ def amber2gmxFF(leaprc: str, outdir: str):
             line.split()[-2] == "loadamberparams"]
     atoms, bonds, connectors = {}, {}, {}
     for lib in libs:
+        print(f"Adding residues from {lib}")
         a, b, c = gml.read_lib(lib)
         atoms.update(a)
         bonds.update(b)
@@ -255,6 +256,7 @@ def amber2gmxFF(leaprc: str, outdir: str):
         mss = masses[new_type] if new_type in new_type in atnrs.keys() else 0
         new_top.parameters.add_atomtype(new_type, mass=mss, sigma=0, epsilon=0, atomic_number=nr)
     for dat in dats:
+        print(f"Adding parameters from {dat}")
         load_frcmod(new_top, dat)
     os.mkdir(outdir)
     os.chdir(outdir)
@@ -276,5 +278,6 @@ def read_addAtomTypes(text: list) -> dict:
         if brack == 0:
             reading = False
         data = line.strip().strip('{}').strip().split()
-        types[data[0].strip('"')] = data[1].strip('"')
+        if len(data) == 3:
+            types[data[0].strip('"')] = data[1].strip('"')
     return types

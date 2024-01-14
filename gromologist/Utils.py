@@ -68,7 +68,7 @@ def parse_frcmod(filename):
         raise RuntimeError("LJ type A/C not supported, terminating")
     content = content[1:] if dat else content
     atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded = {}, {}, {}, {}, {}, {}
-    headers = ['MASS', 'BOND', 'ANGL', 'DIHE', 'IMPR', 'NONB', 'LJED']
+    headers = ['MASS', 'BOND', 'ANGL', 'DIHE', 'IMPR', 'HBON', 'NONB', 'LJED']
     iterator = 0
     current = headers[iterator] if dat else None
     for line in content:
@@ -79,10 +79,12 @@ def parse_frcmod(filename):
             if current is None or not line.strip() or line.strip().startswith('#'):
                 continue
         else:
-            if not line.strip():
+            if not line.strip() and iterator < len(headers) - 2:
                 iterator += 1
                 current = headers[iterator]
                 continue
+            if line.strip() == "END":
+                current = headers[-1]
         if current == 'BOND':
             if dat and '-' not in line[:5]:
                 continue
@@ -114,6 +116,9 @@ def parse_frcmod(filename):
             else:
                 atomtypes[types] = [0, rmin * 0.2 * 2 ** (-1 / 6), eps * 4.184]
         elif current == 'LJED':
+            if dat:
+                if not(len(line.split()) > 1 and line.split()[0] in atomtypes.keys() and line.split()[1] in atomtypes.keys()):
+                    continue
             types = tuple(line.split()[:2])
             vals = tuple(line.split()[2:])
             assert vals[0] == vals[2] and vals[1] == vals[3]

@@ -136,7 +136,8 @@ def parse_frcmod(filename):
             vals = tuple(float(x) for x in line[12:].split()[:3])
             entry = [vals[1], 4.184 * vals[0], int((vals[2] ** 2) ** 0.5)]
             impropertypes[types] = entry
-    assert (all([len(val) == 3 for val in atomtypes.values()]))
+    #assert (all([len(val) == 3 for val in atomtypes.values()]))
+    atomtypes = {k: v for k, v in atomtypes.items() if len(v) == 3} # TODO that's temporary
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded
 
 

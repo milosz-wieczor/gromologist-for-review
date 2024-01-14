@@ -2106,8 +2106,12 @@ class SectionParam(Section):
         :return:
         """
         subsection_dict = {(2, 1): 'bondtypes', (3, 1): 'angletypes', (4, 1): 'dihedraltypes', (4, 9): 'dihedraltypes',
-                           (4, 4): 'dihedraltypes'}
-        subs = self.get_subsection(subsection_dict[(len(types), interaction_type)])
+                           (4, 4): 'dihedraltypes', (4, 2): 'dihedraltypes'}
+        try:
+            subs = self.get_subsection(subsection_dict[(len(types), interaction_type)])
+        except KeyError:
+            self.subsections.append(self._yield_sub([f"[ {subsection_dict[(len(types), interaction_type)]} ]\n"]))
+            subs = self.subsections[-1]
         matching = [ent for ent in subs.entries_param if ent.types == types or ent.types == types[::-1]]
         if matching:
             action = action_default

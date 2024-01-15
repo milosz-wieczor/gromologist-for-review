@@ -142,10 +142,7 @@ def parse_frcmod(filename):
             vals = tuple(float(x) for x in line[12:].split()[:3])
             entry = [vals[1], 4.184 * vals[0], int((vals[2] ** 2) ** 0.5)]
             impropertypes[types] = entry
-    #assert (all([len(val) == 3 for val in atomtypes.values()]))
-    atomtypes = {k: v for k, v in atomtypes.items() if len(v) == 3} # TODO that's temporary
-    natomtypes = {k: v for k, v in atomtypes.items() if len(v) != 3}
-    print(natomtypes)
+    assert (all([len(val) == 3 for val in atomtypes.values()]))
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded
 
 
@@ -297,7 +294,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     dna_atoms, dna_bonds, dna_connectors = {}, {}, {}
     rna_atoms, rna_bonds, rna_connectors = {}, {}, {}
     impropers = {}
-    for prep in glob(amber_dir + "/prep/.in"):
+    for prep in glob(amb + "/prep/*.in"):
         impropers.update(read_prep_impropers(prep))
     for lib in libs:
         print(f"Adding residues from {lib}")
@@ -321,11 +318,11 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     os.mkdir(outdir)
     os.chdir(outdir)
     new_top.save_top('forcefield.itp', split=True)
-    gml.write_rtp(pro_atoms, pro_bonds, pro_connectors, 'aminoacids.rtp')
+    gml.write_rtp(pro_atoms, pro_bonds, pro_connectors, 'aminoacids.rtp', impropers=pro_impropers)
     if dna_atoms:
-        gml.write_rtp(dna_atoms, dna_bonds, dna_connectors, 'dna.rtp')
+        gml.write_rtp(dna_atoms, dna_bonds, dna_connectors, 'dna.rtp', impropers=dna_impropers)
     if rna_atoms:
-        gml.write_rtp(rna_atoms, rna_bonds, rna_connectors, 'rna.rtp')
+        gml.write_rtp(rna_atoms, rna_bonds, rna_connectors, 'rna.rtp', impropers=rna_impropers)
 
 
 def read_addAtomTypes(text: list) -> dict:
@@ -361,5 +358,8 @@ def read_prep_impropers(prepfile: str):
         if line.strip() == "DONE":
             reading = False
         if reading and current is not None and line.strip():
-            impropers[current] = line.strip().split()
+            if current not in impropers.keys():
+                impropers[current] = []
+            if len(line.split()) == 4:
+                impropers[current].append(line.strip().split())
     return impropers

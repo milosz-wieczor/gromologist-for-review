@@ -69,6 +69,7 @@ def parse_frcmod(filename):
     content = content[1:] if dat else content
     atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded = {}, {}, {}, {}, {}, {}
     headers = ['MASS', 'BOND', 'ANGL', 'DIHE', 'IMPR', 'HBON', 'NONB', 'LJED']
+    identical_nonbonded = {}
     iterator = 0
     current = headers[iterator] if dat else None
     for line in content:
@@ -107,14 +108,18 @@ def parse_frcmod(filename):
                 try:
                    _ = float(line.split()[1])
                 except:
+                    if len(line.split()) >= 2 and all([t in atomtypes.keys() for t in line.split()]):
+                        identical_nonbonded[line.split()[0]] = line.split()[1:]
                     continue
-            types = line.split()[0]
+            tps = line.split()[0]
             rmin = float(line.split()[1])
             eps = float(line.split()[2])
-            if types in atomtypes.keys() and len(atomtypes[types]) == 1:
-                atomtypes[types].extend([rmin * 0.2 * 2 ** (-1 / 6), eps * 4.184])
-            else:
-                atomtypes[types] = [0, rmin * 0.2 * 2 ** (-1 / 6), eps * 4.184]
+            types = [tps] if tps not in identical_nonbonded.keys() else [tps] + identical_nonbonded[tps]
+            for atype in types:
+                if atype in atomtypes.keys() and len(atomtypes[atype]) == 1:
+                    atomtypes[atype].extend([rmin * 0.2 * 2 ** (-1 / 6), eps * 4.184])
+                else:
+                    atomtypes[atype] = [0, rmin * 0.2 * 2 ** (-1 / 6), eps * 4.184]
         elif current == 'LJED':
             if dat:
                 if not(len(line.split()) > 1 and line.split()[0] in atomtypes.keys() and line.split()[1] in atomtypes.keys()):
@@ -138,6 +143,8 @@ def parse_frcmod(filename):
             impropertypes[types] = entry
     #assert (all([len(val) == 3 for val in atomtypes.values()]))
     atomtypes = {k: v for k, v in atomtypes.items() if len(v) == 3} # TODO that's temporary
+    natomtypes = {k: v for k, v in atomtypes.items() if len(v) != 3}
+    print natomtypes
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded
 
 
@@ -254,19 +261,48 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, out
 
 
 def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
+    """
+    Files that should be copied manually: watermodels.dat and tip*itp, .hdb, .tdb and .arn
+    :param leaprc:
+    :param outdir:
+    :param amber_dir:
+    :return:
+    """
     content = [line.strip() for line in open(leaprc)]
     orig_dir = os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + os.path.sep if os.path.sep in leaprc else ''
-    libs = [f'{orig_dir}../lib/' + line.split()[1] for line in content if len(line.split()) >= 2 and
+    if amber_dir is not None:
+        amb = amber_dir
+    else:
+        amb = f'{orig_dir}../'
+    libs = [amb + '/lib/' + line.split()[1] for line in content if len(line.split()) >= 2 and
             line.split()[0] == "loadOff"]
-    dats = [f'{orig_dir}../parm/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
+    dats = [amb + '/parm/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
             line.split()[-2] == "loadamberparams"]
-    atoms, bonds, connectors = {}, {}, {}
+    pro_atoms, pro_bonds, pro_connectors = {}, {}, {}
+    dna_atoms, dna_bonds, dna_connectors = {}, {}, {}
+    rna_atoms, rna_bonds, rna_connectors = {}, {}, {}
     for lib in libs:
         print(f"Adding residues from {lib}")
+        nucres = gml.Pdb.nucl_map.keys()
+
+        def dict_filter(dict, restype):
+            if restype == "DNA":
+                return {k: v for k, v in dict.items() if k in nucres and 'D' in nucres}
+            elif restype == "RNA":
+                return {k: v for k, v in dict.items() if k in nucres and 'D' not in nucres}
+            else:
+                return {k: v for k, v in dict.items() if k not in nucres}
+
         a, b, c = gml.read_lib(lib)
-        atoms.update(a)
-        bonds.update(b)
-        connectors.update(c)
+        pro_atoms.update(dict_filter(a, 'protein'))
+        pro_bonds.update(dict_filter(b, 'protein'))
+        pro_connectors.update(dict_filter(c, 'protein'))
+        dna_atoms.update(dict_filter(a, 'DNA'))
+        dna_bonds.update(dict_filter(b, 'DNA'))
+        dna_connectors.update(dict_filter(c, 'DNA'))
+        rna_atoms.update(dict_filter(a, 'RNA'))
+        rna_bonds.update(dict_filter(b, 'RNA'))
+        rna_connectors.update(dict_filter(c, 'RNA'))
     new_top = gml.Top(amber=True)
     for dat in dats:
         print(f"Adding parameters from {dat}")
@@ -274,7 +310,11 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     os.mkdir(outdir)
     os.chdir(outdir)
     new_top.save_top('forcefield.itp', split=True)
-    gml.write_rtp(atoms, bonds, connectors, 'aminoacids.rtp')
+    gml.write_rtp(pro_atoms, pro_bonds, pro_connectors, 'aminoacids.rtp')
+    if dna_atoms:
+        gml.write_rtp(dna_atoms, dna_bonds, dna_connectors, 'dna.rtp')
+    if rna_atoms:
+        gml.write_rtp(rna_atoms, rna_bonds, rna_connectors, 'rna.rtp')
 
 
 def read_addAtomTypes(text: list) -> dict:

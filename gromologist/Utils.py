@@ -274,11 +274,12 @@ def dict_filter(dict, restype):
 
 def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     """
+    Reads a .leaprc file and all parameter dependencies from Amber to convert into a Gromacs .ff dir
     Files that should be copied manually: watermodels.dat and tip*itp, .hdb, .tdb and .arn
-    :param leaprc:
-    :param outdir:
-    :param amber_dir:
-    :return:
+    :param leaprc: str, a file that sources dependencies from which the .ff will be created
+    :param outdir: str, a new .ff directory that will contain the Gromacs-compatible files
+    :param amber_dir: str, Abs path to the dir containing Amber prep, parm, lib directories if `leaprc` is a local file
+    :return: None
     """
     content = [line.strip() for line in open(leaprc)]
     orig_dir = os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + os.path.sep if os.path.sep in leaprc else ''
@@ -315,6 +316,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     for dat in dats:
         print(f"Adding parameters from {dat}")
         load_frcmod(new_top, dat)
+    outdir = outdir + '.ff' if not outdir.endswith('.ff') else outdir
     os.mkdir(outdir)
     os.chdir(outdir)
     new_top.save_top('forcefield.itp', split=True)

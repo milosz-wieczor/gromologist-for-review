@@ -14,7 +14,7 @@ class Pdb:
                 'DA3': "A", 'DG3': "G", 'DC3': "C", 'DT3': "T", 'RA': "A", 'RG': "G", 'RC': "C", 'RU': "U",
                 'RA5': "A", 'RG5': "G", 'RC5': "C", 'RU5': "U", 'RA3': "A", 'RG3': "G", 'RC3': "C", 'RU3': "U",
                 'A': "A", 'G': "G", 'C': "C", 'U': "U", 'A5': "A", 'G5': "G", 'C5': "C", 'U5': "U",
-                'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U"}
+                'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U", "AN": "A", "GN": "G", "UN": "U", "CN": "C", "TN": "T"}
 
     def __init__(self, filename: str = None, top: Union[str, "gml.Top"] = None, altloc: str = 'A', qt: bool = False,
                  **kwargs):

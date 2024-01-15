@@ -1,4 +1,5 @@
 import os
+from glob import glob
 
 import gromologist as gml
 from typing import Optional, Iterable, Union
@@ -144,7 +145,7 @@ def parse_frcmod(filename):
     #assert (all([len(val) == 3 for val in atomtypes.values()]))
     atomtypes = {k: v for k, v in atomtypes.items() if len(v) == 3} # TODO that's temporary
     natomtypes = {k: v for k, v in atomtypes.items() if len(v) != 3}
-    print natomtypes
+    print(natomtypes)
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded
 
 
@@ -203,7 +204,7 @@ def read_lib(lib: str) -> (dict, dict, dict):
     return atoms, bonds, connector
 
 
-def write_rtp(atoms, bonds, connector, outfile: str = "new.rtp"):
+def write_rtp(atoms: dict, bonds: dict, connector: dict, outfile: str = "new.rtp", impropers: Optional[dict] = None):
     with open(outfile, 'w') as out:
         for res in atoms.keys():
             out.write(f"[ {res} ]\n [ atoms ]\n")
@@ -220,8 +221,12 @@ def write_rtp(atoms, bonds, connector, outfile: str = "new.rtp"):
                     out.write(f"  -C  {atoms[res][connector[res][0] - 1][0]}\n")
                 elif is_na:
                     out.write(f"  -O3'  {atoms[res][connector[res][0] - 1][0]}\n")
+            if impropers is not None:
+                if res in impropers.keys():
+                    out.write(f" [ impropers ]\n")
+                    for imp in impropers[res]:
+                        out.write(f" {imp[0]:5s} {imp[1]:5s} {imp[2]:5s} {imp[3]:5s}\n")
             out.write("\n\n")
-        # TODO no idea how this is encoded in AMBER files
 
 
 def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, outfile: str = 'inp.gau', charge: int = 0,
@@ -260,6 +265,16 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, out
         outf.write("\n")
 
 
+def dict_filter(dict, restype):
+    nucres = gml.Pdb.nucl_map.keys()
+    if restype == "DNA":
+        return {k: v for k, v in dict.items() if k in nucres and 'D' in nucres}
+    elif restype == "RNA":
+        return {k: v for k, v in dict.items() if k in nucres and 'D' not in nucres}
+    else:
+        return {k: v for k, v in dict.items() if k not in nucres}
+
+
 def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     """
     Files that should be copied manually: watermodels.dat and tip*itp, .hdb, .tdb and .arn
@@ -281,18 +296,11 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     pro_atoms, pro_bonds, pro_connectors = {}, {}, {}
     dna_atoms, dna_bonds, dna_connectors = {}, {}, {}
     rna_atoms, rna_bonds, rna_connectors = {}, {}, {}
+    impropers = {}
+    for prep in glob(amber_dir + "/prep/.in"):
+        impropers.update(read_prep_impropers(prep))
     for lib in libs:
         print(f"Adding residues from {lib}")
-        nucres = gml.Pdb.nucl_map.keys()
-
-        def dict_filter(dict, restype):
-            if restype == "DNA":
-                return {k: v for k, v in dict.items() if k in nucres and 'D' in nucres}
-            elif restype == "RNA":
-                return {k: v for k, v in dict.items() if k in nucres and 'D' not in nucres}
-            else:
-                return {k: v for k, v in dict.items() if k not in nucres}
-
         a, b, c = gml.read_lib(lib)
         pro_atoms.update(dict_filter(a, 'protein'))
         pro_bonds.update(dict_filter(b, 'protein'))
@@ -303,6 +311,9 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
         rna_atoms.update(dict_filter(a, 'RNA'))
         rna_bonds.update(dict_filter(b, 'RNA'))
         rna_connectors.update(dict_filter(c, 'RNA'))
+    pro_impropers = dict_filter(impropers, 'protein')
+    dna_impropers = dict_filter(impropers, 'DNA')
+    rna_impropers = dict_filter(impropers, 'RNA')
     new_top = gml.Top(amber=True)
     for dat in dats:
         print(f"Adding parameters from {dat}")
@@ -334,3 +345,21 @@ def read_addAtomTypes(text: list) -> dict:
         if len(data) == 3:
             types[data[0].strip('"')] = data[1].strip('"')
     return types
+
+
+def read_prep_impropers(prepfile: str):
+    impropers = {}
+    current = None
+    reading = False
+    content = [line for line in open(prepfile)]
+    for line in content:
+        if len(line.split()) > 2:
+            if line.strip().split()[1] == "INT":
+                current = line.strip().split()[0]
+        if line.strip() == "IMPROPER":
+            reading = True
+        if line.strip() == "DONE":
+            reading = False
+        if reading and current is not None and line.strip():
+            impropers[current] = line.strip().split()
+    return impropers

@@ -142,7 +142,11 @@ def parse_frcmod(filename):
             vals = tuple(float(x) for x in line[12:].split()[:3])
             entry = [vals[1], 4.184 * vals[0], int((vals[2] ** 2) ** 0.5)]
             impropertypes[types] = entry
-    assert (all([len(val) == 3 for val in atomtypes.values()]))
+    # assert (all([len(val) == 3 for val in atomtypes.values()]))
+    atomtypes = {key: val for key, val in atomtypes.items() if len(val) == 3}
+    non_atomtypes = [key for key, val in atomtypes.items() if len(val) != 3]
+    if non_atomtypes:
+        print(f"skipping atomtypes {non_atomtypes}, missing LJ parameters")
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded
 
 
@@ -201,8 +205,14 @@ def read_lib(lib: str) -> (dict, dict, dict):
     return atoms, bonds, connector
 
 
-def write_rtp(atoms: dict, bonds: dict, connector: dict, outfile: str = "new.rtp", impropers: Optional[dict] = None):
+def write_rtp(atoms: dict, bonds: dict, connector: dict, outfile: str = "new.rtp", ff='amber',
+              impropers: Optional[dict] = None):
+    if ff.lower() not in ['amber', 'charmm']:
+        raise RuntimeError("Only Amber and CHARMM are currently supported")
+    btypes = '11941310' if ff == 'amber' else '15921310'
+    print(f"Setting [ bondedtypes ] in {outfile} file for the {ff}-type force field, please make sure this is right")
     with open(outfile, 'w') as out:
+        out.write(f"[ bondedtypes ]\n{' '.join(btypes)}\n\n")
         for res in atoms.keys():
             out.write(f"[ {res} ]\n [ atoms ]\n")
             for at in atoms[res]:
@@ -272,6 +282,43 @@ def dict_filter(dict, restype):
         return {k: v for k, v in dict.items() if k not in nucres}
 
 
+def fix_rtp(rtp_dict: dict, impr=False):
+    for res in rtp_dict.keys():
+        if "ILE" in res:
+            for n, ent in enumerate(rtp_dict[res]):
+                if ent[0] == "CD1":
+                    rtp_dict[res][n] = ('CD', *ent[1:])
+                elif ent[0].startswith("HD1"):
+                    rtp_dict[res][n] = (ent[0].replace("HD1", "HD"), *ent[1:])
+        if res.startswith("C") and res[1:] in gml.Pdb.prot_map.keys():
+            if not impr:
+                for n, ent in enumerate(rtp_dict[res]):
+                    if ent[0] == "O":
+                        rtp_dict[res][n] = ('OC1', *ent[1:])
+                    elif ent[0] == "OXT":
+                        rtp_dict[res][n] = ('OC2', *ent[1:])
+            else:
+                for n, ent in enumerate(rtp_dict[res]):
+                    for m, atname in enumerate(ent):
+                        if atname == "O":
+                            rtp_dict[res][n][m] = 'OC2'
+                        elif atname == "OXT":
+                            rtp_dict[res][n][m] = 'OC1'
+        for mid in ["A", "B", "G", "D", "E", "G1"]:
+            if f"H{mid}3" in [e[0] for e in rtp_dict[res]] and f"H{mid}1" not in [e[0] for e in rtp_dict[res]]:
+                for n, ent in enumerate(rtp_dict[res]):
+                    if ent[0] == f"H{mid}3":
+                        rtp_dict[res][n] = (f'H{mid}1', *ent[1:])
+        if impr:
+            for n, ent in enumerate(rtp_dict[res]):
+                for m, atname in enumerate(ent):
+                    if rtp_dict[res][n][m] == '-M':
+                        rtp_dict[res][n][m] = '-C'
+                    elif rtp_dict[res][n][m] == '+M':
+                        rtp_dict[res][n][m] = '+N'
+    return rtp_dict
+
+
 def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     """
     Reads a .leaprc file and all parameter dependencies from Amber to convert into a Gromacs .ff dir
@@ -300,7 +347,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     for lib in libs:
         print(f"Adding residues from {lib}")
         a, b, c = gml.read_lib(lib)
-        pro_atoms.update(dict_filter(a, 'protein'))
+        pro_atoms.update(fix_rtp(dict_filter(a, 'protein')))
         pro_bonds.update(dict_filter(b, 'protein'))
         pro_connectors.update(dict_filter(c, 'protein'))
         dna_atoms.update(dict_filter(a, 'DNA'))
@@ -309,7 +356,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
         rna_atoms.update(dict_filter(a, 'RNA'))
         rna_bonds.update(dict_filter(b, 'RNA'))
         rna_connectors.update(dict_filter(c, 'RNA'))
-    pro_impropers = dict_filter(impropers, 'protein')
+    pro_impropers = fix_rtp(dict_filter(impropers, 'protein'), impr=True)
     dna_impropers = dict_filter(impropers, 'DNA')
     rna_impropers = dict_filter(impropers, 'RNA')
     new_top = gml.Top(amber=True)

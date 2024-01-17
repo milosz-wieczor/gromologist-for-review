@@ -342,7 +342,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     dna_atoms, dna_bonds, dna_connectors = {}, {}, {}
     rna_atoms, rna_bonds, rna_connectors = {}, {}, {}
     impropers = {}
-    for prep in glob(amb + "/prep/*.in"):
+    for prep in glob(amb + "/prep/all*.in") + glob(amb + "/prep/nuc*.in"):
         impropers.update(read_prep_impropers(prep))
     for lib in libs:
         print(f"Adding residues from {lib}")
@@ -410,5 +410,9 @@ def read_prep_impropers(prepfile: str):
             if current not in impropers.keys():
                 impropers[current] = []
             if len(line.split()) == 4:
-                impropers[current].append(line.strip().split())
+                types = line.strip().split()
+                print(types)
+                # if types == ['CD1', 'CD2', 'CG', 'CB'] or types[::-1] == ['CD1', 'CD2', 'CG', 'CB']:
+                #     types = ['CD1', 'CG', 'CB', 'CD2']
+                impropers[current].append(types)
     return impropers

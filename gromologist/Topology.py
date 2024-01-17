@@ -349,6 +349,7 @@ class Top:
         :return: None
         """
         # TODO check if all types are defined
+        # TODO double-wildcards not recognized?
         for mol in self.molecules:
             mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy, once=once)
 

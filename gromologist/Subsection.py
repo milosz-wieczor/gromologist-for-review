@@ -610,7 +610,7 @@ class SubsectionParam(Subsection):
         used_parm_entries = []
         used_atomtypes_a = {a.type for mol in self.section.top.molecules for a in mol.atoms}
         used_atomtypes_b = {a.type_b for mol in self.section.top.molecules for a in mol.atoms if a.type_b is not None}
-        used_atomtypes = used_atomtypes_a.union(used_atomtypes_b)
+        used_atomtypes = used_atomtypes_a.union(used_atomtypes_b).union({'X'})
         for entry in self.entries_param:
             if all(tp in used_atomtypes for tp in entry.types):
                 used_parm_entries.append(entry.identifier)

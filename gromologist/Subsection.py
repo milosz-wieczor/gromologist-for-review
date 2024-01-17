@@ -606,6 +606,15 @@ class SubsectionParam(Subsection):
                 self.ordering[str(entry)] = n - 10**6
         self.entries.sort(key=self._sorting_fn)
 
+    def reorder_improper(self, types: tuple, new_order: str):
+        try:
+            entry = [ent for ent in self.get_entries_by_types(*types) if ent.interaction_type in '24'][0]
+        except RuntimeError:
+            return
+        else:
+            entry.types = (entry.types[int(new_order[0])], entry.types[int(new_order[1])],
+                           entry.types[int(new_order[2])], entry.types[int(new_order[3])])
+
     def find_used_ff_params(self):
         used_parm_entries = []
         used_atomtypes_a = {a.type for mol in self.section.top.molecules for a in mol.atoms}

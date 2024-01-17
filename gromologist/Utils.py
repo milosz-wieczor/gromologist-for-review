@@ -282,40 +282,73 @@ def dict_filter(dict, restype):
         return {k: v for k, v in dict.items() if k not in nucres}
 
 
-def fix_rtp(rtp_dict: dict, impr=False):
+def fix_rtp(rtp_dict: dict, impr=False, rna=False):
+    to_copy = {}
     for res in rtp_dict.keys():
-        if "ILE" in res:
-            for n, ent in enumerate(rtp_dict[res]):
-                if ent[0] == "CD1":
-                    rtp_dict[res][n] = ('CD', *ent[1:])
-                elif ent[0].startswith("HD1"):
-                    rtp_dict[res][n] = (ent[0].replace("HD1", "HD"), *ent[1:])
-        if res.startswith("C") and res[1:] in gml.Pdb.prot_map.keys():
-            if not impr:
+        if not rna:
+            if "ILE" in res:
                 for n, ent in enumerate(rtp_dict[res]):
-                    if ent[0] == "O":
-                        rtp_dict[res][n] = ('OC1', *ent[1:])
-                    elif ent[0] == "OXT":
-                        rtp_dict[res][n] = ('OC2', *ent[1:])
-            else:
+                    if ent[0] == "CD1":
+                        rtp_dict[res][n] = ('CD', *ent[1:])
+                    elif ent[0].startswith("HD1"):
+                        rtp_dict[res][n] = (ent[0].replace("HD1", "HD"), *ent[1:])
+            if res.startswith("C") and res[1:] in gml.Pdb.prot_map.keys():
+                if not impr:
+                    for n, ent in enumerate(rtp_dict[res]):
+                        if ent[0] == "O":
+                            rtp_dict[res][n] = ('OC1', *ent[1:])
+                        elif ent[0] == "OXT":
+                            rtp_dict[res][n] = ('OC2', *ent[1:])
+                else:
+                    for n, ent in enumerate(rtp_dict[res]):
+                        for m, atname in enumerate(ent):
+                            if atname == "O":
+                                rtp_dict[res][n][m] = 'OC2'
+                            elif atname == "OXT":
+                                rtp_dict[res][n][m] = 'OC1'
+            for mid in ["A", "B", "G", "D", "E", "G1"]:
+                if f"H{mid}3" in [e[0] for e in rtp_dict[res]] and f"H{mid}1" not in [e[0] for e in rtp_dict[res]]:
+                    for n, ent in enumerate(rtp_dict[res]):
+                        if ent[0] == f"H{mid}3":
+                            rtp_dict[res][n] = (f'H{mid}1', *ent[1:])
+            if impr:
                 for n, ent in enumerate(rtp_dict[res]):
                     for m, atname in enumerate(ent):
-                        if atname == "O":
-                            rtp_dict[res][n][m] = 'OC2'
-                        elif atname == "OXT":
-                            rtp_dict[res][n][m] = 'OC1'
-        for mid in ["A", "B", "G", "D", "E", "G1"]:
-            if f"H{mid}3" in [e[0] for e in rtp_dict[res]] and f"H{mid}1" not in [e[0] for e in rtp_dict[res]]:
+                        if rtp_dict[res][n][m] == '-M':
+                            rtp_dict[res][n][m] = '-C'
+                        elif rtp_dict[res][n][m] == '+M':
+                            rtp_dict[res][n][m] = '+N'
+        if rna:
+            for res in rtp_dict.keys():
+                if res[0] in 'CAGU':
+                    to_copy[res] = 'R' + res
+                if impr:
+                    continue
                 for n, ent in enumerate(rtp_dict[res]):
-                    if ent[0] == f"H{mid}3":
-                        rtp_dict[res][n] = (f'H{mid}1', *ent[1:])
-        if impr:
-            for n, ent in enumerate(rtp_dict[res]):
-                for m, atname in enumerate(ent):
-                    if rtp_dict[res][n][m] == '-M':
-                        rtp_dict[res][n][m] = '-C'
-                    elif rtp_dict[res][n][m] == '+M':
-                        rtp_dict[res][n][m] = '+N'
+                    try:
+                        _ = ent[0]
+                    except TypeError:
+                        continue
+                    if ent[0] == "OP1":
+                        rtp_dict[res][n] = ('O1P', *ent[1:])
+                    elif ent[0] == "OP2":
+                        rtp_dict[res][n] = ('O2P', *ent[1:])
+                    elif ent[0] == "H5''":
+                        rtp_dict[res][n] = ("H5'2", *ent[1:])
+                    elif ent[0] == "H5'":
+                        rtp_dict[res][n] = ("H5'1", *ent[1:])
+                    elif ent[0] == "H2'":
+                        rtp_dict[res][n] = ("H2'1", *ent[1:])
+                    elif ent[0] == "HO2'":
+                        rtp_dict[res][n] = ("HO'2", *ent[1:])
+                    elif ent[0] == "HO3'":
+                        rtp_dict[res][n] = ("H3T", *ent[1:])
+                    elif ent[0] == "HO5'":
+                        rtp_dict[res][n] = ("H5T", *ent[1:])
+    for cop in to_copy.keys():
+        rtp_dict[to_copy[cop]] = rtp_dict[cop]
+    for clean in to_copy.keys():
+        del rtp_dict[clean]
     return rtp_dict
 
 
@@ -353,16 +386,25 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
         dna_atoms.update(dict_filter(a, 'DNA'))
         dna_bonds.update(dict_filter(b, 'DNA'))
         dna_connectors.update(dict_filter(c, 'DNA'))
-        rna_atoms.update(dict_filter(a, 'RNA'))
-        rna_bonds.update(dict_filter(b, 'RNA'))
-        rna_connectors.update(dict_filter(c, 'RNA'))
+        rna_atoms.update(fix_rtp(dict_filter(a, 'RNA'), rna=True))
+        rna_bonds.update(fix_rtp(dict_filter(b, 'RNA'), rna=True))
+        rna_connectors.update(fix_rtp(dict_filter(c, 'RNA'), rna=True))
     pro_impropers = fix_rtp(dict_filter(impropers, 'protein'), impr=True)
     dna_impropers = dict_filter(impropers, 'DNA')
-    rna_impropers = dict_filter(impropers, 'RNA')
+    rna_impropers = fix_rtp(dict_filter(impropers, 'RNA'), impr=True, rna=True)
     new_top = gml.Top(amber=True)
     for dat in dats:
         print(f"Adding parameters from {dat}")
         load_frcmod(new_top, dat)
+    new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CT', 'C*', 'CW'), '1203')
+    new_top.parameters.dihedraltypes.reorder_improper(('CT', 'CW', 'CC', 'NB'), '0213')
+    new_top.parameters.dihedraltypes.reorder_improper(('CB', 'N2', 'CA', 'NC'), '0321')
+    new_top.parameters.dihedraltypes.reorder_improper(('CB', 'C5', 'N*', 'CT'), '3201')
+    new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CP', 'N*', 'CT'), '3201')
+    new_top.parameters.dihedraltypes.reorder_improper(('C', 'C4', 'N*', 'CT'), '3201')
+    new_top.parameters.dihedraltypes.reorder_improper(('C', 'CS', 'N*', 'CT'), '3201')
+    new_top.parameters.dihedraltypes.reorder_improper(('C4', 'N2', 'CA', 'NC'), '1203')
+    new_top.parameters.dihedraltypes.reorder_improper(('N2', 'NA', 'CA', 'NC'), '1320')
     outdir = outdir + '.ff' if not outdir.endswith('.ff') else outdir
     os.mkdir(outdir)
     os.chdir(outdir)
@@ -411,8 +453,5 @@ def read_prep_impropers(prepfile: str):
                 impropers[current] = []
             if len(line.split()) == 4:
                 types = line.strip().split()
-                print(types)
-                # if types == ['CD1', 'CD2', 'CG', 'CB'] or types[::-1] == ['CD1', 'CD2', 'CG', 'CB']:
-                #     types = ['CD1', 'CG', 'CB', 'CD2']
                 impropers[current].append(types)
     return impropers

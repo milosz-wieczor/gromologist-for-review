@@ -2107,7 +2107,7 @@ class SectionParam(Section):
         :return:
         """
         subsection_dict = {(2, 1): 'bondtypes', (3, 1): 'angletypes', (4, 1): 'dihedraltypes', (4, 9): 'dihedraltypes',
-                           (4, 4): 'dihedraltypes', (4, 2): 'dihedraltypes'}
+                           (4, 4): 'dihedraltypes', (4, 2): 'dihedraltypes', (5, 1): 'cmaptypes'}
         try:
             subs = self.get_subsection(subsection_dict[(len(types), interaction_type)])
         except KeyError:
@@ -2116,13 +2116,21 @@ class SectionParam(Section):
         matching = [ent for ent in subs.entries_param if ent.types == types or ent.types == types[::-1]]
         if matching:
             action = action_default
-            while action not in 'rt':
-                action = input("An entry already exists, shall we replace it (r) or terminate (t)?")
+            while action not in 'rta':
+                action = input("An entry already exists, shall we replace it (r), append a duplicate (a) "
+                               "or terminate (t)?")
             if action == 't':
                 return
+            elif action == 'a':
+                pass
             else:
                 subs.entries = [ent for ent in subs.entries if ent not in matching]
-        if len(params) <= 3:
+        if subsection_dict[(len(types), int(interaction_type))] == 'cmaptypes':
+            resname = params[0]
+            resolution, values = params[1]
+            text = f"{' '.join(types)} 1 {resname} {resolution} {resolution} {' '.join(values)}"
+            subs.add_entry(gml.EntryParam(text, subsection=subs, processed=True, perres=True))
+        elif len(params) <= 3:
             subs.add_entry(gml.EntryParam(f'{" ".join(types)} {str(interaction_type)} '
                                           f'{" ".join([str(x) for x in params])}', subsection=subs))
         elif interaction_type == 9:

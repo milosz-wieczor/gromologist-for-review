@@ -68,12 +68,13 @@ def parse_frcmod(filename):
     if any(['MOD4' in l and 'AC' in l for l in content]):
         raise RuntimeError("LJ type A/C not supported, terminating")
     content = content[1:] if dat else content
-    atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded = {}, {}, {}, {}, {}, {}
-    headers = ['MASS', 'BOND', 'ANGL', 'DIHE', 'IMPR', 'HBON', 'NONB', 'LJED']
+    atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes = {}, {}, {}, {}, {}, {}, {}
+    cmapresol, cmapres, cmapvals, cmapread = None, [], [], False
+    headers = ['MASS', 'BOND', 'ANGL', 'DIHE', 'IMPR', 'HBON', 'NONB', 'LJED', 'CMAP']
     identical_nonbonded = {}
     iterator = 0
     current = headers[iterator] if dat else None
-    for line in content:
+    for nl, line in enumerate(content):
         if not dat:
             if any([line.strip().startswith(i) for i in headers]):
                 current = line.strip()[:4]
@@ -81,7 +82,7 @@ def parse_frcmod(filename):
             if current is None or not line.strip() or line.strip().startswith('#'):
                 continue
         else:
-            if not line.strip() and iterator < len(headers) - 2:
+            if not line.strip() and iterator < len(headers) - 3:
                 iterator += 1
                 current = headers[iterator]
                 continue
@@ -111,6 +112,9 @@ def parse_frcmod(filename):
                 except:
                     if len(line.split()) >= 2 and all([t in atomtypes.keys() for t in line.split()]):
                         identical_nonbonded[line.split()[0]] = line.split()[1:]
+                    continue
+            else:
+                if len(line.split()) < 3:
                     continue
             tps = line.split()[0]
             rmin = float(line.split()[1])
@@ -142,16 +146,34 @@ def parse_frcmod(filename):
             vals = tuple(float(x) for x in line[12:].split()[:3])
             entry = [vals[1], 4.184 * vals[0], int((vals[2] ** 2) ** 0.5)]
             impropertypes[types] = entry
+        elif current == 'CMAP':
+            types = tuple('C N CT C N'.split())
+            if line.startswith('%FLAG'):
+                if line.split()[1] == "CMAP_COUNT":
+                    for res in cmapres:
+                        cmaptypes[(types, res)] = (cmapresol, cmapvals)
+                    cmapresol, cmapres, cmapvals, cmapread = None, [], [], False
+                elif line.split()[1] == "CMAP_RESLIST":
+                    cmapres = content[nl+1].split()
+                elif line.split()[1] == "CMAP_RESOLUTION":
+                    cmapresol = line.split()[2]
+                elif line.split()[1] == "CMAP_PARAMETER":
+                    cmapread = True
+            elif cmapread:
+                if not line.strip():
+                    cmapread = False
+                else:
+                    cmapvals.extend(line.strip().split())
     # assert (all([len(val) == 3 for val in atomtypes.values()]))
     atomtypes = {key: val for key, val in atomtypes.items() if len(val) == 3}
     non_atomtypes = [key for key, val in atomtypes.items() if len(val) != 3]
     if non_atomtypes:
         print(f"skipping atomtypes {non_atomtypes}, missing LJ parameters")
-    return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded
+    return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes
 
 
 def load_frcmod(top: "gml.Top", filename: str):
-    atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded = parse_frcmod(filename)
+    atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes = parse_frcmod(filename)
     params = top.parameters
     for at in atomtypes.keys():
         params.add_atomtype(at, *atomtypes[at], action_default='r')
@@ -170,6 +192,8 @@ def load_frcmod(top: "gml.Top", filename: str):
         except KeyError:
             print(f"Skipping NBFIX {n} as at least one of the types is not defined; if you want to keep it, "
                   "create/load the type and run this command again.")
+    for c in cmaptypes.keys():
+        params.add_bonded_param(c[0], [c[1], cmaptypes[c]], 1, action_default='a')
 
 
 def read_lib(lib: str) -> (dict, dict, dict):

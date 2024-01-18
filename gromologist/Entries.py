@@ -227,13 +227,17 @@ class EntryParam(Entry):
     parameters, e.g. bondtypes, angletypes, cmaptypes, pairtypes etc.
     that map a set of atom types to a set of FF-specific values
     """
-    def __init__(self, content: str, subsection: "gml.Subsection", processed: bool = False):
+    def __init__(self, content: str, subsection: "gml.Subsection", processed: bool = False, perres=False):
         super().__init__(content, subsection)
         self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
         self.types = tuple(self.content[:self.atoms_per_entry])
         if self.subsection.header == 'cmaptypes' and processed:
-            self.modifiers = self.content[self.atoms_per_entry + 1:self.atoms_per_entry + 3]
-            self.params = [float(x) for x in self.content[self.atoms_per_entry + 3:]]
+            if perres:
+                self.modifiers = self.content[self.atoms_per_entry + 1:self.atoms_per_entry + 4]
+                self.params = [float(x) for x in self.content[self.atoms_per_entry + 4:]]
+            else:
+                self.modifiers = self.content[self.atoms_per_entry + 1:self.atoms_per_entry + 3]
+                self.params = [float(x) for x in self.content[self.atoms_per_entry + 3:]]
             self.interaction_type = self.content[self.atoms_per_entry]
         elif self.subsection.header == 'cmaptypes' and not processed:
             self.modifiers = []
@@ -320,7 +324,10 @@ class EntryParam(Entry):
         :return:
         """
         if self.subsection.header == 'cmaptypes':
-            first = ((8 * "{} ")[:-1] + "\\\n").format(*self.types, self.interaction_type, *self.modifiers)
+            nf1 = 6 + len(self.modifiers)
+            first = ((nf1 * "{} ")[:-1] + "\\\n").format(*self.types, self.interaction_type, *self.modifiers)
+            if len(self.modifiers) == 0:
+                self.subsection.section.top.print(f"Note: CMAP section {self.types} is missing resolution specifier")
             npar = len(self.params)
             last = '\\\n'.join([((10 * "{} ")[:-1]).format(*self.params[10*n:10*(n+1)]) for n in range(int(npar/10))])
             if 10 * int(npar/10) != npar:

@@ -227,6 +227,7 @@ class Top:
         for mol in self.molecules:
             used_params.extend(mol.find_used_ff_params(section=section))
         for pairsect in ['nonbond_params', 'pairtypes']:
+            print(pairsect)
             try:
                 ssect = self.parameters.get_subsection(pairsect)
                 for ent in ssect.entries_param:

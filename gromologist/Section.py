@@ -1730,7 +1730,7 @@ class SectionMol(Section):
         """
         # get a list of atomtypes to clone
         sel = self.get_atoms(selection) if selection is not None else self.atoms
-        types = {at.type for at in sel}
+        types = {at.type.strip('y') for at in sel}
         for tp in types:
             self.top.parameters.clone_type(tp)
         for sub in ['atomtypes', 'bondtypes', 'angletypes', 'dihedraltypes', 'nonbond_params', 'pairtypes']:
@@ -1928,7 +1928,7 @@ class SectionParam(Section):
         :return: None
         """
         new_atomtype = prefix + atomtype if new_type is None else new_type
-        existing_types = {e.types[0] for e in self.top.parameters.get_subsection('atomtypes').entries_param}
+        existing_types = self.top.defined_atomtypes
         if new_atomtype in existing_types and not only_bonded:
             raise RuntimeError(f"Type {new_atomtype} already exists, if you want to add bonded terms only, "
                                f"specify only_bonded=True")
@@ -1941,7 +1941,8 @@ class SectionParam(Section):
                     to_add.append(ent)
             for entry in to_add:
                 newlines = self.gen_clones(entry, atomtype, new_atomtype)
-                sub.add_entries([gml.EntryParam(line, sub) for line in newlines])
+                newentries = [gml.EntryParam(line.replace('\\', ' '), sub, processed=True) for line in newlines]
+                sub.add_entries(newentries)
         self.sort_dihedrals()
         self._remove_symm_dupl(new_atomtype)
 
@@ -2131,8 +2132,7 @@ class SectionParam(Section):
                 subs.add_entry(gml.EntryParam(f'{" ".join(types)} {str(interaction_type)} '
                                               f'{" ".join([str(x) for x in param_slice])}', subsection=subs))
 
-    @staticmethod
-    def gen_clones(entry: "gml.EntryParam", atomtype: str, new_atomtype: str) -> list:
+    def gen_clones(self, entry: "gml.EntryParam", atomtype: str, new_atomtype: str) -> list:
         """
         Copies entry that contains an atomtype to be cloned, taking into
         account possible multiple occurences of that type and generating
@@ -2148,15 +2148,14 @@ class SectionParam(Section):
         for i in range(nchanges):
             changes.extend(SectionParam.gen_combs(nchanges, i + 1))
         for mod in changes:
-            lines.append(SectionParam.mod_types(entry, mod, new_atomtype, atomtype))
+            lines.append(self.mod_types(entry, mod, new_atomtype, atomtype))
         return lines
 
     @staticmethod
     def gen_combs(count: int, tuples: int) -> list:
         return list(combinations(range(count), tuples))
 
-    @staticmethod
-    def mod_types(entry: "gml.EntryParam", mods: list, new_atomtype: str, atomtype: str) -> str:
+    def mod_types(self, entry: "gml.EntryParam", mods: list, new_atomtype: str, atomtype: str) -> str:
         """
         Modifies an EntryParam to include the new atomtype instead of the old one
         in places specified by the directive in mods

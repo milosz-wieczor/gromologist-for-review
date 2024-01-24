@@ -333,7 +333,7 @@ class EntryParam(Entry):
             if 10 * int(npar/10) != npar:
                 last = last + '\\\n' + \
                        (((npar-10*int(npar/10)) * "{} ")[:-1]).format(*self.params[10*int(npar/10):]) + '\n'
-            return first + last
+            return first + last + '\n'
         elif self.format():
             try:
                 return self.format().format(*self.types, self.interaction_type, *self.modifiers, *self.params) +\

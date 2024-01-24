@@ -261,6 +261,15 @@ class Top:
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
 
+    def load_frcmod(self, frcmod):
+        """
+        Loads an Amber frcmod file, adding parameters to an existing Gromacs topology
+        (note that type names will not always match!)
+        :param frcmod: str, path to the frcmod file
+        :return: None
+        """
+        gml.load_frcmod(self, frcmod)
+
     def add_molecule_from_file(self, filename: str, molnames: Optional[list] = None):
         """
         Adds a molecule from an external file (can be .itp or .top) to the current topology

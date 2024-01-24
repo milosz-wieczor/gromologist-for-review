@@ -8,7 +8,7 @@ from typing import Optional, Iterable, Union
 # TODO make top always optional between str/path and gml.Top
 
 
-def generate_dftb3_aa(top: "gml.Top", selection: str, pdb: Optional[Union[str, "gml.Pdb"]] = None):
+def generate_dftb3_aa(top: Union[str, "gml.Top"], selection: str, pdb: Optional[Union[str, "gml.Pdb"]] = None):
     """
     Prepares a DFT3B-compatible topology and structure, setting up amino acids
     for QM/MM calculations (as defined by the selection)
@@ -17,6 +17,8 @@ def generate_dftb3_aa(top: "gml.Top", selection: str, pdb: Optional[Union[str, "
     :param pdb: gml.Pdb, a Pdb object (optional, alternatively can be an attribute of top)
     :return: None
     """
+    top = gml.obj_or_str(top=top)
+    pdb = gml.obj_or_str(pdb=pdb)
     special_atoms = {'N': -0.43, 'H': 0.35, 'HN': 0.35, 'C': 0.55, 'O': -0.47}
     atoms = top.get_atoms(selection)
     print("The following atoms were found:")
@@ -151,6 +153,7 @@ def parse_frcmod(filename):
             if line.startswith('%FLAG'):
                 if line.split()[1] == "CMAP_COUNT":
                     for res in cmapres:
+                        cmapvals = [str(4.184 * i) for i in cmapvals]
                         cmaptypes[(types, res)] = (cmapresol, cmapvals)
                     cmapresol, cmapres, cmapvals, cmapread = None, [], [], False
                 elif line.split()[1] == "CMAP_RESLIST":
@@ -172,7 +175,7 @@ def parse_frcmod(filename):
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes
 
 
-def load_frcmod(top: "gml.Top", filename: str):
+def load_frcmod(top: Union[str, "gml.Top"], filename: str):
     atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes = parse_frcmod(filename)
     params = top.parameters
     for at in atomtypes.keys():
@@ -275,7 +278,7 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, out
     :return: None
     """
     gau_content = [line for line in open(directive_file)]
-    pdb = gml.Pdb(pdb) if isinstance(pdb, str) else pdb
+    pdb = gml.obj_or_str(pdb=pdb)
     pdb.add_elements()
     with open(outfile, 'w') as outf:
         for line in [ln for ln in gau_content if ln.strip().startswith('%')]:

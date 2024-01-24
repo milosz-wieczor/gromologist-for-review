@@ -153,7 +153,7 @@ def parse_frcmod(filename):
             if line.startswith('%FLAG'):
                 if line.split()[1] == "CMAP_COUNT":
                     for res in cmapres:
-                        cmapvals = [str(4.184 * i) for i in cmapvals]
+                        cmapvals = [str(round(4.184 * float(i), 10)) for i in cmapvals]
                         cmaptypes[(types, res)] = (cmapresol, cmapvals)
                     cmapresol, cmapres, cmapvals, cmapread = None, [], [], False
                 elif line.split()[1] == "CMAP_RESLIST":

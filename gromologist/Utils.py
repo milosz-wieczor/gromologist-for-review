@@ -194,8 +194,8 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
             types = tuple('C N CT C N'.split())
             if line.startswith('%FLAG'):
                 if line.split()[1] == "CMAP_COUNT":
+                    cmapvals = [str(round(4.184 * float(i), 10)) for i in cmapvals]
                     for res in cmapres:
-                        cmapvals = [str(round(4.184 * float(i), 10)) for i in cmapvals]
                         cmaptypes[(types, res)] = (cmapresol, cmapvals)
                     cmapresol, cmapres, cmapvals, cmapread = None, [], [], False
                 elif line.split()[1] == "CMAP_RESLIST":
@@ -478,10 +478,8 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     for dat in dats:
         print(f"Adding parameters from {dat}")
         cmaptypes.update(load_frcmod(new_top, dat, return_cmap=True))
-        print(cmaptypes)
     for k in cmaptypes.keys():
         rtp_cmap[k[1]] = ['-C N CA C +N'.split()]
-    print(rtp_cmap)
     new_top = reorder_amber_impropers(new_top)
     outdir = outdir + '.ff' if not outdir.endswith('.ff') else outdir
     os.mkdir(outdir)

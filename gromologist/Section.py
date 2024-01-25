@@ -167,7 +167,7 @@ class SectionMol(Section):
         return sum([a.mass for a in self.atoms])
 
     @property
-    def bonds_section(self) -> gml.SubsectionBonded:
+    def bonds_section(self) -> "gml.SubsectionBonded":
         """
         Returns the [ bonds ] section of the topology
         :return: gml.SubsectionBonded
@@ -175,7 +175,7 @@ class SectionMol(Section):
         return self.get_subsection('bonds')
 
     @property
-    def angles_section(self) -> gml.SubsectionBonded:
+    def angles_section(self) -> "gml.SubsectionBonded":
         """
         Returns the [ angles ] section of the topology
         :return: gml.SubsectionBonded
@@ -183,7 +183,7 @@ class SectionMol(Section):
         return self.get_subsection('angles')
 
     @property
-    def dihedrals_section(self) -> gml.SubsectionBonded:
+    def dihedrals_section(self) -> "gml.SubsectionBonded":
         """
         Returns the [ dihedrals ] section of the topology
         :return: gml.SubsectionBonded

@@ -62,6 +62,42 @@ def generate_dftb3_aa(top: Union[str, "gml.Top"], selection: str, pdb: Optional[
                 top.pdb.add_vs2(resid, 'CA', 'CB', 'LIN', fraction=0.72, serial=last_atom, chain=chain)
 
 
+def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, outfile: str = 'inp.gau', charge: int = 0,
+                            multiplicity: int = 1, group_a: Optional[str] = None, group_b: Optional[str] = None):
+    """
+    From a .pdb file and an existing Gaussian input, produces a new .gau input
+    with correct atom names, coordinates, and possibly fragment assignment
+    :param pdb: gml.Pdb or str, the structure object/file containing the desired coordinates
+    :param directive_file: str, an existing Gaussian input from which the %- and #-prefixed lines will be taken
+    :param outfile: str, a file to which the new input will be written
+    :param charge: int, charge of the system (by default 0)
+    :param multiplicity: int, multiplicity of the system (by default 1)
+    :param group_a: str, selection to define 1st fragment if the counterpoise correction is used
+    :param group_b: str, selection to define 2nd fragment if the counterpoise correction is used
+    :return: None
+    """
+    gau_content = [line for line in open(directive_file)]
+    pdb = gml.obj_or_str(pdb=pdb)
+    pdb.add_elements()
+    with open(outfile, 'w') as outf:
+        for line in [ln for ln in gau_content if ln.strip().startswith('%')]:
+            outf.write(line)
+        for line in [ln for ln in gau_content if ln.strip().startswith('#')]:
+            outf.write(line)
+        outf.write(f"\ngromologist input to gaussian\n\n{charge} {multiplicity}\n")
+        if group_a is None and group_b is None:
+            for atom in pdb.atoms:
+                outf.write(f" {atom.element}   {atom.x}  {atom.y}  {atom.z}\n")
+        elif group_a is not None and group_b is not None:
+            for atom in pdb.get_atoms(group_a):
+                outf.write(f" {atom.element}(Fragment=1)   {atom.x:8.3f}  {atom.y:8.3f}  {atom.z:8.3f}\n")
+            for atom in pdb.get_atoms(group_b):
+                outf.write(f" {atom.element}(Fragment=2)   {atom.x:8.3f}  {atom.y:8.3f}  {atom.z:8.3f}\n")
+        else:
+            raise RuntimeError('Specify either both group_a and group_b, or neither')
+        outf.write("\n")
+
+
 # TODO move REST2 preparation here
 
 def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
@@ -181,13 +217,14 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes
 
 
-def load_frcmod(top: Union[str, "gml.Top"], filename: str):
+def load_frcmod(top: Union[str, "gml.Top"], filename: str, return_cmap: bool = False) -> Optional[dict]:
     """
     Loads an .frcmod file into an existing topology. Can be also launched as
     gml.Top().load_frcmod(...)
     :param top: str or gml.Top, existing gmx topology
     :param filename: str, name of the frcmod file to load
-    :return: None
+    :param return_cmap: bool, if set to True will return cmaptypes
+    :return: None or dict, depending on return_cmap
     """
     top = gml.obj_or_str(top)
     atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes = parse_frcmod(filename)
@@ -211,6 +248,10 @@ def load_frcmod(top: Union[str, "gml.Top"], filename: str):
                   "create/load the type and run this command again.")
     for c in cmaptypes.keys():
         params.add_bonded_param(c[0], [c[1], cmaptypes[c]], 1, action_default='a')
+    if return_cmap:
+        return cmaptypes
+    else:
+        return None
 
 
 def read_lib(lib: str) -> (dict, dict, dict):
@@ -252,7 +293,7 @@ def read_lib(lib: str) -> (dict, dict, dict):
 
 
 def write_rtp(atoms: dict, bonds: dict, connector: dict, outfile: str = "new.rtp", ff='amber',
-              impropers: Optional[dict] = None):
+              impropers: Optional[dict] = None, cmap: Optional[dict] = None):
     """
     Writes an .rtp file given all per-residue dictionary with topology, extra dihedrals/impropers, CMAP etc.
     :param atoms: dict of tuple, atom names/types and their ID/charge
@@ -261,6 +302,7 @@ def write_rtp(atoms: dict, bonds: dict, connector: dict, outfile: str = "new.rtp
     :param outfile: str, to which file output should be written
     :param ff: str, 'amber' or 'charmm' to set correct [ bondedtypes ] (default interaction types)
     :param impropers: dict of tuples, atom names that should be involved in improper dihedrals
+    :param cmap: dict of tuples, atom names that should be involved in the cmap correction
     :return: None
     """
     if ff.lower() not in ['amber', 'charmm']:
@@ -289,43 +331,12 @@ def write_rtp(atoms: dict, bonds: dict, connector: dict, outfile: str = "new.rtp
                     out.write(f" [ impropers ]\n")
                     for imp in impropers[res]:
                         out.write(f" {imp[0]:5s} {imp[1]:5s} {imp[2]:5s} {imp[3]:5s}\n")
+            if cmap is not None:
+                if res in cmap.keys():
+                    out.write(f" [ cmap ]\n")
+                    for cmp in cmap[res]:
+                        out.write(f" {cmp[0]:5s} {cmp[1]:5s} {cmp[2]:5s} {cmp[3]:5s} {cmp[4]:5s}\n")
             out.write("\n\n")
-
-
-def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, outfile: str = 'inp.gau', charge: int = 0,
-                            multiplicity: int = 1, group_a: Optional[str] = None, group_b: Optional[str] = None):
-    """
-    From a .pdb file and an existing Gaussian input, produces a new .gau input
-    with correct atom names, coordinates, and possibly fragment assignment
-    :param pdb: gml.Pdb or str, the structure object/file containing the desired coordinates
-    :param directive_file: str, an existing Gaussian input from which the %- and #-prefixed lines will be taken
-    :param outfile: str, a file to which the new input will be written
-    :param charge: int, charge of the system (by default 0)
-    :param multiplicity: int, multiplicity of the system (by default 1)
-    :param group_a: str, selection to define 1st fragment if the counterpoise correction is used
-    :param group_b: str, selection to define 2nd fragment if the counterpoise correction is used
-    :return: None
-    """
-    gau_content = [line for line in open(directive_file)]
-    pdb = gml.obj_or_str(pdb=pdb)
-    pdb.add_elements()
-    with open(outfile, 'w') as outf:
-        for line in [ln for ln in gau_content if ln.strip().startswith('%')]:
-            outf.write(line)
-        for line in [ln for ln in gau_content if ln.strip().startswith('#')]:
-            outf.write(line)
-        outf.write(f"\ngromologist input to gaussian\n\n{charge} {multiplicity}\n")
-        if group_a is None and group_b is None:
-            for atom in pdb.atoms:
-                outf.write(f" {atom.element}   {atom.x}  {atom.y}  {atom.z}\n")
-        elif group_a is not None and group_b is not None:
-            for atom in pdb.get_atoms(group_a):
-                outf.write(f" {atom.element}(Fragment=1)   {atom.x:8.3f}  {atom.y:8.3f}  {atom.z:8.3f}\n")
-            for atom in pdb.get_atoms(group_b):
-                outf.write(f" {atom.element}(Fragment=2)   {atom.x:8.3f}  {atom.y:8.3f}  {atom.z:8.3f}\n")
-        else:
-            raise RuntimeError('Specify either both group_a and group_b, or neither')
-        outf.write("\n")
 
 
 def dict_filter(indict: dict, restype: str) -> dict:
@@ -463,9 +474,33 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     dna_impropers = dict_filter(impropers, 'DNA')
     rna_impropers = fix_rtp(dict_filter(impropers, 'RNA'), impr=True, rna=True)
     new_top = gml.Top(amber=True)
+    cmaptypes, rtp_cmap = {}, {}
     for dat in dats:
         print(f"Adding parameters from {dat}")
-        load_frcmod(new_top, dat)
+        cmaptypes.update(load_frcmod(new_top, dat, return_cmap=True))
+        print(cmaptypes)
+    for k in cmaptypes.keys():
+        rtp_cmap[k[1]] = ['-C N CA C +N'.split()]
+    print(rtp_cmap)
+    new_top = reorder_amber_impropers(new_top)
+    outdir = outdir + '.ff' if not outdir.endswith('.ff') else outdir
+    os.mkdir(outdir)
+    os.chdir(outdir)
+    new_top.save_top('forcefield.itp', split=True)
+    gml.write_rtp(pro_atoms, pro_bonds, pro_connectors, 'aminoacids.rtp', impropers=pro_impropers, cmap=rtp_cmap)
+    if dna_atoms:
+        gml.write_rtp(dna_atoms, dna_bonds, dna_connectors, 'dna.rtp', impropers=dna_impropers)
+    if rna_atoms:
+        gml.write_rtp(rna_atoms, rna_bonds, rna_connectors, 'rna.rtp', impropers=rna_impropers)
+
+
+def reorder_amber_impropers(new_top: "gml.Top") -> "gml.Top":
+    """
+    Modifying improper dihedral order, empirically checked against GMX FFs
+    when errors come up
+    :param new_top: gml.Top, a topology to process
+    :return: gml.Top
+    """
     new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CT', 'C*', 'CW'), '1203')
     new_top.parameters.dihedraltypes.reorder_improper(('CT', 'CW', 'CC', 'NB'), '0213')
     new_top.parameters.dihedraltypes.reorder_improper(('CB', 'N2', 'CA', 'NC'), '0321')
@@ -475,15 +510,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     new_top.parameters.dihedraltypes.reorder_improper(('C', 'CS', 'N*', 'CT'), '3201')
     new_top.parameters.dihedraltypes.reorder_improper(('C4', 'N2', 'CA', 'NC'), '1203')
     new_top.parameters.dihedraltypes.reorder_improper(('N2', 'NA', 'CA', 'NC'), '1320')
-    outdir = outdir + '.ff' if not outdir.endswith('.ff') else outdir
-    os.mkdir(outdir)
-    os.chdir(outdir)
-    new_top.save_top('forcefield.itp', split=True)
-    gml.write_rtp(pro_atoms, pro_bonds, pro_connectors, 'aminoacids.rtp', impropers=pro_impropers)
-    if dna_atoms:
-        gml.write_rtp(dna_atoms, dna_bonds, dna_connectors, 'dna.rtp', impropers=dna_impropers)
-    if rna_atoms:
-        gml.write_rtp(rna_atoms, rna_bonds, rna_connectors, 'rna.rtp', impropers=rna_impropers)
+    return new_top
 
 
 def read_addAtomTypes(text: list) -> dict:

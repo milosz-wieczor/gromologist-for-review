@@ -55,7 +55,7 @@ class Top:
         self.header = []
         self._parse_sections()
 
-    def from_selection(self, selection: str) -> gml.Top:
+    def from_selection(self, selection: str) -> "gml.Top":
         """
         Returns a new .top file corresponding to the specified selection
         :param selection: str, a Gromologist-compatible selection
@@ -113,7 +113,7 @@ class Top:
 
     @classmethod
     def _from_text(cls, text: str, gmx_dir: Optional[str] = None, pdb: Optional[str] = None,
-                   ignore_ifdef: bool = False) -> gml.Top:
+                   ignore_ifdef: bool = False) -> "gml.Top":
         """
         A simple wrapper to generate a topology from an in-memory string object
         :param text: str, the text to be parsed
@@ -213,7 +213,7 @@ class Top:
         atomlist = self.atoms
         return [atomlist[i] for i in self.select_atoms(selection_string)]
 
-    def get_atom(self, selection_string: str) -> gml.EntryAtom:
+    def get_atom(self, selection_string: str) -> "gml.EntryAtom":
         """
         Returns a single atom compatible with a selection
         :param selection_string: str, selection compatible with gromologist syntax

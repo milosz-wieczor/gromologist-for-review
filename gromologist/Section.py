@@ -128,38 +128,74 @@ class SectionMol(Section):
 
     @property
     def atoms(self) -> list:
+        """
+        Returns gml.EntryAtom entries corresponding to all atoms in the molecule
+        :return: list of gml.EntryAtom
+        """
         return self.get_subsection('atoms').entries_atom
 
     @property
     def natoms(self) -> int:
+        """
+        Returns the number of atoms in the molecule
+        :return: int, number of atoms
+        """
         return len(self.atoms)
 
     @property
     def nmols(self) -> int:
+        """
+        Returns the count of the given molecule in the complete system, according to the [ molecules ] section
+        :return: int, number of molecule copies
+        """
         return sum([mol_count[1] for mol_count in self.top.system if mol_count[0] == self.mol_name])
 
     @property
     def charge(self) -> float:
+        """
+        Calculates the total charge of the molecule
+        :return: float, total charge
+        """
         return sum([a.charge for a in self.atoms])
 
     @property
     def mass(self) -> float:
+        """
+        Calculates the total mass of the molecule
+        :return: float, total mass
+        """
         return sum([a.mass for a in self.atoms])
 
     @property
-    def bonds_section(self):
+    def bonds_section(self) -> gml.SubsectionBonded:
+        """
+        Returns the [ bonds ] section of the topology
+        :return: gml.SubsectionBonded
+        """
         return self.get_subsection('bonds')
 
     @property
-    def angles_section(self):
+    def angles_section(self) -> gml.SubsectionBonded:
+        """
+        Returns the [ angles ] section of the topology
+        :return: gml.SubsectionBonded
+        """
         return self.get_subsection('angles')
 
     @property
-    def dihedrals_section(self):
+    def dihedrals_section(self) -> gml.SubsectionBonded:
+        """
+        Returns the [ dihedrals ] section of the topology
+        :return: gml.SubsectionBonded
+        """
         return self.get_subsection('dihedrals')
 
     @property
     def residues(self) -> list:
+        """
+        Returns the list of residues defined in the topology (labeled as resname-resid pairs)
+        :return: list of str
+        """
         resid = None
         reslist = []
         for at in self.atoms:
@@ -268,6 +304,10 @@ class SectionMol(Section):
 
     @property
     def is_alchemical(self) -> bool:
+        """
+        Whether the molecule contains any alchemical atoms/residues
+        :return: bool
+        """
         sect = self.get_subsection('atoms')
         for ent in sect.entries_atom:
             if ent.type_b is not None:
@@ -276,14 +316,26 @@ class SectionMol(Section):
 
     @property
     def is_water(self) -> bool:
+        """
+        Whether the molecule is a water residue
+        :return: bool
+        """
         return bool(self.get_atoms('water'))
 
     @property
     def is_protein(self) -> bool:
+        """
+        Whether the molecule is a protein
+        :return: bool
+        """
         return bool(self.get_atoms('protein'))
 
     @property
     def is_nucleic(self) -> bool:
+        """
+        Whether the molecule is a nucleic acid
+        :return: bool
+        """
         return bool(self.get_atoms('nucleic'))
 
     def _patch_alch(self):
@@ -2099,11 +2151,12 @@ class SectionParam(Section):
 
     def add_bonded_param(self, types: tuple, params: list, interaction_type: int, action_default: str = 'x'):
         """
-        # TODO fill here
-        :param types:
-        :param params:
-        :param interaction_type:
-        :param action_default:
+        Adds a bonded parameter to a parameter set, creating the subsection if necessary
+        :param types: tuple of str, atom types defining the interaction
+        :param params: list, parameters of the interaction
+        :param interaction_type: int, ID of the interaction type
+        :param action_default: str, default action: 'r' for replacing, 't' for skipping, 'a' for duplicating,
+        anything else for interactive selection
         :return:
         """
         subsection_dict = {(2, 1): 'bondtypes', (3, 1): 'angletypes', (4, 1): 'dihedraltypes', (4, 9): 'dihedraltypes',

@@ -55,7 +55,7 @@ class Top:
         self.header = []
         self._parse_sections()
 
-    def from_selection(self, selection):
+    def from_selection(self, selection: str) -> gml.Top:
         """
         Returns a new .top file corresponding to the specified selection
         :param selection: str, a Gromologist-compatible selection
@@ -80,7 +80,7 @@ class Top:
         new_top.clear_ff_params()
         return new_top
 
-    def save_from_selection(self, selection, filename='subsystem.top'):
+    def save_from_selection(self, selection: str, filename: str = 'subsystem.top'):
         """
         Generates and saves a new .top file corresponding to the specified selection
         :param selection: str, a Gromologist-compatible selection
@@ -112,7 +112,8 @@ class Top:
             print(*args)
 
     @classmethod
-    def _from_text(cls, text: str, gmx_dir: Optional[str] = None, pdb: Optional[str] = None, ignore_ifdef: bool = False):
+    def _from_text(cls, text: str, gmx_dir: Optional[str] = None, pdb: Optional[str] = None,
+                   ignore_ifdef: bool = False) -> gml.Top:
         """
         A simple wrapper to generate a topology from an in-memory string object
         :param text: str, the text to be parsed
@@ -204,14 +205,28 @@ class Top:
         return result[0]
 
     def get_atoms(self, selection_string: str) -> list:
+        """
+        Returns a list of atoms compatible with a selection
+        :param selection_string: str, selection compatible with gromologist syntax
+        :return: list of gml.Entry entries
+        """
         atomlist = self.atoms
         return [atomlist[i] for i in self.select_atoms(selection_string)]
 
-    def get_atom(self, selection_string: str):
+    def get_atom(self, selection_string: str) -> gml.EntryAtom:
+        """
+        Returns a single atom compatible with a selection
+        :param selection_string: str, selection compatible with gromologist syntax
+        :return: a single gml.Entry entry
+        """
         return self.atoms[self.select_atom(selection_string)]
 
     @property
     def defined_atomtypes(self) -> set:
+        """
+        Returns a set of all atomtypes defined in this topology (in [ atomtypes ])
+        :return:
+        """
         return {ent.types[0] for ent in self.parameters.get_subsection('atomtypes').entries_param}
 
     def list_molecules(self):
@@ -223,10 +238,15 @@ class Top:
             print("{:20s}{:>10d}".format(mol_count[0], mol_count[1]))
 
     def clear_ff_params(self, section: str = 'all'):
+        """
+        Removes all FF parameters included in the topology that are not used by the defined molecules
+        :param section: str, 'all' if applied to all parameters, else as specified
+        :return: None
+        """
         used_params = []
         for mol in self.molecules:
             used_params.extend(mol.find_used_ff_params(section=section))
-        for pairsect in ['nonbond_params', 'pairtypes']:
+        for pairsect in ['nonbond_params', 'pairtypes']: # TODO mod the part below to work with section = ...
             print(pairsect)
             try:
                 ssect = self.parameters.get_subsection(pairsect)
@@ -261,7 +281,7 @@ class Top:
         for mol in self.molecules:
             mol.add_ff_params(add_section=section)
 
-    def load_frcmod(self, frcmod):
+    def load_frcmod(self, frcmod: str):
         """
         Loads an Amber frcmod file, adding parameters to an existing Gromacs topology
         (note that type names will not always match!)

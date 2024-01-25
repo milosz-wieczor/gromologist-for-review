@@ -64,7 +64,13 @@ def generate_dftb3_aa(top: Union[str, "gml.Top"], selection: str, pdb: Optional[
 
 # TODO move REST2 preparation here
 
-def parse_frcmod(filename):
+def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
+    """
+    Parses either an frcmod file with extra parameters, or a parm file with
+    core FF parameters (both have slightly different formats for opening/closing sections)
+    :param filename: str, name of the file to be read
+    :return: tuple of dict, FF parameres in their respective formats
+    """
     dat = True if filename.endswith('dat') else False
     content = open(filename).readlines()
     if any(['MOD4' in l and 'AC' in l for l in content]):
@@ -176,6 +182,14 @@ def parse_frcmod(filename):
 
 
 def load_frcmod(top: Union[str, "gml.Top"], filename: str):
+    """
+    Loads an .frcmod file into an existing topology. Can be also launched as
+    gml.Top().load_frcmod(...)
+    :param top: str or gml.Top, existing gmx topology
+    :param filename: str, name of the frcmod file to load
+    :return: None
+    """
+    top = gml.obj_or_str(top)
     atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes = parse_frcmod(filename)
     params = top.parameters
     for at in atomtypes.keys():
@@ -200,6 +214,11 @@ def load_frcmod(top: Union[str, "gml.Top"], filename: str):
 
 
 def read_lib(lib: str) -> (dict, dict, dict):
+    """
+    Reads a .lib file with residue definitions
+    :param lib: str, name of the .lib file
+    :return: tuple of dict, dictionary with atoms, bonds, and inter-residue connectors
+    """
     curr_resname = None
     atoms = {}
     bonds = {}
@@ -234,6 +253,16 @@ def read_lib(lib: str) -> (dict, dict, dict):
 
 def write_rtp(atoms: dict, bonds: dict, connector: dict, outfile: str = "new.rtp", ff='amber',
               impropers: Optional[dict] = None):
+    """
+    Writes an .rtp file given all per-residue dictionary with topology, extra dihedrals/impropers, CMAP etc.
+    :param atoms: dict of tuple, atom names/types and their ID/charge
+    :param bonds: dict of tuples, 1-based indices of pairs defining bonds
+    :param connector: dict of tuples, connecting atoms from -1 or +1 residue in polymers
+    :param outfile: str, to which file output should be written
+    :param ff: str, 'amber' or 'charmm' to set correct [ bondedtypes ] (default interaction types)
+    :param impropers: dict of tuples, atom names that should be involved in improper dihedrals
+    :return: None
+    """
     if ff.lower() not in ['amber', 'charmm']:
         raise RuntimeError("Only Amber and CHARMM are currently supported")
     btypes = '11941310' if ff == 'amber' else '15921310'
@@ -299,17 +328,31 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, out
         outf.write("\n")
 
 
-def dict_filter(dict, restype):
+def dict_filter(indict: dict, restype: str) -> dict:
+    """
+    Filters dictionaries based on whether they belong to DNA, RNA or protein
+    :param indict: dict, dictionary with keys that are residue names
+    :param restype: str, type of residues (DNA, RNA, or anything else for protein)
+    :return: dict, the filtered dictionary
+    """
     nucres = gml.Pdb.nucl_map.keys()
     if restype == "DNA":
-        return {k: v for k, v in dict.items() if k in nucres and 'D' in nucres}
+        return {k: v for k, v in indict.items() if k in nucres and 'D' in nucres}
     elif restype == "RNA":
-        return {k: v for k, v in dict.items() if k in nucres and 'D' not in nucres}
+        return {k: v for k, v in indict.items() if k in nucres and 'D' not in nucres}
     else:
-        return {k: v for k, v in dict.items() if k not in nucres}
+        return {k: v for k, v in indict.items() if k not in nucres}
 
 
-def fix_rtp(rtp_dict: dict, impr=False, rna=False):
+def fix_rtp(rtp_dict: dict, impr: bool = False, rna: bool = False) -> dict:
+    """
+    Makes Gromacs-specific changes in .rtp data, e.g. adjusts atom names, terminal atom naming,
+    hydrogen numbering, RNA residue names, improper type order etc.
+    :param rtp_dict: dict, dictionary with .rtp data (atoms or impropers)
+    :param impr: bool, whether the entry contains improper dihedral data
+    :param rna: bool, whether the entry represents RNA residues
+    :return: dict, the dictionary with necessary modifications
+    """
     to_copy = {}
     for res in rtp_dict.keys():
         if not rna:
@@ -462,7 +505,12 @@ def read_addAtomTypes(text: list) -> dict:
     return types
 
 
-def read_prep_impropers(prepfile: str):
+def read_prep_impropers(prepfile: str) -> dict:
+    """
+    Reads improper dihedrals from a specified file in the leap/prep directory
+    :param prepfile: str, input file for reading
+    :return: dict of lists, each dict entry corresponds to a residue, the list contains 4-lists of atomtypes
+    """
     impropers = {}
     current = None
     reading = False

@@ -813,7 +813,10 @@ class Top:
         for subsection in section.subsections:
             outfile.write('\n[ {} ]\n'.format(subsection.header))
             for entry in subsection:
-                str_entry = str(entry).rstrip() + '\n'
+                if subsection.header == 'cmaptypes':
+                    str_entry = str(entry).rstrip() + '\n\n'
+                else:
+                    str_entry = str(entry).rstrip() + '\n'
                 outfile.write(str_entry)
 
     def _write_header(self, outfile: TextIO):

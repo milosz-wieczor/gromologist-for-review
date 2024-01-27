@@ -833,8 +833,9 @@ Finally, if CONECT entries are needed in the PDB (as required by some programs),
 >>> p.add_conect()
 ```
 
-with a default distance cut-off of 1.55 A to define a chemical bond. Note that this last
-feature depends on `numpy` for speed!
+with a default distance cut-off of 2.05 A (heavy atom, including disulfides) or 1.3 (hydrogen atom) to define 
+a chemical bond. Note that this last feature uses a faster subroutine when `numpy` is available, but will fall back to 
+the slower algorithm if asked to include PBC in distance calculations (`p.add_conect(pbc=True)`).
 
 ##### Converting a 3-point water model to a 4-point one
 <a name="converting-a-3-point-water-model-to-a-4-point-one"/>

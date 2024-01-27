@@ -1209,26 +1209,50 @@ class Pdb:
             self.insert_atom(atom.serial + 3, name='H3', hooksel=f'serial {atom_serial}', bondlength=0.95,
                              vector=self._vector(['N', hname, 'HA', 'N'], atom.resnum, atom.chain))
 
-
-    def add_conect(self, cutoff=1.65):
+    def add_conect(self, cutoff=2.05, cutoff_h=1.3, pbc = False):
         """
         Adds CONECT entries to the PDB, using the value of
         cutoff to determine molecule connectivity
         :param cutoff: float, cut-off to determine atom bonding patterns
+        :param cutoff_h: float, cut-off to determine atom bonding patterns with hydrogens
         :return: None
         """
+        self.add_elements()
+        if pbc:
+            self._conect_simple(cutoff, cutoff_h, pbc)
+            return
         try:
             import numpy as np
         except ImportError:
-            for n, atom in enumerate(self.atoms):
-                dists = [self._atoms_dist(atom, at) for at in self.atoms]
-                selected = [self.atoms[m].serial for m, a in enumerate(dists) if 0.1 < a < cutoff]
-                self.conect[atom.serial] = selected
+            self._conect_simple(cutoff, cutoff_h, pbc)
         else:
+            hs = self.get_atom_indices('element H')
             coords = np.array(self.get_coords())
             for n, atom in enumerate(self.atoms):
                 dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
-                selected = [self.atoms[i].serial for i in list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0])]
+                if n not in hs:
+                    selected = [self.atoms[i].serial for i in list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0]) if i not in hs]
+                    selected_h = [self.atoms[i].serial for i in list(np.where(np.logical_and(dists < cutoff_h, dists > 0.1))[0])
+                                if i in hs]
+                    self.conect[atom.serial] = selected + selected_h
+                else:
+                    selected_h = [self.atoms[i].serial for i in
+                                  list(np.where(np.logical_and(dists < cutoff_h, dists > 0.1))[0])]
+                    self.conect[atom.serial] = selected_h
+
+    def _conect_simple(self, cf1, cf2, pbc):
+        hs = self.get_atom_indices('element H')
+        for n, atom in enumerate(self.atoms):
+            if pbc:
+                dists = [self._atoms_dist(atom, at) for at in self.atoms]
+            else:
+                dists = [self._atoms_dist_pbc(atom, at) for at in self.atoms]
+            if n not in hs:
+                selected = [self.atoms[m].serial for m, a in enumerate(dists) if 0.1 < a < cf1 and m not in hs]
+                selected_h = [self.atoms[m].serial for m, a in enumerate(dists) if 0.1 < a < cf2 and m in hs]
+                self.conect[atom.serial] = selected + selected_h
+            else:
+                selected = [self.atoms[m].serial for m, a in enumerate(dists) if 0.1 < a < cf2]
                 self.conect[atom.serial] = selected
 
     def set_beta(self, values, selection=None, smooth=False, ignore_mem=False):

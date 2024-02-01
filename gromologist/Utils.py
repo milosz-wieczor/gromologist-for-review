@@ -1,5 +1,6 @@
 import os
 from glob import glob
+from shutil import copy2
 
 import gromologist as gml
 from typing import Optional, Iterable, Union
@@ -433,7 +434,29 @@ def fix_rtp(rtp_dict: dict, impr: bool = False, rna: bool = False) -> dict:
     return rtp_dict
 
 
-def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
+def find_leap_files(ambdir, filetype, leaprc):
+    content = [line.strip() for line in open(leaprc)]
+    pref = os.path.sep if leaprc.startswith(os.path.sep) else ''
+    reldir = pref + os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + pref
+    print(reldir)
+    if filetype == 'lib':
+        files_in_ambdir = [ambdir + '/lib/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
+                           "loadoff" in [w.lower() for w in line.split()]]
+        files_in_reldir = [reldir + line.split()[-1] for line in content if len(line.split()) >= 2 and
+                           "loadoff" in [w.lower() for w in line.split()]]
+    elif filetype == 'parm':
+        files_in_ambdir = [ambdir + '/parm/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
+                           "loadamberparams" in [w.lower() for w in line.split()]]
+        files_in_reldir = [reldir + line.split()[-1] for line in content if len(line.split()) >= 2 and
+                           "loadamberparams" in [w.lower() for w in line.split()]]
+    else:
+        raise RuntimeError('select "parm" or "lib"')
+    print(files_in_ambdir, files_in_reldir)
+    found_files = [f for f in files_in_ambdir + files_in_reldir if os.path.exists(f)]
+    return found_files
+
+
+def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_ff: Optional[str] = None):
     """
     Reads a .leaprc file and all parameter dependencies from Amber to convert into a Gromacs .ff dir
     Files that should be copied manually: watermodels.dat and tip*itp, .hdb, .tdb and .arn
@@ -442,16 +465,13 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
     :param amber_dir: str, Abs path to the dir containing Amber prep, parm, lib directories if `leaprc` is a local file
     :return: None
     """
-    content = [line.strip() for line in open(leaprc)]
     orig_dir = os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + os.path.sep if os.path.sep in leaprc else ''
     if amber_dir is not None:
         amb = amber_dir
     else:
         amb = f'{orig_dir}../'
-    libs = [amb + '/lib/' + line.split()[1] for line in content if len(line.split()) >= 2 and
-            line.split()[0] == "loadOff"]
-    dats = [amb + '/parm/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
-            line.split()[-2] == "loadamberparams"]
+    libs = find_leap_files(amb, 'lib', leaprc)
+    dats = find_leap_files(amb, 'parm', leaprc)
     pro_atoms, pro_bonds, pro_connectors = {}, {}, {}
     dna_atoms, dna_bonds, dna_connectors = {}, {}, {}
     rna_atoms, rna_bonds, rna_connectors = {}, {}, {}
@@ -490,6 +510,20 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None):
         gml.write_rtp(dna_atoms, dna_bonds, dna_connectors, 'dna.rtp', impropers=dna_impropers)
     if rna_atoms:
         gml.write_rtp(rna_atoms, rna_bonds, rna_connectors, 'rna.rtp', impropers=rna_impropers)
+    gmx_dir, gmx = gml.find_gmx_dir()
+    if base_ff is None:
+        base_ff = gmx_dir + '/amber99.ff'
+    else:
+        if not base_ff.startswith('/'):
+            base_ff = gmx_dir + f'/{base_ff}'
+    wildcards_to_copy = ['tip*', 'spc*', '*atp', '*r2b', '*tdb', '*arn', '*hdb']
+    files_to_copy = []
+    for wildcard in wildcards_to_copy:
+        files_to_copy.extend(glob(f'{base_ff}/{wildcard}'))
+    for file_to_copy in files_to_copy:
+        copy2(file_to_copy, '.')
+    # TODO set up watermodels.dat
+
 
 
 def reorder_amber_impropers(new_top: "gml.Top") -> "gml.Top":
@@ -499,15 +533,20 @@ def reorder_amber_impropers(new_top: "gml.Top") -> "gml.Top":
     :param new_top: gml.Top, a topology to process
     :return: gml.Top
     """
-    new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CT', 'C*', 'CW'), '1203')
-    new_top.parameters.dihedraltypes.reorder_improper(('CT', 'CW', 'CC', 'NB'), '0213')
-    new_top.parameters.dihedraltypes.reorder_improper(('CB', 'N2', 'CA', 'NC'), '0321')
-    new_top.parameters.dihedraltypes.reorder_improper(('CB', 'C5', 'N*', 'CT'), '3201')
-    new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CP', 'N*', 'CT'), '3201')
-    new_top.parameters.dihedraltypes.reorder_improper(('C', 'C4', 'N*', 'CT'), '3201')
-    new_top.parameters.dihedraltypes.reorder_improper(('C', 'CS', 'N*', 'CT'), '3201')
-    new_top.parameters.dihedraltypes.reorder_improper(('C4', 'N2', 'CA', 'NC'), '1203')
-    new_top.parameters.dihedraltypes.reorder_improper(('N2', 'NA', 'CA', 'NC'), '1320')
+    try:
+        _ = new_top.parameters.dihedraltypes
+    except KeyError:
+        pass
+    else:
+        new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CT', 'C*', 'CW'), '1203')
+        new_top.parameters.dihedraltypes.reorder_improper(('CT', 'CW', 'CC', 'NB'), '0213')
+        new_top.parameters.dihedraltypes.reorder_improper(('CB', 'N2', 'CA', 'NC'), '0321')
+        new_top.parameters.dihedraltypes.reorder_improper(('CB', 'C5', 'N*', 'CT'), '3201')
+        new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CP', 'N*', 'CT'), '3201')
+        new_top.parameters.dihedraltypes.reorder_improper(('C', 'C4', 'N*', 'CT'), '3201')
+        new_top.parameters.dihedraltypes.reorder_improper(('C', 'CS', 'N*', 'CT'), '3201')
+        new_top.parameters.dihedraltypes.reorder_improper(('C4', 'N2', 'CA', 'NC'), '1203')
+        new_top.parameters.dihedraltypes.reorder_improper(('N2', 'NA', 'CA', 'NC'), '1320')
     return new_top
 
 

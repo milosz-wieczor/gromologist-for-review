@@ -77,12 +77,12 @@ def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
         outfile.write(mdp)
 
 
-def find_gmx_dir(suppress=False):
+def find_gmx_dir(suppress: bool = False) -> (str, str):
     """
     Attempts to find Gromacs internal files to fall back to
     when default .itp files are included using the
     #include statement
-    :return: str, path to share/gromacs/top directory
+    :return: tuple of str, path to share/gromacs/top directory and path to gmx executable
     """
     gmx = os.popen('which gmx 2> /dev/null').read().strip()
     if not gmx:

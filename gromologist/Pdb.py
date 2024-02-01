@@ -1,6 +1,6 @@
 import gromologist as gml
 from collections import defaultdict
-from typing import Optional, Union, Iterable
+from typing import Optional, Union, Iterable, Sized, Sequence
 import math
 
 
@@ -129,11 +129,14 @@ class Pdb:
         """
         new_pdb = Pdb()
         if ftype == 'pdb':
-            new_pdb.atoms, new_pdb.box, new_pdb.remarks = cls._parse_contents([line.strip() for line in text.split('\n')], False)
+            new_pdb.atoms, new_pdb.box, new_pdb.remarks = cls._parse_contents(
+                [line.strip() for line in text.split('\n')], False)
         elif ftype == 'bqt':
-            new_pdb.atoms, new_pdb.box, new_pdb.remarks = cls._parse_contents([line.strip() for line in text.split('\n')], True)
+            new_pdb.atoms, new_pdb.box, new_pdb.remarks = cls._parse_contents(
+                [line.strip() for line in text.split('\n')], True)
         elif ftype == 'gro':
-            new_pdb.atoms, new_pdb.box, new_pdb.remarks = cls._parse_contents_gro([line.strip() for line in text.split('\n')])
+            new_pdb.atoms, new_pdb.box, new_pdb.remarks = cls._parse_contents_gro(
+                [line.strip() for line in text.split('\n')])
         return new_pdb
 
     def print_protein_sequence(self, gaps: bool = False) -> list:
@@ -178,6 +181,7 @@ class Pdb:
         sequences = []
         mapping.update(Pdb.nucl_map)
         chains = list({a.chain.strip() for a in self.atoms if a.atomname == "O4'"})
+        chaintypes = []
         if not chains:
             print("No nucleic acid chains in the molecule, run Pdb.add_chains() first")
             return []
@@ -185,9 +189,14 @@ class Pdb:
             cas = set(self.get_atom_indices(f"name O4' and chain {ch}"))
             atoms = [a for n, a in enumerate(self.atoms) if n in cas]
             sequences.append(''.join([mapping[i.resname] if i.resname in mapping.keys() else 'X' for i in atoms]))
+            if atoms[0].resname.startswith('D'):
+                chaintypes.append('D')
+            else:
+                chaintypes.append('R')
         if as_modeller:
-            codes = {"A": 'e', "T": 't', "C": 'j', "G": 'l'}
-            sequences = [''.join([codes[i] for i in seq]) for seq in sequences]
+            codes_d = {"A": 'e', "T": 't', "C": 'j', "G": 'l'}
+            codes_r = {"A": 'a', "U": 'u', "C": 'c', "G": 'g'}
+            sequences = [''.join([codes_d[i] for i in seq]) if stype == "D" else ''.join([codes_r[i] for i in seq]) for seq, stype in zip(sequences, chaintypes)]
         return sequences
 
     def find_missing(self):
@@ -407,7 +416,8 @@ class Pdb:
 
         def identify(atom):
             first = atom.resname
-            if first in Pdb.prot_map.keys() or (first[1:] in Pdb.prot_map.keys() and first[0] in 'NC') or first == 'ACE':
+            if first in Pdb.prot_map.keys() or (
+                    first[1:] in Pdb.prot_map.keys() and first[0] in 'NC') or first == 'ACE':
                 return 'Protein'
             elif first in Pdb.nucl_map.keys():
                 return 'Nucleic'
@@ -544,7 +554,7 @@ class Pdb:
             count = offset
         ats = range(len(self.atoms)) if selection is None else self.get_atom_indices(selection)
         for n in ats:
-            if per_chain and n > 1 and self.atoms[n].chain != self.atoms[n-1].chain:
+            if per_chain and n > 1 and self.atoms[n].chain != self.atoms[n - 1].chain:
                 try:
                     count = offset[self.chains.index(self.atoms[n].chain)]
                 except:
@@ -651,7 +661,7 @@ class Pdb:
             if kw not in {"serial", "atomname", "resname", "chain", "resnum", "x", "y", "z", "occ", "beta", "element"}:
                 raise ValueError("{} is not a valid Atom attribute")
             new_atom.__setattr__(kw, kwargs[kw])
-        self.atoms.insert(serial-1, new_atom)
+        self.atoms.insert(serial - 1, new_atom)
         if renumber:
             self.renumber_atoms()
         rname = base_atom.resname if "resname" not in kwargs.keys() else kwargs["resname"]
@@ -712,11 +722,11 @@ class Pdb:
         if not as_plumed and not as_ndx:
             return indices
         elif as_plumed:
-            return f"ATOMS={','.join([str(ind+1) for ind in indices])}"
+            return f"ATOMS={','.join([str(ind + 1) for ind in indices])}"
         elif as_ndx:
             outstr = '[ groupname ]\n'
             for n, ind in enumerate(indices, 1):
-                outstr += f'{ind+1:7d}'
+                outstr += f'{ind + 1:7d}'
                 if n % 10 == 0:
                     outstr += '\n'
             return outstr
@@ -956,12 +966,12 @@ class Pdb:
             if len(geo_ref) == 2:
                 p1sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[0])
                 p2sel = '{}resid {} and name {}'.format(chstr, resid, geo_ref[1])
-                self.insert_atom(aftnr+2, name=atom_add, hooksel=hooksel,
+                self.insert_atom(aftnr + 2, name=atom_add, hooksel=hooksel,
                                  bondlength=bond_length,
                                  p1_sel=p1sel, p2_sel=p2sel, atomname=atom_add, resname=mutant.target_3l)
             else:
                 vec = self._vector(geo_ref, resid, chain)
-                self.insert_atom(aftnr+2, name=atom_add, hooksel=hooksel,
+                self.insert_atom(aftnr + 2, name=atom_add, hooksel=hooksel,
                                  bondlength=bond_length,
                                  vector=vec, atomname=atom_add, resname=mutant.target_3l)
         self.renumber_atoms()
@@ -1100,7 +1110,7 @@ class Pdb:
         :param c_sel: str, selection that returns the carbon atom bound to that hydrogen
         :return: None
         """
-        self.reposition_atom_passfrom_hook(h_sel, c_sel, 1.09, h_sel, c_sel)
+        self.reposition_atom_from_hook(h_sel, c_sel, 1.09, h_sel, c_sel)
 
     def _get_chirality(self, atomlist, nopbc=False):
         """
@@ -1178,13 +1188,14 @@ class Pdb:
             box = [0.0] * 6
             box[0] = boxline[0]
             box[-1] = math.atan(boxline[1] / boxline[5]) if boxline[5] != 0 else 90
-            box[1] = boxline[1] / math.sin(box[-1] * math.pi/180)
+            box[1] = boxline[1] / math.sin(box[-1] * math.pi / 180)
             box[2] = math.sqrt(boxline[7] ** 2 + boxline[8] ** 2 + boxline[2] ** 2)
             box[-2] = math.acos(boxline[7] / box[2])
-            box[-3] = math.acos((boxline[8] * math.sin(box[-1] * math.pi/180)) / box[2]
-                                + math.cos(box[-2]) * math.cos(box[-1] * math.pi/180))
+            box[-3] = math.acos((boxline[8] * math.sin(box[-1] * math.pi / 180)) / box[2]
+                                + math.cos(box[-2]) * math.cos(box[-1] * math.pi / 180))
             box[0], box[1], box[2] = box[0] * 10, box[1] * 10, box[2] * 10
-            box[3], box[4], box[5] = round(box[3] * 180/math.pi, 4), round(box[4] * 180/math.pi, 4), round(box[5], 4)
+            box[3], box[4], box[5] = round(box[3] * 180 / math.pi, 4), round(box[4] * 180 / math.pi, 4), round(box[5],
+                                                                                                               4)
         else:
             raise RuntimeError('Can\'t read box properties')
         return atoms, tuple(box), remarks
@@ -1209,14 +1220,16 @@ class Pdb:
             self.insert_atom(atom.serial + 3, name='H3', hooksel=f'serial {atom_serial}', bondlength=0.95,
                              vector=self._vector(['N', hname, 'HA', 'N'], atom.resnum, atom.chain))
 
-    def add_conect(self, cutoff=2.05, cutoff_h=1.3, pbc = False):
+    def add_conect(self, cutoff: float = 2.05, cutoff_h: float = 1.3, pbc: bool = False):
         """
         Adds CONECT entries to the PDB, using the value of
         cutoff to determine molecule connectivity
         :param cutoff: float, cut-off to determine atom bonding patterns
         :param cutoff_h: float, cut-off to determine atom bonding patterns with hydrogens
+        :param pbc: bool, whether to account for periodic boundary conditions when calculating distances
         :return: None
         """
+        # TODO if top present, take bonds from there
         self.add_elements()
         if pbc:
             self._conect_simple(cutoff, cutoff_h, pbc)
@@ -1231,16 +1244,18 @@ class Pdb:
             for n, atom in enumerate(self.atoms):
                 dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
                 if n not in hs:
-                    selected = [self.atoms[i].serial for i in list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0]) if i not in hs]
-                    selected_h = [self.atoms[i].serial for i in list(np.where(np.logical_and(dists < cutoff_h, dists > 0.1))[0])
-                                if i in hs]
+                    selected = [self.atoms[i].serial for i in
+                                list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0]) if i not in hs]
+                    selected_h = [self.atoms[i].serial for i in
+                                  list(np.where(np.logical_and(dists < cutoff_h, dists > 0.1))[0])
+                                  if i in hs]
                     self.conect[atom.serial] = selected + selected_h
                 else:
                     selected_h = [self.atoms[i].serial for i in
                                   list(np.where(np.logical_and(dists < cutoff_h, dists > 0.1))[0])]
                     self.conect[atom.serial] = selected_h
 
-    def _conect_simple(self, cf1, cf2, pbc):
+    def _conect_simple(self, cf1: float, cf2: float, pbc: bool):
         hs = self.get_atom_indices('element H')
         for n, atom in enumerate(self.atoms):
             if pbc:
@@ -1255,7 +1270,8 @@ class Pdb:
                 selected = [self.atoms[m].serial for m, a in enumerate(dists) if 0.1 < a < cf2]
                 self.conect[atom.serial] = selected
 
-    def set_beta(self, values, selection=None, smooth=False, ignore_mem=False):
+    def set_beta(self, values: Sequence, selection: str = None, smooth: Optional[float] = None,
+                 ignore_mem: bool = False):
         """
         Enables user to write arbitrary values to the beta field
         of the PDB entry
@@ -1273,7 +1289,7 @@ class Pdb:
             raise ValueError("Lists 'value' and 'serials' have inconsistent sizes: {} and {}".format(len(values),
                                                                                                      len(atoms)))
         index = 0
-        if not smooth:
+        if smooth is None:
             for atom in atoms:
                 atom.beta = values[index]
                 index += 1
@@ -1286,6 +1302,7 @@ class Pdb:
             except ImportError:
                 print("Needs numpy for smoothing, try installing it")
             else:
+                values = np.array(values)
                 atomnums = [n for n, atom in enumerate(self.atoms) if atom in atoms]
                 coords = np.array(self.get_coords())[atomnums]
                 for atom in self.atoms:
@@ -1350,7 +1367,7 @@ class Pdb:
                 outfile.write(line.strip() + '\n')
             for n, atom in enumerate(self.atoms):
                 outfile.write(self._write_atom(atom))
-                if add_ter and n < self.natoms-1 and atom.chain != self.atoms[n+1].chain:
+                if add_ter and n < self.natoms - 1 and atom.chain != self.atoms[n + 1].chain:
                     outfile.write(self._ter_format.format(atom.serial, atom.resname, atom.chain, atom.resnum))
             for conect in self.conect.keys():
                 outfile.write(self._write_conect(conect, self.conect[conect]))
@@ -1380,7 +1397,7 @@ class Pdb:
             for atom in self.atoms:
                 outfile.write(self._write_atom(atom, pdb=False))
             gbox = self._calc_gro_box()
-            if sum([x**2 for x in gbox[3:]]) > 0:
+            if sum([x ** 2 for x in gbox[3:]]) > 0:
                 outfile.write((9 * "{:10.5f}" + "\n").format(*gbox))
             else:
                 outfile.write((3 * "{:10.5f}" + "\n").format(*gbox[:3]))
@@ -1616,7 +1633,7 @@ class Traj:
         structs = []
         content = [line for line in open(infile)]
         if ftype == 'pdb':
-            term_lines = [0] + [n+1 for n, line in enumerate(content)
+            term_lines = [0] + [n + 1 for n, line in enumerate(content)
                                 if line.startswith('END') or line.startswith('ENDMDL')]
         elif ftype == 'gro':
             natoms = int(content[1].strip())

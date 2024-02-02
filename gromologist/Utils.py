@@ -438,7 +438,6 @@ def find_leap_files(ambdir, filetype, leaprc):
     content = [line.strip() for line in open(leaprc)]
     pref = os.path.sep if leaprc.startswith(os.path.sep) else ''
     reldir = pref + os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + pref
-    print(reldir)
     if filetype == 'lib':
         files_in_ambdir = [ambdir + '/lib/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
                            "loadoff" in [w.lower() for w in line.split()]]
@@ -451,7 +450,6 @@ def find_leap_files(ambdir, filetype, leaprc):
                            "loadamberparams" in [w.lower() for w in line.split()]]
     else:
         raise RuntimeError('select "parm" or "lib"')
-    print(files_in_ambdir, files_in_reldir)
     found_files = [f for f in files_in_ambdir + files_in_reldir if os.path.exists(f)]
     return found_files
 
@@ -478,8 +476,9 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
     impropers = {}
     for prep in glob(amb + "/prep/all*.in") + glob(amb + "/prep/nuc*.in"):
         impropers.update(read_prep_impropers(prep))
+    print('\n')
     for lib in libs:
-        print(f"Adding residues from {lib}")
+        print(f"***** Adding residues from {lib} *****")
         a, b, c = gml.read_lib(lib)
         pro_atoms.update(fix_rtp(dict_filter(a, 'protein')))
         pro_bonds.update(dict_filter(b, 'protein'))
@@ -490,14 +489,17 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
         rna_atoms.update(fix_rtp(dict_filter(a, 'RNA'), rna=True))
         rna_bonds.update(fix_rtp(dict_filter(b, 'RNA'), rna=True))
         rna_connectors.update(fix_rtp(dict_filter(c, 'RNA'), rna=True))
+    print('\n')
     pro_impropers = fix_rtp(dict_filter(impropers, 'protein'), impr=True)
     dna_impropers = dict_filter(impropers, 'DNA')
     rna_impropers = fix_rtp(dict_filter(impropers, 'RNA'), impr=True, rna=True)
     new_top = gml.Top(amber=True)
     cmaptypes, rtp_cmap = {}, {}
+    print('\n')
     for dat in dats:
-        print(f"Adding parameters from {dat}")
+        print(f"***** Adding parameters from {dat} *****")
         cmaptypes.update(load_frcmod(new_top, dat, return_cmap=True))
+    print('\n')
     for k in cmaptypes.keys():
         rtp_cmap[k[1]] = ['-C N CA C +N'.split()]
     new_top = reorder_amber_impropers(new_top)
@@ -510,7 +512,10 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
         gml.write_rtp(dna_atoms, dna_bonds, dna_connectors, 'dna.rtp', impropers=dna_impropers)
     if rna_atoms:
         gml.write_rtp(rna_atoms, rna_bonds, rna_connectors, 'rna.rtp', impropers=rna_impropers)
-    gmx_dir, gmx = gml.find_gmx_dir()
+    gmx_dir = new_top.gromacs_dir
+    if not gmx_dir:
+        print("Gromacs directory not found. Please move the additional files (.hdb, .atp, solvent .itp etc.) manually")
+        return
     if base_ff is None:
         base_ff = gmx_dir + '/amber99.ff'
     else:
@@ -520,10 +525,10 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
     files_to_copy = []
     for wildcard in wildcards_to_copy:
         files_to_copy.extend(glob(f'{base_ff}/{wildcard}'))
+    print(f"Copying accessory files (.hdb, .atp, solvent .itp etc.) from {base_ff}\n")
     for file_to_copy in files_to_copy:
         copy2(file_to_copy, '.')
     # TODO set up watermodels.dat
-
 
 
 def reorder_amber_impropers(new_top: "gml.Top") -> "gml.Top":

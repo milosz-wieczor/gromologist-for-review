@@ -633,6 +633,20 @@ will be set to zero.
 Alternatively, if the parameters are missing in one of the alchemical states but not in the other, one can copy them
 from the other alchemical state by setting either `fix_B_from_A` or `fix_A_from_B`.
 
+In order to just label each interaction entry (bonds, angles, dihedrals) by atom types within comments, use:
+
+```
+>>> t.label_types()
+```
+
+For angles, the result below:
+
+```
+    2     1     3     1  ; HO OH CI
+```
+
+will explain that an angle term involving atoms 2, 1 and 3 corresponds to atom types `HO`, `OH` and `CI`.
+
 Finally, one can recalculate the cumulative charge ("qtot" comment in molecule definitions)
 by using:
 

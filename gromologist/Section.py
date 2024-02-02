@@ -1144,6 +1144,11 @@ class SectionMol(Section):
         del self.printed
 
     def label_types(self, add_section: str = 'all'):
+        """
+        Labels all parameters defined in the molecule by atomtype in the comment
+        :param add_section: str, if 'all' then applies to all sections, otherwise can be a list of section names
+        :return: None
+        """
         if add_section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals']
         else:

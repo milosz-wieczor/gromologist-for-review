@@ -636,10 +636,10 @@ from the other alchemical state by setting either `fix_B_from_A` or `fix_A_from_
 In order to just label each interaction entry (bonds, angles, dihedrals) by atom types within comments, use:
 
 ```
->>> t.label_types()
+>>> t.molecules[0].label_types()
 ```
 
-For angles, the result below:
+For angles, the result below (in molecule number 0):
 
 ```
     2     1     3     1  ; HO OH CI

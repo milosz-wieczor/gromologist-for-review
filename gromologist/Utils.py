@@ -461,6 +461,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
     :param leaprc: str, a file that sources dependencies from which the .ff will be created
     :param outdir: str, a new .ff directory that will contain the Gromacs-compatible files
     :param amber_dir: str, Abs path to the dir containing Amber prep, parm, lib directories if `leaprc` is a local file
+    :param base_ff: str, name of the source .ff directory that will be used for auxilliary files
     :return: None
     """
     orig_dir = os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + os.path.sep if os.path.sep in leaprc else ''

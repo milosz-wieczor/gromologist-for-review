@@ -45,6 +45,7 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Automated system preparation](#automated-system-preparation)
         * [Miscellanous](#miscellanous)
     * [Sensitivity analysis](#sensitivity-analysis)
+    * [Importing Amber parameters into Gromacs force fields](#importing-amber-parameters)
 
 <small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
 
@@ -972,6 +973,7 @@ To customize or automate the workflow, the following options are available:
 Any additional key:value pairs will be passed to pdb2gmx (e.g. `heavyh='yes'` to turn on
 hydrogen mass repartitioning).
 
+
 ##### Miscellanous
 <a name="miscellanous"/>
 
@@ -1000,7 +1002,32 @@ the energy derivatives for each frame for each possible NBFIX:
 >>> td.add_traj(top='md/topol.top', traj='md/traj.xtc', datasets={'helicity': hdata})
 >>> td.run() # this part will take some time
 >>> # let's find the difference between the binned derivatives for the lower and upper half of the dataset:
->>> hmin, hmax = np.min(hdata), np.max(hdata)
+>>> hmin, hmax = np.min(hdata), np.max(hdata) 
 >>> hmid = 0.5 * (hmin + hmax)
 >>> td.calc_discrete_derivatives(dataset='helicity', threshold=[hmin, hmid, hmid, hmax])
 ```
+
+
+### Importing Amber parameters into Gromacs force fields
+<a name="importing-amber-parameters"/>
+
+Gromologist allows to read Amber-style `leaprc` files that source residue libraries and parameter datasets to 
+create Gromacs-style `.ff` directories that can be used to prepare systems through `gmx pdb2gmx`.
+
+Parameter files are identified based on the `loadamberparams` keyword, while residue libraries will be read following
+the `loadOff` directive; types defined through `addAtomTypes` will also be read. Other directives will be ignored, 
+and existing Gromacs auxilliary files (e.g. .hdb for hydrogen addition, or .itp for solvent molecule definitions) will
+be copied from existing Gromacs `.ff` directories (by default, `amber99.ff`; this can be controlled with the `base_ff` argument).
+
+If the `leaprc` file is not present in the respective Amber installation directory, you might need to separately specify
+the path to Amber files as `amber_dir = /path/to/ambertools/dat/leap/prep/`. In general, the conversion can be performed
+with the following example command:
+
+```
+>>> amber2gmxFF('leaprc.ff15', outdir = 'gmx.ff', amber_dir = '/path/to/ambertools/dat/leap/prep/')
+```
+
+Newly created files include: `forcefield.itp`, `ffparams.itp`, `*.rtp` (rna, dna, aminoacids - depending on the defined
+residues), and `atomtypes.atp`. In the case of non-standard residues, please check for correct addition of improper dihedrals.
+
+Report bugs and issues to [milosz.wieczor\@irbbarcelona.org](mailto:milosz.wieczor@irbbarcelona.org?subject=gromologist).

@@ -1887,6 +1887,10 @@ class SectionParam(Section):
         self._get_defines()
 
     @property
+    def atomtypes(self):
+        return self.get_subsection('atomtypes')
+
+    @property
     def bondtypes(self):
         return self.get_subsection('bondtypes')
 

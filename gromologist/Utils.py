@@ -504,8 +504,14 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
         rtp_cmap[k[1]] = ['-C N CA C +N'.split()]
     new_top = reorder_amber_impropers(new_top)
     outdir = outdir + '.ff' if not outdir.endswith('.ff') else outdir
+    atomtypes = read_addAtomTypes(leaprc)
     os.mkdir(outdir)
     os.chdir(outdir)
+    for atype in new_top.parameters.atomtypes.entries_param:
+        if atype.modifiers[0] == '0' and atype.types[0] in atomtypes.keys():
+            atype.modifiers[0] = str(atomtypes[atype.types[0]][0])
+        if atype.modifiers[1] == '0' and atype.types[0] in atomtypes.keys():
+            atype.modifiers[1] = str(atomtypes[atype.types[0]][1])
     new_top.save_top('forcefield.itp', split=True)
     gml.write_rtp(pro_atoms, pro_bonds, pro_connectors, 'aminoacids.rtp', impropers=pro_impropers, cmap=rtp_cmap)
     if dna_atoms:
@@ -514,20 +520,24 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
         gml.write_rtp(rna_atoms, rna_bonds, rna_connectors, 'rna.rtp', impropers=rna_impropers)
     gmx_dir = new_top.gromacs_dir
     if not gmx_dir:
-        print("Gromacs directory not found. Please move the additional files (.hdb, .atp, solvent .itp etc.) manually")
-        return
-    if base_ff is None:
-        base_ff = gmx_dir + '/amber99.ff'
+        print("Gromacs directory not found. Please move the additional files (.hdb, solvent .itp etc.) manually")
     else:
-        if not base_ff.startswith('/'):
-            base_ff = gmx_dir + f'/{base_ff}'
-    wildcards_to_copy = ['tip*', 'spc*', '*atp', '*r2b', '*tdb', '*arn', '*hdb']
-    files_to_copy = []
-    for wildcard in wildcards_to_copy:
-        files_to_copy.extend(glob(f'{base_ff}/{wildcard}'))
-    print(f"Copying accessory files (.hdb, .atp, solvent .itp etc.) from {base_ff}\n")
-    for file_to_copy in files_to_copy:
-        copy2(file_to_copy, '.')
+        if base_ff is None:
+            base_ff = gmx_dir + '/amber99.ff'
+        else:
+            if not base_ff.startswith('/'):
+                base_ff = gmx_dir + f'/{base_ff}'
+        wildcards_to_copy = ['tip*', 'spc*', '*r2b', '*tdb', '*arn', '*hdb']
+        files_to_copy = []
+        for wildcard in wildcards_to_copy:
+            files_to_copy.extend(glob(f'{base_ff}/{wildcard}'))
+        print(f"Copying accessory files (.hdb, .atp, solvent .itp etc.) from {base_ff}\n")
+        for file_to_copy in files_to_copy:
+            copy2(file_to_copy, '.')
+    with open('atomtypes.atp', 'w') as outfile:
+        for atype in new_top.parameters.atomtypes.entries_param:
+            outfile.write(f"{atype.types[0]:12s} {float(atype.modifiers[1]):12.5f}\n")
+    new_top.find_undefined_types()
     # TODO set up watermodels.dat
 
 
@@ -555,8 +565,14 @@ def reorder_amber_impropers(new_top: "gml.Top") -> "gml.Top":
     return new_top
 
 
-def read_addAtomTypes(text: list) -> dict:
+def read_addAtomTypes(textfile: str) -> dict:
+    text = open(textfile).readlines()
     reading, brack = False, 0
+    element_properties = {
+        "H": (1, 1.008), "O": (8, 15.999), "C": (6, 12.011), "N": (7, 14.007), "S": (16, 32.06), "P": (15, 30.974),
+        "F": (9, 18.998), "Cl": (17, 35.45), "Br": (35, 79.904), "I": (53, 126.90), "Mg": (12, 24.305),
+        "Ca": (20, 40.078)
+    }
     types = {}
     for line in text:
         if line.strip().startswith('addAtomTypes'):
@@ -571,6 +587,11 @@ def read_addAtomTypes(text: list) -> dict:
         data = line.strip().strip('{}').strip().split()
         if len(data) == 3:
             types[data[0].strip('"')] = data[1].strip('"')
+    for k, v in types.items():
+        if v:
+            types[k] = element_properties[v]
+        else:
+            types[k] = (0, 0.0)
     return types
 
 

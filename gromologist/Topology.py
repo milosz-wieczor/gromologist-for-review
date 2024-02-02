@@ -225,9 +225,20 @@ class Top:
     def defined_atomtypes(self) -> set:
         """
         Returns a set of all atomtypes defined in this topology (in [ atomtypes ])
-        :return:
+        :return: set, all atomtypes defined in the parameters' section
         """
-        return {ent.types[0] for ent in self.parameters.get_subsection('atomtypes').entries_param}
+        return {ent.types[0] for ent in self.parameters.atomtypes.entries_param}
+
+    def find_undefined_types(self):
+        """
+        Checks if any atom types required by some bonded or nonbonded parameters are missing in [ atomtypes ] definition
+        :return: None
+        """
+        deftyp = self.defined_atomtypes.union({"X"})
+        for ssect in self.parameters.subsections:
+            types = {t for e in ssect.entries_param for t in e.types}
+            if types.difference(deftyp):
+                print(f"Warning: atomtypes {types.difference(deftyp)} required in {ssect.header} not found in [ atomtypes ]")
 
     def list_molecules(self):
         """

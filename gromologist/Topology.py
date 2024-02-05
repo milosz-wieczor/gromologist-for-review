@@ -248,6 +248,16 @@ class Top:
         for mol_count in self.system:
             print("{:20s}{:>10d}".format(mol_count[0], mol_count[1]))
 
+    def remove_all_comments(self):
+        """
+        Removes comments from all topology lines (useful e.g. for comparing with diff)
+        :return: None
+        """
+        for sect in self.sections:
+            for ssub in sect.subsections:
+                for entry in ssub.entries:
+                    entry.comment = ''
+
     def clear_ff_params(self, section: str = 'all'):
         """
         Removes all FF parameters included in the topology that are not used by the defined molecules

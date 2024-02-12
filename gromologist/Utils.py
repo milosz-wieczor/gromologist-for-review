@@ -192,14 +192,9 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
             entry = [vals[1], 4.184 * vals[0], int((vals[2] ** 2) ** 0.5)]
             impropertypes[types] = entry
         elif current == 'CMAP':
-            types = tuple('C N CT C N'.split())
+            types = tuple('C N CT C N'.split()) # in case the format ever changes in the future
             if line.startswith('%FLAG'):
-                if line.split()[1] == "CMAP_COUNT":
-                    cmapvals = [str(round(4.184 * float(i), 10)) for i in cmapvals]
-                    for res in cmapres:
-                        cmaptypes[(types, res)] = (cmapresol, cmapvals)
-                    cmapresol, cmapres, cmapvals, cmapread = None, [], [], False
-                elif line.split()[1] == "CMAP_RESLIST":
+                if line.split()[1] == "CMAP_RESLIST":
                     cmapres = content[nl+1].split()
                 elif line.split()[1] == "CMAP_RESOLUTION":
                     cmapresol = line.split()[2]
@@ -210,6 +205,12 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
                     cmapread = False
                 else:
                     cmapvals.extend(line.strip().split())
+            if len(cmapvals) > 0 and len(cmapvals) == int(cmapresol) ** 2:
+                cmapvals = [str(round(4.184 * float(i), 10)) for i in cmapvals]
+                for res in cmapres:
+                    cmaptypes[(types, res)] = (cmapresol, cmapvals)
+                cmapresol, cmapres, cmapvals, cmapread = None, [], [], False
+
     # assert (all([len(val) == 3 for val in atomtypes.values()]))
     atomtypes = {key: val for key, val in atomtypes.items() if len(val) == 3}
     non_atomtypes = [key for key, val in atomtypes.items() if len(val) != 3]
@@ -434,27 +435,27 @@ def fix_rtp(rtp_dict: dict, impr: bool = False, rna: bool = False) -> dict:
     return rtp_dict
 
 
-def find_leap_files(ambdir, filetype, leaprc):
+def find_leap_files(ambdir: str, filetype: str, leaprc: str, extras: Optional[list] = None):
     content = [line.strip() for line in open(leaprc)]
+    extras = extras if extras is not None else []
     pref = os.path.sep if leaprc.startswith(os.path.sep) else ''
     reldir = pref + os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + pref
     if filetype == 'lib':
-        files_in_ambdir = [ambdir + '/lib/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
-                           "loadoff" in [w.lower() for w in line.split()]]
-        files_in_reldir = [reldir + line.split()[-1] for line in content if len(line.split()) >= 2 and
-                           "loadoff" in [w.lower() for w in line.split()]]
+        files = [line.split()[-1] for line in content if
+                 len(line.split()) >= 2 and "loadoff" in [w.lower() for w in line.split()]] + extras
     elif filetype == 'parm':
-        files_in_ambdir = [ambdir + '/parm/' + line.split()[-1] for line in content if len(line.split()) >= 2 and
-                           "loadamberparams" in [w.lower() for w in line.split()]]
-        files_in_reldir = [reldir + line.split()[-1] for line in content if len(line.split()) >= 2 and
-                           "loadamberparams" in [w.lower() for w in line.split()]]
+        files = [line.split()[-1] for line in content if
+                 len(line.split()) >= 2 and "loadamberparams" in [w.lower() for w in line.split()]] + extras
     else:
         raise RuntimeError('select "parm" or "lib"')
+    files_in_ambdir = [ambdir + f'/{filetype}/' + f for f in files]
+    files_in_reldir = [reldir + f for f in files]
     found_files = [f for f in files_in_ambdir + files_in_reldir if os.path.exists(f)]
     return found_files
 
 
-def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_ff: Optional[str] = None):
+def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_ff: Optional[str] = None,
+                extra_files: Optional[list] = None):
     """
     Reads a .leaprc file and all parameter dependencies from Amber to convert into a Gromacs .ff dir
     Files that should be copied manually: watermodels.dat and tip*itp, .hdb, .tdb and .arn
@@ -462,6 +463,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
     :param outdir: str, a new .ff directory that will contain the Gromacs-compatible files
     :param amber_dir: str, Abs path to the dir containing Amber prep, parm, lib directories if `leaprc` is a local file
     :param base_ff: str, name of the source .ff directory that will be used for auxilliary files
+    :param extra_files: list of str, additional files that should be included (e.g. frcmod.tip3p)
     :return: None
     """
     orig_dir = os.path.sep.join(leaprc.split(os.path.sep)[:-1]) + os.path.sep if os.path.sep in leaprc else ''
@@ -469,13 +471,17 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
         amb = amber_dir
     else:
         amb = f'{orig_dir}../'
-    libs = find_leap_files(amb, 'lib', leaprc)
-    dats = find_leap_files(amb, 'parm', leaprc)
+    extra_files = extra_files if extra_files is not None else []
+    extra_libs = [pth for pth in extra_files if pth.endswith('lib')]
+    extra_dats = [pth for pth in extra_files if pth.endswith('dat') or 'frcmod' in pth.split(os.path.sep)[-1]]
+    extra_prep = [pth for pth in extra_files if pth.endswith('in') or pth.endswith('prep')]
+    libs = find_leap_files(amb, 'lib', leaprc, extra_libs)
+    dats = find_leap_files(amb, 'parm', leaprc, extra_dats)
     pro_atoms, pro_bonds, pro_connectors = {}, {}, {}
     dna_atoms, dna_bonds, dna_connectors = {}, {}, {}
     rna_atoms, rna_bonds, rna_connectors = {}, {}, {}
     impropers = {}
-    for prep in glob(amb + "/prep/all*.in") + glob(amb + "/prep/nuc*.in"):
+    for prep in glob(amb + "/prep/all*.in") + glob(amb + "/prep/nuc*.in") + extra_prep:
         impropers.update(read_prep_impropers(prep))
     print('\n')
     for lib in libs:
@@ -502,7 +508,13 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
         cmaptypes.update(load_frcmod(new_top, dat, return_cmap=True))
     print('\n')
     for k in cmaptypes.keys():
-        rtp_cmap[k[1]] = ['-C N CA C +N'.split()]
+        try:
+            cc = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "C"][0]
+            na = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "N"][0]
+            ca = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "CA"][0]
+        except KeyError:
+            cc, na, ca = "C", "N", "CA"
+        rtp_cmap[k[1]] = [f'-{cc} {na} {ca} {cc} +{na}'.split()]
     new_top = reorder_amber_impropers(new_top)
     outdir = outdir + '.ff' if not outdir.endswith('.ff') else outdir
     atomtypes = read_addAtomTypes(leaprc)

@@ -897,11 +897,13 @@ class SectionMol(Section):
                 pass
 
     def _check_correct(self):
+        natoms = self.natoms
         for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap', 'position_restraints']:
             try:
                 subsection = self.get_subsection(subs)
+                print(subs)
                 for entry in subsection.entries_bonded:
-                    if any([e > self.natoms for e in entry.atom_numbers]):
+                    if any([e > natoms for e in entry.atom_numbers]):
                         raise RuntimeError(f"Entry {entry} is invalid, only {self.natoms} atoms in the system")
             except KeyError:
                 pass

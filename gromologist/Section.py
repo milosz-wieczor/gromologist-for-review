@@ -478,6 +478,7 @@ class SectionMol(Section):
                 atom.charge = charges[(disulf_resname, atom.atomname)]
                 atom.resname = disulf_resname
         self.merge_two(other, s1.num, s2.num)
+        self._check_correct()
 
     def add_coordinated_ion(self, resid1: int, resid2: int, other: Optional["gml.SectionMol"] = None, rtp: Optional[str] = None):
         """
@@ -527,6 +528,7 @@ class SectionMol(Section):
             else:
                 x1 = self.get_atom(f'resid {resid1} and name ND1')
         self.merge_two(other, x1.num, x2.num)
+        self._check_correct()
 
     def gen_state_b(self, atomname: Optional[str] = None, resname: Optional[str] = None,
                     resid: Optional[int] = None, atomtype: Optional[str] = None, new_type: Optional[str] = None,
@@ -605,6 +607,7 @@ class SectionMol(Section):
                         entry.types_state_a = entry.types_state_b
                         entry.types_state_b = None
         self.update_dicts()
+        self._check_correct()
 
     def swap_states(self, atomname: Optional[str] = None, resname: Optional[str] = None,
                      resid: Optional[int] = None, atomtype: Optional[str] = None):
@@ -686,6 +689,7 @@ class SectionMol(Section):
                 self.del_atom(to_remove.num)
                 dummies = [entry for entry in sub.entries_atom if entry.type[0] == "D" and entry.num in selected]
         self.update_dicts()
+        self._check_correct()
     
     def add_atom(self, atom_number: int, atom_name: str, atom_type: str, charge: float = 0.0,
                  resid: Optional[int] = None, resname: Optional[str] = None, mass: Optional[float] = None,
@@ -752,13 +756,14 @@ class SectionMol(Section):
             atoms.insert(position, new_entry)
         self.update_dicts()
     
-    def del_atom(self, atom_number: int, del_in_pdb: bool = True, renumber_in_pdb: bool = True):
+    def del_atom(self, atom_number: int, del_in_pdb: bool = True, renumber_in_pdb: bool = True, check_after: bool = False):
         """
         Removes an atom from the topology, as specified using
         topology numbering (1-based)
         :param atom_number: int, atom number in topology
         :param del_in_pdb: bool, whether to also remove in the bound PDB file
         :param renumber_in_pdb: bool, whether to renumber atoms in the bound PDB file
+        :param check_after: bool, whether to perform a plain number check after each atom deletion
         :return: None
         """
         if atom_number > self.natoms:
@@ -770,7 +775,8 @@ class SectionMol(Section):
         self.offset_numbering(-1, atom_number)
         self.update_dicts()
         # checking correct numbers, can add more checks in the future
-        self._check_correct()
+        if check_after:
+            self._check_correct()
         if del_in_pdb:
             if self.top.pdb:
                 for to_remove in matched:
@@ -1387,6 +1393,7 @@ class SectionMol(Section):
                     self.top.pdb.mutate_protein_residue(resid, target, ch)
         elif mutate_in_pdb and not self.top.pdb:
             print("No .pdb file bound to the topology, use Top.add_pdb() to add one")
+        self._check_correct()
 
     def cleave_protein(self, after_residue: int, rtp: Optional[str] = None, mutate_in_pdb: bool = True):
         new_c_term = self.get_atom(f'resid {after_residue} and name C')
@@ -1468,6 +1475,7 @@ class SectionMol(Section):
                 natom.type = ntypes[natom.atomname]
                 natom.charge = ncharges[natom.atomname]
             # TODO add impropers
+        self._check_correct()
 
     def parse_rtp(self, rtp: str, remember: bool = False) -> (dict, dict, dict, dict, dict):
         """

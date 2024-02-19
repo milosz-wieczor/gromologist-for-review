@@ -208,7 +208,7 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
             if len(cmapvals) > 0 and len(cmapvals) == int(cmapresol) ** 2:
                 cmapvals = [str(round(4.184 * float(i), 10)) for i in cmapvals]
                 for res in cmapres:
-                    cmaptypes[(types, res)] = (cmapresol, cmapvals)
+                    cmaptypes[(types, res)] = [cmapresol, cmapvals]
                 cmapresol, cmapres, cmapvals, cmapread = None, [], [], False
 
     # assert (all([len(val) == 3 for val in atomtypes.values()]))
@@ -219,7 +219,8 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes
 
 
-def load_frcmod(top: Union[str, "gml.Top"], filename: str, return_cmap: bool = False) -> Optional[dict]:
+def load_frcmod(top: Union[str, "gml.Top"], filename: str, return_cmap: bool = False, pro_atoms: Optional[dict] = None)\
+        -> Optional[dict]:
     """
     Loads an .frcmod file into an existing topology. Can be also launched as
     gml.Top().load_frcmod(...)
@@ -230,6 +231,14 @@ def load_frcmod(top: Union[str, "gml.Top"], filename: str, return_cmap: bool = F
     """
     top = gml.obj_or_str(top)
     atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes = parse_frcmod(filename)
+    for k in cmaptypes.keys():
+        try:
+            cc = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "C"][0]
+            na = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "N"][0]
+            ca = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "CA"][0]
+        except KeyError:
+            cc, na, ca = "C", "N", "CA"
+        cmaptypes[k].append(f'{cc} {na} {ca} {cc} {na}'.split())
     params = top.parameters
     for at in atomtypes.keys():
         params.add_atomtype(at, *atomtypes[at], action_default='r')
@@ -249,7 +258,7 @@ def load_frcmod(top: Union[str, "gml.Top"], filename: str, return_cmap: bool = F
             print(f"Skipping NBFIX {n} as at least one of the types is not defined; if you want to keep it, "
                   "create/load the type and run this command again.")
     for c in cmaptypes.keys():
-        params.add_bonded_param(c[0], [c[1], cmaptypes[c]], 1, action_default='a')
+        params.add_bonded_param(cmaptypes[c][-1], [c[1], cmaptypes[c][:-1]], 1, action_default='a')
     if return_cmap:
         return cmaptypes
     else:
@@ -505,16 +514,10 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
     print('\n')
     for dat in dats:
         print(f"***** Adding parameters from {dat} *****")
-        cmaptypes.update(load_frcmod(new_top, dat, return_cmap=True))
+        cmaptypes.update(load_frcmod(new_top, dat, return_cmap=True, pro_atoms=pro_atoms))
     print('\n')
     for k in cmaptypes.keys():
-        try:
-            cc = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "C"][0]
-            na = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "N"][0]
-            ca = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "CA"][0]
-        except KeyError:
-            cc, na, ca = "C", "N", "CA"
-        rtp_cmap[k[1]] = [f'-{cc} {na} {ca} {cc} +{na}'.split()]
+        rtp_cmap[k[1]] = [f'-C N CA C +N'.split()]
     new_top = reorder_amber_impropers(new_top)
     outdir = outdir + '.ff' if not outdir.endswith('.ff') else outdir
     atomtypes = read_addAtomTypes(leaprc)

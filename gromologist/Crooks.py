@@ -507,11 +507,10 @@ class Crooks:
         job was restarted), and integrates dH/dl to calculate work
         :return: None
         """
-        dhdl = np.loadtxt('run{n}_l{l}/dyn{n}_l{l}.xvg'.format(n=self.id, l=self.initlambda), comments=['#', '@'])
+        dhdl = np.loadtxt('run{n}_l{l}/dyn.xvg'.format(n=self.id, l=self.initlambda), comments=['#', '@'])
         if not int(dhdl[-1, 0]) == int(self.master.sim_length):
-            raise RuntimeError("In file run{}_l{}/dyn{}_l{}.xvg last line reads {}, less than the requested total "
-                               "fime of {} ps".format(self.id, self.initlambda, self.id, self.initlambda, dhdl[-1],
-                                                      self.master.sim_length))
+            raise RuntimeError("In file run{}_l{}/dyn.xvg last line reads {}, less than the requested total "
+                               "fime of {} ps".format(self.id, self.initlambda, dhdl[-1], self.master.sim_length))
         dhdl_dict = {i: j for i, j in dhdl}
         dhdl = np.array([dhdl_dict[i] for i in sorted(list(dhdl_dict.keys()))])  # avoid duplicates in case of restarts
         endlambda = 1 if self.initlambda == 0 else 0

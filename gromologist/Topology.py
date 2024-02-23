@@ -10,7 +10,7 @@ from collections import OrderedDict
 
 class Top:
     def __init__(self, filename='', gmx_dir=None, gmx_exe=None, pdb=None, ignore_ifdef=False, define=None, ifdef=None,
-                 ignore_missing_defines=False, keep_all=True, suppress=False, amber=False):
+                 ignore_missing_defines=False, keep_all=True, suppress=False, amber=False, charmm=False):
         """
         A class to represent and contain the Gromacs topology file and provide
         tools for editing topology elements
@@ -34,12 +34,18 @@ class Top:
             self.dir = os.sep.join(self.fname.split(os.sep)[:-1])
         else:
             self.dir = os.getcwd() + os.sep + os.sep.join(self.fname.split(os.sep)[:-1])
-        if not (self.fname == '' and amber):
+        if not (self.fname == '' and (amber or charmm)):
             with open(self.fname) as top_file:
                 self._contents = top_file.readlines()
         else:
-            self.print("Creating an empty amber topology file")
-            self._contents = ['#define _FF_AMBER\n', '[ defaults ]\n', '1 2 yes 0.5 0.8333\n', '[ atomtypes ]\n']
+            if amber and not charmm:
+                self.print("Creating an empty amber topology file")
+                self._contents = ['#define _FF_AMBER\n', '[ defaults ]\n', '1 2 yes 0.5 0.8333\n', '[ atomtypes ]\n']
+            elif charmm and not amber:
+                self.print("Creating an empty charmm topology file")
+                self._contents = ['#define _FF_CHARMM\n', '[ defaults ]\n', '1 2 yes 1.0 1.0\n', '[ atomtypes ]\n']
+            else:
+                raise RuntimeError("To make an empty topology, select either 'amber=True' or 'charmm=True'")
         self.defines = {}
         self.ignore_missing_defines = ignore_missing_defines
         if define is not None:

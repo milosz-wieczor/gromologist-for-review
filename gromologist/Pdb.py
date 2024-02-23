@@ -488,6 +488,29 @@ class Pdb:
     def _write_conect(atom: int, bonded: list) -> str:
         return 'CONECT' + ('{:>5}' * (len(bonded) + 1)).format(atom, *bonded) + '\n'
 
+    def shift_periodic_image(self, vec: list, selection: Optional[str] = 'all'):
+        """
+        Move a part of the system by a box vector in X, Y and/or Z dimension
+        :param vec: list of 3 int (i, j, k), the selection will be translated by [i*a, j*b, k*c]
+        :param selection: str, if chosen, the translation will only be applied to this part of the system
+        :return: None
+        """
+        atoms_to_move = self.get_atoms(selection)
+        deg2rad = 57.29577951308232
+        alpha, beta, gamma = self.box[3]/deg2rad, self.box[4]/deg2rad, self.box[5]/deg2rad
+        box_vec_a = [self.box[0], 0, 0]
+        box_vec_b = [self.box[1] * math.cos(gamma), self.box[1] * math.sin(gamma), 0]
+        v3_x = self.box[2] * (math.cos(alpha) - math.cos(beta) * math.cos(gamma)) / math.sin(gamma)
+        v3_y = self.box[2] * (math.sin(beta) * math.cos(alpha) - math.cos(beta) * math.sin(alpha) * math.cos(gamma))
+        v3_z = self.box[2] * (math.sin(beta) * math.sin(alpha) + math.cos(beta) * math.cos(gamma))
+        box_vec_c = [v3_x, v3_y, v3_z]
+        vec_to_move = [box_vec_a[j] * vec[0] + box_vec_b[j] * vec[1] + box_vec_c[j] * vec[2] for j in range(3)]
+        print(box_vec_a, box_vec_b, box_vec_c, vec_to_move)
+        for atom in atoms_to_move:
+            atom.x += vec_to_move[0]
+            atom.y += vec_to_move[1]
+            atom.z += vec_to_move[2]
+
     def tip3_to_opc(self, offset: float = 0.147722363):
         """
         Converts a 3-point water model in a structure to a 4-point

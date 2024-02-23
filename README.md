@@ -37,6 +37,7 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
         * [Filling beta-values with custom data (for visualization)](#filling-beta-values-with-custom-data--for-visualization-)
         * [Renumbering atoms or residues in a structure](#renumbering-atoms-or-residues-in-a-structure)
         * [Adding chain, CONECT, QT or element information](#adding-chain--conect-qt-or-element-information)
+        * [Moving a subset of atoms to a different periodic image](#moving-a-subset-of-atoms-to-a-different-periodic-image)
         * [Converting a 3-point water model to a 4-point one](#converting-a-3-point-water-model-to-a-4-point-one)
     + [Selection language syntax](#selection-language-syntax)
         * [Creating index groups](#creating-index-groups)
@@ -102,6 +103,14 @@ PDB file md/conf.pdb with 100 atoms
 >>> t.add_pdb('md/other.pdb')
 >>> t.pdb
 PDB file md/other.pdb with 105 atoms
+```
+
+For the purpose of including external files, an empty topology can be created for Amber and CHARMM FFs
+(note the FF has to be specified as they use different `[ defaults ]`):
+
+```
+>>> empty_amb = Top(amber=True)
+>>> empty_chm = Top(charmm=True)
 ```
 
 After changes have been made, modified files can be saved:
@@ -851,6 +860,20 @@ Finally, if CONECT entries are needed in the PDB (as required by some programs),
 with a default distance cut-off of 2.05 A (heavy atom, including disulfides) or 1.3 (hydrogen atom) to define 
 a chemical bond. Note that this last feature uses a faster subroutine when `numpy` is available, but will fall back to 
 the slower algorithm if asked to include PBC in distance calculations (`p.add_conect(pbc=True)`).
+
+##### Moving a subset of atoms to a different periodic image
+<a name="moving-a-subset-of-atoms-to-a-different-periodic-image"/>
+
+For cases where default PBC treatment does not provide desired results, or where no topology is available
+at the time, a selected group of atoms can be shifted by a desired combination of box vectors 
+[**a**, **b**, **c**]:
+
+```
+>>> p.shift_periodic_image([0, 1, 1], selection = 'resid 1 to 5'):
+```
+
+This command will shift residues 1-5 by a sum of box vectors **b** and **c**. If `selection` is not set, 
+the whole structure will be translated.
 
 ##### Converting a 3-point water model to a 4-point one
 <a name="converting-a-3-point-water-model-to-a-4-point-one"/>

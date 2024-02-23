@@ -164,8 +164,8 @@ class CrooksPool:
                    fmt='%10.5f')
         if self.convergence:
             self.analyze_convergence(works_0, works_1, grid)
-        with open(f'result_{self.name}.dat') as out:
-            out.write(str(result_bar))
+        with open(f'result_{self.name}.dat', 'w') as out:
+            out.write(str(result_bar) + '\n')
 
     @staticmethod
     def bhattacharyya(d0, d1, grid):

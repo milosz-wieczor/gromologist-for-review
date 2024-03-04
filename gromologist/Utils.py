@@ -300,6 +300,9 @@ def read_lib(lib: str) -> (dict, dict, dict):
                     reading_bonds = True
                 elif ln.strip('!').split()[0].split('.')[3] == 'connect':
                     connector[curr_resname].append(int(content[n + 1].strip()))
+    atoms = {k: v for k, v in atoms.items() if 'BOX' not in k}
+    bonds = {k: v for k, v in bonds.items() if 'BOX' not in k}
+    connector = {k: v for k, v in connector.items() if 'BOX' not in k}
     return atoms, bonds, connector
 
 
@@ -458,7 +461,8 @@ def find_leap_files(ambdir: str, filetype: str, leaprc: str, extras: Optional[li
     else:
         raise RuntimeError('select "parm" or "lib"')
     files_in_ambdir = [ambdir + f'/{filetype}/' + f for f in files]
-    files_in_reldir = [reldir + f for f in files]
+    files_in_reldir = [reldir + '/' + f for f in files]
+    print(files_in_reldir)
     found_files = [f for f in files_in_ambdir + files_in_reldir if os.path.exists(f)]
     return found_files
 
@@ -604,7 +608,7 @@ def read_addAtomTypes(textfile: str) -> dict:
         if len(data) == 3:
             types[data[0].strip('"')] = data[1].strip('"')
     for k, v in types.items():
-        if v:
+        if v and v in element_properties.keys():
             types[k] = element_properties[v]
         else:
             types[k] = (0, 0.0)

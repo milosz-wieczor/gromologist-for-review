@@ -688,7 +688,8 @@ class Pdb:
         if renumber:
             self.renumber_atoms()
         rname = base_atom.resname if "resname" not in kwargs.keys() else kwargs["resname"]
-        atomsel = f'name {name} and resid {base_atom.resnum} and resname {rname}'
+        chsel = f'chain {base_atom.chain} and ' if base_atom.chain.strip() else ''
+        atomsel = f'{chsel}name {name} and resid {base_atom.resnum} and resname {rname}'
         if (atomsel is not None and hooksel is not None and bondlength is not None and
                 ((p1_sel is not None and p2_sel is not None) or vector is not None)):
             self.reposition_atom_from_hook(atomsel, hooksel, bondlength, p1_sel, p2_sel, vector)

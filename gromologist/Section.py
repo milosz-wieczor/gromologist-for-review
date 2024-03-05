@@ -235,8 +235,8 @@ class SectionMol(Section):
             return
         _ = self.subsections.pop(sub_ind)
 
-    def set_type(self, type_to_set: str, atomname: str, resname: Optional[str] = None, resid: Optional[int] = None,
-                 prefix: Optional[str] = None):
+    def set_type(self, type_to_set: Optional[str] = None, atomname: Optional[str] = None, resname: Optional[str] = None,
+                 resid: Optional[int] = None, atomtype: Optional[str] = None, prefix: Optional[str] = None):
         """
         Sets a defined atomic type for all atoms fulfilling a criterion
         (residue name/id, atom name)
@@ -247,6 +247,8 @@ class SectionMol(Section):
         :param prefix: str, if specified then prefix + original type will be set instead of type_to_set
         :return: None
         """
+        if type_to_set is None and prefix is None:
+            raise RuntimeError("Set either type_to_set or prefix")
         if resname is None:
             resnames = list({a.resname for a in self.atoms})
         else:
@@ -261,8 +263,23 @@ class SectionMol(Section):
                 resids = resid
             else:
                 resids = [resid]
+        if atomtype is None:
+            types = list({a.type for a in self.atoms})
+        else:
+            if isinstance(atomtype, list) or isinstance(atomtype, tuple):
+                types = atomtype
+            else:
+                types = [atomtype]
+        if atomname is None:
+            names = list({a.atomname for a in self.atoms})
+        else:
+            if isinstance(atomname, list) or isinstance(atomname, tuple):
+                names = atomname
+            else:
+                names = [atomname]
+        resnames, names, resids, types = set(resnames), set(names), set(resids), set(types)
         for a in self.atoms:
-            if a.resname in resnames and a.atomname == atomname and a.resid in resids:
+            if a.resname in resnames and a.atomname in names and a.resid in resids and a.type in types:
                 if prefix is None:
                     a.type = type_to_set
                 else:
@@ -2016,6 +2033,23 @@ class SectionParam(Section):
         self.sort_dihedrals()
         self._remove_symm_dupl(new_atomtype)
 
+    def rename_type(self, atomtype: str, prefix: str = 'y', new_type: Optional[str] = None, only_bonded: bool = False):
+        """
+        Works like clone_type, but just renames the existing type instead of duplicating it
+        :param atomtype: str, atomtype to be duplicated
+        :param prefix: str, new name will be generated as prefix + original atomtype
+        :param new_type: str, directly specify the new name (optional)
+        :param only_bonded: bool, if the atomtype exists, will only copy bonded terms
+        :return: None
+        """
+        new_atomtype = prefix + atomtype if new_type is None else new_type
+        subsect = self.subsections if not only_bonded else [sub for sub in self.subsections
+                                                            if not sub.header == "atomtypes"]
+        for sub in subsect:
+            for ent in sub.entries_param:
+                for tp in range(len(ent.types)):
+                    if ent.types[tp] == atomtype:
+                        ent.types[tp] = new_atomtype
     def clean_unused(self, used_params: list, section: str = 'all'):
         """
         Cleans up FF parameters that are not used by the given system

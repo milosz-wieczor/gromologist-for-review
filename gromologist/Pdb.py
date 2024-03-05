@@ -139,6 +139,12 @@ class Pdb:
                 [line.strip() for line in text.split('\n')])
         return new_pdb
 
+    def insert_from(self, filename, selection: str = 'all', after: str = 'all'):
+        pdb = gml.Pdb(filename)
+        last_index = self.get_atom_indices(after)[-1]
+        for at in pdb.get_atoms(selection)[::-1]:
+            self.atoms.insert(last_index + 1, at)
+
     def print_protein_sequence(self, gaps: bool = False) -> list:
         """
         Prints protein sequence chain by chain, recognizing amino acids

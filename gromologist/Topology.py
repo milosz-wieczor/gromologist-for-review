@@ -317,7 +317,8 @@ class Top:
         """
         gml.load_frcmod(self, frcmod)
 
-    def add_molecule_from_file(self, filename: str, molnames: Optional[list] = None):
+    def add_molecule_from_file(self, filename: str, molnames: Optional[list] = None, molcount: Optional[list] = None,
+                               prefix_type: Optional[str] = None):
         """
         Adds a molecule from an external file (can be .itp or .top) to the current topology
         :param filename: name of the file containing the molecule to be added
@@ -329,33 +330,65 @@ class Top:
         special_lines = [n for n, l in enumerate(contents)
                          if l.strip() and l.strip().strip('[]').strip().split()[0] in special_sections]
         special_lines.append(len(contents))
+        inserted_mols = []
+        existing_mols = [molsect.mol_name for molsect in self.molecules]
         for beg, end in zip(special_lines[:-1], special_lines[1:]):
             if 'moleculetype' in contents[beg]:
                 molsections = [n for n, i in enumerate(self.sections) if isinstance(i, gml.SectionMol)][-1]
                 section = self._yield_sec(contents[beg:end])
                 if molnames is None or section.mol_name in molnames:
+                    if section.mol_name in existing_mols:
+                        print(f"Skipping molecule {section.mol_name} as its name is already taken. If needed, rename it "
+                              f"in [ moleculetypes ]")
+                        continue
                     self.sections.insert(molsections+1, section)
-        print("Molecules inserted. Try running Top.find_missing_ff_params() to see if the topology contains"
-              "all necessary parameters.\n\nTo add the newly defined molecule to the system, use "
-              "Top.add_molecules_to_system() or manually edit the [ molecules ] section in the topology")
+                    inserted_mols.append(section.mol_name)
+        self.print("Molecules inserted. Try running Top.find_missing_ff_params() to see if the topology contains"
+                   "all necessary parameters.\n\n")
+        if prefix_type is not None:
+            for newmol in inserted_mols:
+                mol = self.get_molecule(newmol)
+                types = list(set([a.type for a in mol.atoms]))
+                for atype in types:
+                    mol.set_type(atomtype=atype, prefix=prefix_type)
+        if molcount is None:
+            self.print("To add the newly defined molecule to the system, use Top.add_molecules_to_system() or "
+                       "manually edit the [ molecules ] section in the topology. You can also specify `molcount` in "
+                       "this function to automatically add the desired number of molecules to the system.")
+        else:
+            try:
+                _ =  len(molcount)
+            except TypeError:
+                molcount = [molcount] * len(inserted_mols)
+            else:
+                assert len(molcount) == len(inserted_mols)
+            for mc, mname in zip(molcount, inserted_mols):
+                self.add_molecules_to_system(mname, mc)
+                self.print(f"Added {mc} instances of molecule {mname}")
 
-    def add_parameters_from_file(self, filename: str, sections: Optional[list] = None, overwrite: bool = False):
+    def add_parameters_from_file(self, filename: str, sections: Optional[list] = None, overwrite: bool = False,
+                                 prefix_type: Optional[str] = None):
         """
         Adds parameters from an external file
         :param filename: name of the file containing the parameters to be added
         :param sections: list, enumerates sections to be added (can be just 1-element list), None means add all
         :param overwrite: bool, whether to overwrite existing parameters in case of conflict (default is not)
+        :param prefix_type: str, if specified, will add
         :return: None
         """
         other = gml.Top(filename, ignore_ifdef=True)
+        if prefix_type is not None:
+            other.prefix_types(prefix_type)
         defs_self = self.parameters.get_subsection('defaults').entries_param[0].content
         defs_other = other.parameters.get_subsection('defaults').entries_param[0].content
         if not all([int(defs_self[0]) == int(defs_other[0]), int(defs_self[1]) == int(defs_other[1]),
                     defs_self[2] == defs_other[2], float(defs_self[3]) == float(defs_other[3]),
                     float(defs_self[4]) == float(defs_other[4])]):
-            raise RuntimeError("Can't merge parameters with different [ defaults ] sections, "
-                               "make sure they are identical")
-        for subsection in other.parameters.subsections:  # TODO make optional selections available
+            raise RuntimeError(f"Can't merge parameters with different [ defaults ] sections, "
+                               f"make sure they are identical: {defs_self} and {defs_other}")
+        other_subs = other.parameters.subsections if sections is None else [sc for sc in other.parameters.subsections
+                                                                            if sc.header in sections]
+        for subsection in other_subs:
             if subsection.header != 'defaults':
                 try:
                     # let's check if we already have this subsection in our topo
@@ -390,6 +423,20 @@ class Top:
         else:
             system_subsection = system_subsection[0]
         system_subsection.add_entry(gml.Entry(f"{molname} {nmol}", system_subsection))
+
+    def prefix_types(self, prefix: str, types_list: Optional[list] = None):
+        """
+
+        :param types_list:
+        :return:
+        """
+        types = list(self.defined_atomtypes) if types_list is None else types_list
+        if any([prefix + tp in types for tp in types]):
+            raise RuntimeError(f"The combination of prefix {prefix} and one of the types {types} is already defined")
+        for atype in types:
+            for mol in self.molecules:
+                mol.set_type(prefix=prefix, atomtype=atype)
+            self.parameters.rename_type(atype, prefix=prefix)
 
     def find_missing_ff_params(self, section: str = 'all', fix_by_analogy: bool = False, fix_B_from_A: bool = False,
                                fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):

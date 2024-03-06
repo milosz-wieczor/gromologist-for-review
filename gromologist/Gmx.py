@@ -7,7 +7,7 @@ from glob import glob
 
 
 def _gmx_command(gmx_exe: str, command: str = 'grompp', answer: bool = False, pass_values: Optional[Iterable] = None,
-                quiet: bool = False, fail_on_error: bool = False, **params) -> str:
+                 quiet: bool = False, fail_on_error: bool = False, **params) -> str:
     """
     Runs the specified gmx command, optionally passing keyworded or stdin arguments
     :param gmx_exe: str, a gmx executable
@@ -352,8 +352,9 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
         rtpnum = None
         found = [f'{i} (local)' for i in glob(f'*ff')] + glob(f'{gmx[0]}/*ff')
         if set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff')):
-            raise RuntimeError(f"Directories {set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff'))} have identical names,"
-                               f"please make them unambiguous e.g. by renaming the local version")
+            raise RuntimeError(
+                f"Directories {set(glob(f'*ff')).intersection(glob(f'{gmx[0]}/*ff'))} have identical names,"
+                f"please make them unambiguous e.g. by renaming the local version")
         if ff is None:
             for n, i in enumerate(found):
                 print('[', n + 1, '] ', i.split('/')[-1])
@@ -373,7 +374,8 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
                 pathtoff = found[rtpnum - 1].replace(' (local)', '')
             else:
                 pathtoff = [x for x in found if ff in x][0]
-            water = [line.split()[0] for line in open(pathtoff + os.sep + 'watermodels.dat') if 'recommended' in line][0]
+            water = [line.split()[0] for line in open(pathtoff + os.sep + 'watermodels.dat') if 'recommended' in line][
+                0]
         gmx_command(gmx[1], 'pdb2gmx', quiet=quiet, f=struct, ff=ff, water=water,
                     answer=True, fail_on_error=True, **kwargs)
     else:
@@ -397,7 +399,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     else:
         gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', maxsol=maxsol, cs=waterbox,
                     quiet=quiet, answer=True, fail_on_error=True)
-    gen_mdp('do_minimization.mdp', runtype='mini')
+    gml.gen_mdp('do_minimization.mdp', runtype='mini')
     if ion_conc == 0:
         copy2('water.gro', 'ions.gro')
     else:
@@ -407,28 +409,45 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
                              quiet=quiet, neutral=True, p="topol", o='test', answer=True)
         sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
         gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
-                          quiet=quiet, neutral=True, p="topol", o='ions', answer=True, fail_on_error=True)
+                    quiet=quiet, neutral=True, p="topol", o='ions', answer=True, fail_on_error=True)
     output = gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='ions.gro', o='do_mini',
-                      quiet=quiet, answer=True, maxwarn=maxwarn, fail_on_error=True)
-    print(extract_warnings(output))
+                         quiet=quiet, answer=True, maxwarn=maxwarn, fail_on_error=True)
+    if extract_warnings(output):
+        print(extract_warnings(output))
     if minimize:
         gmx_command(gmx[1], 'mdrun', deffnm='do_mini', v=True,
-                          quiet=quiet, answer=True, fail_on_error=True)
+                    quiet=quiet, answer=True, fail_on_error=True)
         final_str_name = 'minimized_structure.pdb'
     else:
         copy2('ions.gro', 'do_mini.gro')
         final_str_name = 'pre-minimized_structure.pdb'
     ndx(gml.Pdb('do_mini.gro'), selections=['all', 'not solvent'])
     gmx_command(gmx[1], 'trjconv', s='do_mini.tpr', f='do_mini.gro', o='whole.gro', pbc='cluster',
-                      pass_values=[1, 0], quiet=quiet,
-                      n='gml.ndx', answer=True, fail_on_error=True)
+                pass_values=[1, 0], quiet=quiet,
+                n='gml.ndx', answer=True, fail_on_error=True)
 
     t = gml.Top('topol.top')
     t.clear_sections()
-    t.save_top('merged_topology.top')
+    try:
+        os.mkdir('ready_system')
+    except:
+        pass
+    t.save_top('ready_system/merged_topology.top')
     p = gml.Pdb('whole.gro', top=t)
     p.add_chains()
-    p.save_pdb(final_str_name)
+    p.save_pdb('ready_system/' + final_str_name)
+    gml.gen_mdp('ready_system/eq1_nvt.mdp', runtype='md', integrator="md", nstxout__compressed=50000,
+                compressed__x__precision=2500, dt=0.001, coulombtype="PME", ref__t=298, nsteps=100000,
+                gen__temp=100, pcoupl="no", tcoupl="v-rescale", tau__t=25.0, define="-DPOSRES",
+                verlet__buffer__tolerance='2e-04')
+    gml.gen_mdp('ready_system/eq2_npt.mdp', runtype='md', integrator="md", nstxout__compressed=50000,
+                compressed__x__precision=2500, dt=0.002, coulombtype="PME", ref__t=298, nsteps=100000, gen__vel="no",
+                pcoupl="C-rescale", tcoupl="v-rescale")
+    with open('ready_system/equilibrate.sh', 'w') as outf:
+        outf.write(f'gmx grompp -f eq1_nvt.mdp -c {final_str_name} -r {final_str_name} -p merged_topology.top -o eq1\n')
+        outf.write(f'gmx mdrun -deffnm eq1 -cpi -v\n')
+        outf.write(f'gmx grompp -f eq2_npt.mdp -c {final_str_name} -p merged_topology.top -t eq1.cpt -o eq2\n')
+        outf.write(f'gmx mdrun -deffnm eq2 -cpi -v\n')
 
 
 def extract_warnings(text):

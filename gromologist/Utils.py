@@ -705,5 +705,5 @@ def calc_LJ_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_
     s6_matrix = (sigma_matrix / dist_matrix[:, :, 0]) ** 6
     force_matrix = np.zeros((len(fon_indices), 3))
     for i in range(len(fon_indices)):
-        force_matrix[i, :] = -24 * np.sum(epsilon_matrix[i, :][..., None] * geom_matrix[i, :, :] * (2 * s6_matrix**2 - s6_matrix)[i, :][..., None], axis=0)
+        force_matrix[i, :] = 24 * np.sum(epsilon_matrix[i, :][..., None] * geom_matrix[i, :, :] * (2 * s6_matrix**2 - s6_matrix)[i, :][..., None], axis=0)
     return force_matrix

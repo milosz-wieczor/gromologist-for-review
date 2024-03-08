@@ -640,3 +640,70 @@ def read_prep_impropers(prepfile: str) -> dict:
                 types = line.strip().split()
                 impropers[current].append(types)
     return impropers
+
+
+def calc_Coulomb_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_on: str, force_from: str):
+    """
+    Calculates Coulomb forces exerted by one subset of atoms on each atom in another subset. Does NOT take into accout
+    scaled 1-4 interactions.
+    :param top: gml.Top or str, topology
+    :param pdb: gml.Pdb or str, structure
+    :param force_on: selection for which the forces will be calculated
+    :param force_from: selection of atoms that are exerting the forces
+    :return: Nx3 np.array, where N is the length of the force_on selection
+    """
+    import numpy as np
+    k_coul = 138.9118  # in kJ/mol nm e²
+    pdb = gml.obj_or_str(pdb=pdb)
+    top = gml.obj_or_str(top=top)
+    fon_indices = pdb.get_atom_indices(force_on)
+    ffr_indices = pdb.get_atom_indices(force_from)
+    topat = top.atoms
+    fon_charges = [a.charge for a in [topat[i] for i in fon_indices]]
+    ffr_charges = np.array([a.charge for a in [topat[i] for i in ffr_indices]])
+    fon_coords = np.array([pdb.get_coords(force_on)])[0]/10
+    ffr_coords = np.array([pdb.get_coords(force_from)])[0]/10
+    vec_matrix = np.zeros((len(fon_indices), len(ffr_indices), 3))
+    for i in range(len(fon_indices)):
+        for j in range(len(ffr_indices)):
+            vec_matrix[i, j, :] = fon_coords[i] - ffr_coords[j]
+    dist_matrix = np.linalg.norm(vec_matrix, axis=2)[..., None]
+    geom_matrix = vec_matrix / dist_matrix**3
+    force_matrix = np.zeros((len(fon_indices), 3))
+    for i in range(len(fon_indices)):
+        force_matrix[i, :] = k_coul * fon_charges[i] * np.sum(ffr_charges[..., None] * geom_matrix[i, :, :], axis=0)
+    return force_matrix
+
+
+def calc_LJ_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_on: str, force_from: str):
+    """
+    Calculates Coulomb forces exerted by one subset of atoms on each atom in another subset. Does NOT take into accout
+    scaled 1-4 interactions.
+    :param top: gml.Top or str, topology
+    :param pdb: gml.Pdb or str, structure
+    :param force_on: selection for which the forces will be calculated
+    :param force_from: selection of atoms that are exerting the forces
+    :return: Nx3 np.array, where N is the length of the force_on selection
+    """
+    import numpy as np
+    pdb = gml.obj_or_str(pdb=pdb)
+    top = gml.obj_or_str(top=top)
+    fon_indices = pdb.get_atom_indices(force_on)
+    ffr_indices = pdb.get_atom_indices(force_from)
+    topat = top.atoms
+    sigma_matrix = np.array([[top.parameters.sigma_ij(topat[i], topat[j]) for i in ffr_indices] for j in fon_indices])
+    epsilon_matrix = np.array(
+        [[top.parameters.epsilon_ij(topat[i], topat[j]) for i in ffr_indices] for j in fon_indices])
+    fon_coords = np.array([pdb.get_coords(force_on)])[0]/10
+    ffr_coords = np.array([pdb.get_coords(force_from)])[0]/10
+    vec_matrix = np.zeros((len(fon_indices), len(ffr_indices), 3))
+    for i in range(len(fon_indices)):
+        for j in range(len(ffr_indices)):
+            vec_matrix[i, j, :] = fon_coords[i] - ffr_coords[j]
+    dist_matrix = np.linalg.norm(vec_matrix, axis=2)[..., None]
+    geom_matrix = vec_matrix / dist_matrix ** 2
+    s6_matrix = (sigma_matrix / dist_matrix[:, :, 0]) ** 6
+    force_matrix = np.zeros((len(fon_indices), 3))
+    for i in range(len(fon_indices)):
+        force_matrix[i, :] = -24 * np.sum(epsilon_matrix[i, :][..., None] * geom_matrix[i, :, :] * (2 * s6_matrix**2 - s6_matrix)[i, :][..., None], axis=0)
+    return force_matrix

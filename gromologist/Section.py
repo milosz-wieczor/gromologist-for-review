@@ -1946,7 +1946,50 @@ class SectionParam(Section):
             self.subsections.insert(position, merged_subsection)
             for old in subsections_to_merge:
                 self.subsections.remove(old)
-    
+
+    def sigma_ij(self, atom_i, atom_j):
+        """
+        A function that will return a correct value of sigma_ij even if custom combination rules are specified
+        :param atom_i: gml.EntryAtom, atom i
+        :param atom_j: gml.EntryAtom, atom j
+        :return: float, the value of sigma in nm
+        """
+        lor_ber = 0.5 * atom_i.sigma + 0.5 * atom_j.sigma
+        try:
+            nb = self.get_subsection('nonbond_params')
+        except:
+            return lor_ber
+        else:
+            type_i = atom_i.type
+            type_j = atom_j.type
+            for entry in nb.entries_param:
+                if ((entry.types[0] == type_i and entry.types[1] == type_j) or
+                        (entry.types[0] == type_j and entry.types[1] == type_i)):
+                    return entry.params[0]
+            return lor_ber
+
+    def epsilon_ij(self, atom_i, atom_j):
+        """
+        A function that will return a correct value of epsilon_ij even if custom combination rules are specified
+        :param atom_i: gml.EntryAtom, atom i
+        :param atom_j: gml.EntryAtom, atom j
+        :return: float, the value of sigma in kJ/mol
+        """
+        # TODO only works for Lorentz-Berthelot so far
+        lor_ber = (atom_i.epsilon * atom_j.epsilon)**0.5
+        try:
+            nb = self.get_subsection('nonbond_params')
+        except:
+            return lor_ber
+        else:
+            type_i = atom_i.type
+            type_j = atom_j.type
+            for entry in nb.entries_param:
+                if ((entry.types[0] == type_i and entry.types[1] == type_j) or
+                        (entry.types[0] == type_j and entry.types[1] == type_i)):
+                    return entry.params[1]
+            return lor_ber
+
     def _get_defines(self):
         for sub in self.subsections:
             for entry in [e for e in sub.entries if not isinstance(e, gml.EntryParam)]:

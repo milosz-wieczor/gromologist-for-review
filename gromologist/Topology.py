@@ -108,7 +108,8 @@ class Top:
             return self.read_system_properties()
 
     def __repr__(self) -> str:
-        return "Topology with {} atoms and total charge {:.3f}".format(self.natoms, self.charge)
+        return (f"Topology with {self.natoms} atoms, total charge {self.charge:.3f}, "
+                f"and {len(self.molecules)} molecules defined")
 
     def print(self, *args):
         """

@@ -1611,17 +1611,25 @@ class SectionMol(Section):
         for atom in self.atoms:
             print(str(atom).strip())
 
-    def list_bonds(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
-        return self._list_bonded('bonds', by_types, by_params, returning)
+    def list_bonds(self, by_types: bool = False, by_params: bool = False, by_num: bool = False, returning: bool = False):
+        return self._list_bonded('bonds', by_types, by_params, by_num, returning)
 
-    def list_angles(self, by_types: bool = False, by_params: bool = False, returning: bool = False):
-        return self._list_bonded('angles', by_types, by_params, returning)
+    def list_angles(self, by_types: bool = False, by_params: bool = False, by_num: bool = False, returning: bool = False):
+        return self._list_bonded('angles', by_types, by_params, by_num, returning)
 
-    def list_dihedrals(self, by_types: bool = False, by_params: bool = False, returning: bool = False,
+    def list_dihedrals(self, by_types: bool = False, by_params: bool = False, by_num: bool = False, returning: bool = False,
                        interaction_type: Optional[list]=None):
-        return self._list_bonded('dihedrals', by_types, by_params, returning, interaction_type)
+        return self._list_bonded('dihedrals', by_types, by_params, by_num, returning, interaction_type)
 
-    def to_rtp(self, outname='out.rtp'):
+    def to_rtp(self, outname: str = 'out.rtp', generate_hdb: Optional[bool] = None, out_hdb: Optional[str] = None):
+        """
+        Takes a (single-residue) molecule and makes it into an .rtp entry
+        :param outname: str, name for the .rtp file to be produced (or appended to, if exists)
+        :param generate_hdb: bool, whether to generate a corresponding .hdb entry (and rename hydrogen atoms)
+        :param out_hdb: str, by default outname.replace('rtp', 'hdb') will be used to store the .hdb entry;
+        use this option to overwrite this default behavior
+        :return: None
+        """
         if os.path.exists(outname):
             mode = 'a'
             print('Found an existing .rtp file with requested name, will append to it')
@@ -1631,6 +1639,21 @@ class SectionMol(Section):
             raise RuntimeError(f'Not all atoms in molecule {self.mol_name} have the same residue name, '
                                f'fix this to write an .rtp entry')
         resname = self.atoms[0].resname
+        hdbname = outname.replace('rtp', 'hdb') if out_hdb is None else out_hdb
+        if generate_hdb is None:
+            ans = ''
+            while ans.lower() not in 'yntf':
+                ans = input(f"Do you also want to generate a hydrogen database (.hdb) entry in file {hdbname}? "
+                            f"This will enable automatic generation of hydrogen atoms, but also rename the hydrogens"
+                            f"to follow Gromacs' numbering rules. (y/n)")
+            generate_hdb = True if ans.lower() in 'yt' else False
+        if not generate_hdb:
+            replace = {}
+        else:
+            replace = self.to_hdb(hdbname)
+        for a in self.atoms:
+            if a.atomname in replace.keys():
+                a.atomname = replace[a.atomname]
         atoms = [(a.atomname, a.type, a.charge, n) for n, a in enumerate(self.atoms, 1)]
         bonds = self.list_bonds(returning=True)
         impropers = self.list_dihedrals(returning=True, interaction_type=["2", "4"])
@@ -1647,8 +1670,77 @@ class SectionMol(Section):
                 for imp in impropers:
                     outfile.write(f"  {imp[0]:6s} {imp[1]:6s} {imp[2]:6s} {imp[3]:6s}\n")
 
-    def _list_bonded(self, term: str, by_types: bool = False, by_params: bool = False, returning: bool = False,
-                     interaction_type: Optional[list] = None):
+    def to_hdb(self, outname='out.hdb'):
+        """
+        Takes a (single-residue) molecule and interactively helps you create an .hdb entry
+        :param outname: str, name for the .hdb file to be produced (or appended to, if exists)
+        :return: dict, hydrogen replacement names
+        """
+        if os.path.exists(outname):
+            mode = 'a'
+            print('Found an existing .hdb file with requested name, will append to it')
+        else:
+            mode = 'w'
+        if not all([self.atoms[0].resname == a.resname for a in self.atoms]):
+            raise RuntimeError(f'Not all atoms in molecule {self.mol_name} have the same residue name, '
+                               f'fix this to write an .hdb entry')
+        heavy_with_h = []
+        for atom in self.atoms:
+            if atom.ish:
+                heavy = atom.bound_atoms[0]
+                if heavy.num not in [a.num for a in heavy_with_h]:
+                    heavy_with_h.append(heavy)
+        lines = []
+        renamed = {}
+        for n, hwh in enumerate(heavy_with_h, 1):
+            hs = [a for a in hwh.bound_atoms if a.ish]
+            nhs = [a for a in hwh.bound_atoms if not a.ish]
+            numh = len(hs)
+            hname = f"H{n}"
+            for nn, i in enumerate(range(len(hs)), 1):
+                renamed[hs[i].atomname] = hname + str(nn) if len(hs) > 1 else hname
+            nhsnh = [a for a in nhs[0].bound_atoms if a.num != hwh.num]
+            if numh == 3:
+                lines.append((numh, 4, hname, hwh.atomname, nhs[0].atomname, nhsnh[0].atomname))
+            elif numh == 2:
+                if (hwh.element == "C" and len(nhs) == 1) or hwh.element == "N":
+                    lines.append((numh, 3, hname, hwh.atomname, nhs[0].atomname, nhsnh[0].atomname))
+                else:
+                    lines.append((numh, 6, hname, hwh.atomname, nhs[0].atomname, nhs[1].atomname))
+            else:
+                assert numh == 1
+                if len(nhs) == 3:
+                    lines.append((numh, 5, hname, hwh.atomname, nhs[0].atomname, nhs[1].atomname, nhs[2].atomname))
+                elif len(nhs) == 2:
+                    lines.append((numh, 1, hname, hwh.atomname, nhs[0].atomname, nhs[1].atomname))
+                else:
+                    lines.append((numh, 2, hname, hwh.atomname, nhs[0].atomname, nhsnh[0].atomname))
+        with open(outname, mode) as outfile:
+            outfile.write(f"{self.atoms[0].resname}\t{len(heavy_with_h)} \n")
+            for line in lines:
+                outfile.write("\t".join([str(i) for i in line]) + "\n")
+        return renamed
+
+    def write_atomtypes(self, atfile: str = 'atomtypes.dat'):
+        if os.path.exists(atfile):
+            mode = 'a'
+            print('Found an existing file with requested name, will append to it')
+        else:
+            mode = 'w'
+        element_properties = {"H": (1, 1.008), "O": (8, 15.999), "C": (6, 12.011), "N": (7, 14.007), "S": (16, 32.06),
+                              "P": (15, 30.974), "F": (9, 18.998), "X": (0, 0.0)}
+        types = set(a.type for a in self.atoms)
+        existing = set()
+        if mode == 'a':
+            existing.update({line.split()[0] for line in open(atfile)})
+        to_adds = list(types.difference(existing))
+        with open(atfile, mode) as outfile:
+            for to_add in to_adds:
+                element = to_add[0].upper() if to_add[0].upper() in element_properties.keys() else 'X'
+                outfile.write(f"{to_add:8s}      {element_properties[element][1]:12.5f}\n")
+
+    def _list_bonded(self, term: str, by_types: bool = False, by_params: bool = False, by_num: bool = False,
+                     returning: bool = False, interaction_type: Optional[list] = None):
         self.update_dicts()
         subsection = self.get_subsection(term)
         tried_adding = False
@@ -1676,7 +1768,9 @@ class SectionMol(Section):
                     else:
                         print((formatstring[term] + extra).format(*entry.types_state_a, *params))
                 else:
-                    if not by_types:
+                    if by_num:
+                        returnable.append(entry.atom_numbers)
+                    elif not by_types:
                         returnable.append(entry.atom_names)
                     else:
                         returnable.append(entry.types_state_a)

@@ -377,6 +377,14 @@ class EntryAtom(Entry):
                 return False
         return True
 
+    def __repr__(self):
+        if self.type_b is not None:
+            extra = f"(A)/{self.type_b}(B)"
+        else:
+            extra = ''
+        return (f"atom {self.atomname}, type {self.type}{extra} in residue {self.resname}-{self.resid} of "
+                f"molecule {self.molname}")
+
     @property
     def molname(self) -> str:
         """
@@ -422,6 +430,14 @@ class EntryAtom(Entry):
         """
         entry = self._get_atomtype_entry()
         return float(entry.params[1])
+
+    @property
+    def bound_atoms(self) -> list:
+        bonds = self.subsection.section.list_bonds(by_num=True, returning=True)
+        bonds_involving_self = [b for b in bonds if self.num in b]
+        bonds_indices = [i for b in bonds_involving_self for i in b if i != self.num]
+        molatoms = self.subsection.section.atoms
+        return [molatoms[i-1] for i in bonds_indices]
 
     def _get_atomtype_entry(self):
         atomtypes = self.subsection.section.top.parameters.get_subsection('atomtypes')

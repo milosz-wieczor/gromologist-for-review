@@ -53,7 +53,7 @@ class Top:
         self._preprocess_conditional_includes(ifdef)
         self._include_all(ignore_ifdef)
         if not keep_all:
-            self.resolve_ifdefs([] if ifdef is None else ifdef)
+            self._resolve_ifdefs([] if ifdef is None else ifdef)
         else:
             self.print("Keeping all conditional (#ifdef/#endif) sections, this might lead to issues if sections "
                        "are being merged or moved around - look out for messages & check your topology afterwards!")
@@ -380,13 +380,22 @@ class Top:
         other = gml.Top(filename, ignore_ifdef=True)
         if prefix_type is not None:
             other.prefix_types(prefix_type)
-        defs_self = self.parameters.get_subsection('defaults').entries_param[0].content
-        defs_other = other.parameters.get_subsection('defaults').entries_param[0].content
-        if not all([int(defs_self[0]) == int(defs_other[0]), int(defs_self[1]) == int(defs_other[1]),
-                    defs_self[2] == defs_other[2], float(defs_self[3]) == float(defs_other[3]),
-                    float(defs_self[4]) == float(defs_other[4])]):
-            raise RuntimeError(f"Can't merge parameters with different [ defaults ] sections, "
-                               f"make sure they are identical: {defs_self} and {defs_other}")
+        try:
+            defs_self = self.parameters.get_subsection('defaults').entries_param[0].content
+            defs_other = other.parameters.get_subsection('defaults').entries_param[0].content
+        except KeyError:
+            inp = 'q'
+            while inp.lower() not in 'nfty':
+                inp = input("\n\nAt least one of the files does not define a [ defaults ] section with key \n"
+                            "interaction modifiers. Do you trust that the parameter sets are compatible? (y/n)\n\n")
+            if inp.lower() in 'nf':
+                return
+        else:
+            if not all([int(defs_self[0]) == int(defs_other[0]), int(defs_self[1]) == int(defs_other[1]),
+                        defs_self[2] == defs_other[2], float(defs_self[3]) == float(defs_other[3]),
+                        float(defs_self[4]) == float(defs_other[4])]):
+                raise RuntimeError(f"Can't merge parameters with different [ defaults ] sections, "
+                                   f"make sure they are identical: {defs_self} and {defs_other}")
         other_subs = other.parameters.subsections if sections is None else [sc for sc in other.parameters.subsections
                                                                             if sc.header in sections]
         for subsection in other_subs:
@@ -425,11 +434,39 @@ class Top:
             system_subsection = system_subsection[0]
         system_subsection.add_entry(gml.Entry(f"{molname} {nmol}", system_subsection))
 
+    def extract_explicit_parameters(self, molname: Optional[str] = None):
+        """
+        Takes the parameters explicitly defined in sections [ bonds ], [ angles ], [ dihedrals ]
+        and puts them in [ bondtypes ], ...
+        :param molname: list or str, optionally only apply to a subset of molecules
+        :return: None
+        """
+        if molname is None:
+            molecules = self.molecules
+        elif isinstance(molname, str):
+            molecules = [self.get_molecule(molname)]
+        else:
+            molecules = [self.get_molecule(mname) for mname in molname]
+        to_add = set()
+        for mol in molecules:
+            for ssect in mol.subsections:
+                if not isinstance(ssect, gml.SubsectionBonded):
+                    continue
+                for e in ssect.entries_bonded:
+                    if len(e.params_state_a) > 0:
+                        e.read_types()
+                        to_add.add((tuple(sorted(e.types_state_a)), tuple(e.params_state_a), int(e.interaction_type)))
+        to_add = sorted(list(to_add), key=lambda x: x[0])
+        for entry in to_add:
+            self.parameters.add_bonded_param(entry[0], list(entry[1]), entry[2])
+        self.parameters.fix_zero_periodicity()
+
     def prefix_types(self, prefix: str, types_list: Optional[list] = None):
         """
-
-        :param types_list:
-        :return:
+        Add a prefix to all types in the topology, to make it compatible with any other topology
+        :param prefix: str, will be added in front of the atomtype to modify it
+        :param types_list: list of str, will modify all types except for when an explicit list of types is provided here
+        :return: None
         """
         types = list(self.defined_atomtypes) if types_list is None else types_list
         if any([prefix + tp in types for tp in types]):
@@ -564,7 +601,7 @@ class Top:
                 ignore_set.add(n)
         return ignore_set
 
-    def resolve_ifdefs(self, ifdefs: list):
+    def _resolve_ifdefs(self, ifdefs: list):
         continuing = True
         while continuing:
             remove_lines = []
@@ -689,7 +726,14 @@ class Top:
         of special headers, and builds the self.sections list
         :return: None
         """
-        special_sections = {'defaults', 'moleculetype', 'system'}
+        section_lines = [l.strip().strip('[]').strip().split()[0] for n, l in enumerate(self._contents)
+                         if len(l.strip().split()) == 3 and l.strip()[0] == '[' and l.strip()[-1] == ']']
+        if section_lines[0] != 'defaults':
+            print("The topology file lacks the [ defaults ] section, it will work but won't be fully functional")
+            first = 'defaults' if section_lines[0] == 'moleculetype' else section_lines[0]
+        else:
+            first = 'defaults'
+        special_sections = {first, 'moleculetype', 'system'}
         special_lines = [n for n, l in enumerate(self._contents)
                          if l.strip() and l.strip().strip('[]').strip().split()[0] in special_sections]
         special_lines.append(len(self._contents))
@@ -711,7 +755,7 @@ class Top:
         :param content: list of str, slice of self.content
         :return: Section (or its subclass) instance
         """
-        if 'defaults' in content[0]:
+        if 'defaults' in content[0] or 'atomtypes' in content[0]:
             return gml.SectionParam(content, self)
         elif 'moleculetype' in content[0]:
             return gml.SectionMol(content, self)

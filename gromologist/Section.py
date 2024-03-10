@@ -1621,7 +1621,8 @@ class SectionMol(Section):
                        interaction_type: Optional[list]=None):
         return self._list_bonded('dihedrals', by_types, by_params, by_num, returning, interaction_type)
 
-    def to_rtp(self, outname: str = 'out.rtp', generate_hdb: Optional[bool] = None, out_hdb: Optional[str] = None):
+    def to_rtp(self, outname: str = 'out.rtp', generate_hdb: Optional[bool] = None, out_hdb: Optional[str] = None,
+               set_bonded: bool = True):
         """
         Takes a (single-residue) molecule and makes it into an .rtp entry
         :param outname: str, name for the .rtp file to be produced (or appended to, if exists)
@@ -1655,8 +1656,10 @@ class SectionMol(Section):
             if a.atomname in replace.keys():
                 a.atomname = replace[a.atomname]
         atoms = [(a.atomname, a.type, a.charge, n) for n, a in enumerate(self.atoms, 1)]
-        bonds = self.list_bonds(returning=True)
-        impropers = self.list_dihedrals(returning=True, interaction_type=["2", "4"])
+        bonds = self.list_bonds(returning=True, by_params=set_bonded)
+        angles = self.list_angles(returning=True, by_params=set_bonded) if set_bonded else []
+        dihedrals = self.list_dihedrals(returning=True, interaction_type=["1", "9"], by_params=set_bonded) if set_bonded else []
+        impropers = self.list_dihedrals(returning=True, interaction_type=["2", "4"], by_params=set_bonded)
         with open(outname, mode) as outfile:
             outfile.write(f"[ {resname} ]\n")
             outfile.write(f"  [ atoms ]\n")
@@ -1664,11 +1667,17 @@ class SectionMol(Section):
                 outfile.write(f"  {at[0]:6s} {at[1]:6s} {at[2]:8.4f} {at[3]:5d}\n")
             outfile.write(f"  [ bonds ]\n")
             for bd in bonds:
-                outfile.write(f"  {bd[0]:6s} {bd[1]:6s}\n")
+                outfile.write(" ".join(f"{str(i):9s}" for i in bd) + '\n')
+            outfile.write(f"  [ angles ]\n" if set_bonded else '')
+            for ang in angles:
+                outfile.write(" ".join(f"{str(i):9s}" for i in ang) + '\n')
+            outfile.write(f"  [ dihedrals ]\n" if set_bonded else '')
+            for dih in dihedrals:
+                outfile.write(" ".join(f"{str(i):9s}" for i in dih) + '\n')
             if impropers:
                 outfile.write(f"  [ impropers ]\n")
                 for imp in impropers:
-                    outfile.write(f"  {imp[0]:6s} {imp[1]:6s} {imp[2]:6s} {imp[3]:6s}\n")
+                    outfile.write(" ".join(f"{str(i):9s}" for i in imp) + '\n')
 
     def to_hdb(self, outname='out.hdb'):
         """
@@ -1769,11 +1778,12 @@ class SectionMol(Section):
                         print((formatstring[term] + extra).format(*entry.types_state_a, *params))
                 else:
                     if by_num:
-                        returnable.append(entry.atom_numbers)
+                        appendable = entry.atom_numbers
                     elif not by_types:
-                        returnable.append(entry.atom_names)
+                        appendable = entry.atom_names
                     else:
-                        returnable.append(entry.types_state_a)
+                        appendable = entry.types_state_a
+                    returnable.append(appendable + tuple(params))
         return None if not returning else returnable
 
     def alch_h_to_ch3(self, resid: int, orig_name: str, basename: str, ctype: Optional[str] = None,

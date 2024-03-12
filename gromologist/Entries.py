@@ -230,7 +230,7 @@ class EntryParam(Entry):
     def __init__(self, content: str, subsection: "gml.Subsection", processed: bool = False, perres=False):
         super().__init__(content, subsection)
         self.atoms_per_entry = type(self.subsection).n_atoms[self.subsection.header]
-        self.types = list(self.content[:self.atoms_per_entry])
+        self.types = tuple(self.content[:self.atoms_per_entry])
         if self.subsection.header == 'cmaptypes' and processed:
             if perres:
                 self.modifiers = self.content[self.atoms_per_entry + 1:self.atoms_per_entry + 4]

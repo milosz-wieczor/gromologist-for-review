@@ -1656,6 +1656,7 @@ class SectionMol(Section):
             if a.atomname in replace.keys():
                 a.atomname = replace[a.atomname]
         atoms = [(a.atomname, a.type, a.charge, n) for n, a in enumerate(self.atoms, 1)]
+        # TODO compare against rtp default types
         bonds = self.list_bonds(returning=True, by_params=set_bonded)
         angles = self.list_angles(returning=True, by_params=set_bonded) if set_bonded else []
         dihedrals = self.list_dihedrals(returning=True, interaction_type=["1", "9"], by_params=set_bonded) if set_bonded else []
@@ -2196,7 +2197,10 @@ class SectionParam(Section):
             for ent in sub.entries_param:
                 for tp in range(len(ent.types)):
                     if ent.types[tp] == atomtype:
+                        ent.types = list(ent.types)
                         ent.types[tp] = new_atomtype
+                        ent.types = tuple([ent.types])  # that's too silly but typelists should remain tuples <shrugs>
+
     def clean_unused(self, used_params: list, section: str = 'all'):
         """
         Cleans up FF parameters that are not used by the given system

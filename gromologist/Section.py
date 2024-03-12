@@ -2199,7 +2199,7 @@ class SectionParam(Section):
                     if ent.types[tp] == atomtype:
                         ent.types = list(ent.types)
                         ent.types[tp] = new_atomtype
-                        ent.types = tuple([ent.types])  # that's too silly but typelists should remain tuples <shrugs>
+                        ent.types = tuple(ent.types)  # that's too silly but typelists should remain tuples <shrugs>
 
     def clean_unused(self, used_params: list, section: str = 'all'):
         """

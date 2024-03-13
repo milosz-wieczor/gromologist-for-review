@@ -365,6 +365,10 @@ class ThermoDiff:
         self.profile_free_energy_derivatives = {}
         self.discrete_observable_derivatives = {}
         self.profile_observable_derivatives = {}
+        self.discrete_free_energy_means = {}
+        self.profile_free_energy_means = {}
+        self.discrete_observable_means = {}
+        self.profile_observable_means = {}
         self.discrete_free_energy_derivative_uncertainties = {}
         self.profile_free_energy_derivative_uncertainties = {}
         self.discrete_observable_derivative_uncertainties = {}
@@ -719,15 +723,26 @@ class ThermoDiff:
         flat_derivs = [der for ct in active_counters_trajids for der in self.derivatives[ct]] # the dU/d(sigma) values
         return flat_bin_data, flat_deriv_data, flat_weights, flat_derivs
 
+    def calc_derivative(self, dataset: Optional[str] = None, cv_dataset: Optional[str] = None,
+                        noe: Optional[bool] = False, bootstrap=False):
+        binning_dset, deriv_dset = (dataset, dataset) if cv_dataset is None else (cv_dataset, dataset)
+        flat_vals, _, _, _ = self.get_flat_data(binning_dset, deriv_dset, self.mods[0])
+        hmin, hmax = np.min(flat_vals), np.max(flat_vals)
+        self.calc_discrete_derivatives(dataset=dataset, threshold=[hmin-0.1, hmax+0.1], cv_dataset=cv_dataset, noe=noe,
+                                       bootstrap=bootstrap)
+
+    def print_derivative(self, dataset: str, outfile: Optional[str] = None, bootstrap: bool = False):
+        self.print_discrete_derivatives(dataset, free_energy=False, outfile=outfile, bootstrap=bootstrap)
+
     def calc_discrete_derivatives(self, dataset: Optional[str] = None, free_energy: Optional[bool] = True,
                                   threshold: Optional[list] = None, cv_dataset: Optional[str] = None,
-                                  noe: Optional[bool] = True, bootstrap = False):
+                                  noe: Optional[bool] = False, bootstrap = False):
         """
         Calculates selected derivatives for a number of discrete states
         :param dataset: str, alias for the dataset
         :param free_energy: bool, whether the derivative should be of free energy or of observable/CV
         :param threshold: list, for continues dataset specifies 2N boundaries used to define N discrete states
-        :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be
+        :param cv_dataset: str, if specified then derivatives will be calculated based on 'dataset' but binning will be based on this
         :param noe: bool, if free_energy is False, then this switches on calculations based on averaging the -6th power (use one state)
         :param bootstrap: bool, whether to estimate uncertainty using bootstrap
         performed based on 'cv_dataset'
@@ -806,6 +821,9 @@ class ThermoDiff:
                                                                   weights=vals_weights[state_index]) / mod.dpar
             # here just writing the results to the final dictionaries
             if free_energy:
+                self.discrete_free_energy_means[(str(mod), dataset)] = [mean_data[x]
+                                                                        for x in mean_derivatives.keys()
+                                                                        if counter[x] > 0]
                 self.discrete_free_energy_derivatives[(str(mod), dataset)] = [mean_derivatives[x]
                                                                               for x in mean_derivatives.keys()
                                                                               if counter[x] > 0]
@@ -814,16 +832,19 @@ class ThermoDiff:
                                                                                                for x in unc_derivatives.keys()
                                                                                                if counter[x] > 0]
             else:
+                mean_der = {key: 0 for key in mean_derivatives.keys()}
                 mean_obs = {key: 0 for key in mean_derivatives.keys()}
                 final_unc = {key: 0 for key in mean_derivatives.keys()}
                 for key in mean_derivatives.keys():
                     mean_obs_der = (1 / (0.008314 * self.temperature)) * (mean_data[key] * mean_derivatives[key] -
                                                                           mean_product[key])
                     if not noe:
-                        mean_obs[key] = mean_obs_der
+                        mean_der[key] = mean_obs_der
+                        mean_obs[key] = mean_data[key]
                     else:
+                        mean_obs[key] = mean_data[key] ** (-1/6)
                         mdk = mean_data[key] ** (-7/6) if mean_data[key] != 0 else 0
-                        mean_obs[key] = -1/6 * mdk * mean_obs_der
+                        mean_der[key] = -1/6 * mdk * mean_obs_der
                     if bootstrap:
                         if counter[key] > 0:
                             rel_data = unc_data[key]/mean_data[key]
@@ -833,9 +854,11 @@ class ThermoDiff:
                             if not noe:
                                 final_unc[key] = unc_obs
                             else:
-                                final_unc[key] = mean_obs[key] * (unc_obs/mean_obs_der +
+                                final_unc[key] = mean_der[key] * (unc_obs/mean_obs_der +
                                                                   7/6 * mean_data[key]**(-13/6) * rel_data)
-                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_obs[x] for x in mean_obs.keys()
+                self.discrete_observable_means[(str(mod), dataset)] = [mean_obs[x] for x in mean_obs.keys()
+                                                                             if counter[x] > 0]
+                self.discrete_observable_derivatives[(str(mod), dataset)] = [mean_der[x] for x in mean_der.keys()
                                                                              if counter[x] > 0]
                 if bootstrap:
                     self.discrete_observable_derivative_uncertainties[(str(mod), dataset)] = [final_unc[x] for x
@@ -908,56 +931,81 @@ class ThermoDiff:
                 with open(f'working{self.name}/{mod}/{key[1]}-discrete_sensitivity.dat', 'w') as outfile:
                     outfile.write(f"{round(derivs[key][1] - derivs[key][0], 3)}\n")
 
-    def print_discrete_derivatives(self, dataset: str, free_energy: bool, outfile: Optional[str] = None, bootstrap: bool = False):
+    def print_discrete_derivatives(self, dataset: str, free_energy: bool, outfile: Optional[str] = None,
+                                   bootstrap: bool = False, target: Optional[list] = None):
         """
         Prints discrete derivatives to the screen or a file
         :param dataset: str, for which dataset the derivatives should be selected
         :param free_energy: bool, whether the 1st state should be set to reference (equal to 0.0)
         :param outfile: str, optional filename if the result is to be printed to a file
         :param bootstrap: bool, whether to add uncertainty
+        :param target: list, if specified, will also calculate required change so that req_change = (target-mean)/derivative
         :return: None
         """
         if outfile is not None:
             outfile = open(outfile, mode='w')
+            if target:
+                outtar = open('req_chg_' + outfile, mode='w')
         derivs = self.discrete_free_energy_derivatives if free_energy else self.discrete_observable_derivatives
         uncerts = self.discrete_free_energy_derivative_uncertainties if free_energy else self.discrete_observable_derivative_uncertainties
+        means = self.discrete_free_energy_means if free_energy else self.discrete_observable_means
         thrs = self.thresholds[dataset]
         for x in range(len(thrs)//2):
             x1 = round(thrs[2 * x], 3)
             x2 = round(thrs[2 * x + 1], 3)
             xx = f"{x1}-{x2}"
             print(f'  {xx:20s}', end='|', file=outfile)
+            if target:
+                print(f'  {xx:20s}', end='|', file=outtar)
         print(f'{"  others":20s}  |', file=outfile)
         print(23 * (len(thrs)//2 + 1) * '-', file=outfile)
+        if target:
+            print(f'{"  others":20s}  |', file=outtar)
+            print(23 * (len(thrs) // 2 + 1) * '-', file=outtar)
         all_ders = [q for q in derivs.keys() if q[1] == dataset]
+        all_means = [q for q in means.keys() if q[1] == dataset]
         if free_energy:
             sorted_ders = sorted(all_ders, key=lambda l: abs(derivs[l][1] - derivs[l][0]), reverse=True)
+            sorted_means = sorted(all_means, key=lambda l: abs(derivs[l][1] - derivs[l][0]), reverse=True)
         else:
             sorted_ders = sorted(all_ders, key=lambda l: abs(derivs[l][0]), reverse=True)
-        strings = {}
+            sorted_means = sorted(all_means, key=lambda l: abs(derivs[l][0]), reverse=True)
+        strings, strmeans = {}, {}
+        target = derivs[all_ders[0]] if target is None else target  # just a dummy to have fewer conditions, will be discarded if irrelevant
         for n, mod in enumerate(all_ders):
             strings[mod] = []
-            for nd, d in enumerate(derivs[mod]):
+            strmeans[mod] = []
+            nd = -1
+            for d, mn, tg in zip(derivs[mod], means[mod], target):
+                nd += 1
                 if bootstrap:
                     err = f' +/- {uncerts[mod][nd]}'
                 else:
                     err = ''
                 if free_energy:
                     strings[mod].append(f'  {d-derivs[mod][0]:20.5f}{err}|')
+                    strmeans[mod].append(f'  {((tg - target[0]) - (mn - means[mod][0]))/(d-derivs[mod][0]):20.5f}{err}|')
                 else:
                     strings[mod].append(f'  {d:20.5f}{err}|')
+                    strmeans[mod].append(f'  {(tg - mn)/d:20.5f}{err}|')
             try:
                 strings[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}  {self.mods[n].period:4d}\n")
+                strmeans[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}  {self.mods[n].period:4d}\n")
             except:
                 try:
                     strings[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}\n")
+                    strmeans[mod].append(f"  {str(self.mods[n]):6s}  {'-'.join(self.mods[n].types):16s}\n")
                 except:
                     if str(self.mods[n]).startswith('c'):
                         strings[mod].append(f"  {str(self.mods[n]):6s}  {self.mods[n].atoms[0].atomname:6s}  {self.mods[n].atoms[0].resname:6s}\n")
+                        strmeans[mod].append(f"  {str(self.mods[n]):6s}  {self.mods[n].atoms[0].atomname:6s}  {self.mods[n].atoms[0].resname:6s}\n")
                     else:
                         strings[mod].append(f"  {str(self.mods[n]):6s}  {self.mods[n].type:16s}\n")
+                        strmeans[mod].append(f"  {str(self.mods[n]):6s}  {self.mods[n].type:16s}\n")
             # strings[mod].append(23 * (len(thrs)//2 + 1) * '-')
         for sormod in sorted_ders:
             print(''.join(strings[sormod]), file=outfile)
+            if target:
+                print(''.join(strmeans[sormod]), file=outtar)
         if outfile is not None:
             outfile.close()

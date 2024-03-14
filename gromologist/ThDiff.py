@@ -729,7 +729,7 @@ class ThermoDiff:
         flat_vals, _, _, _ = self.get_flat_data(binning_dset, deriv_dset, self.mods[0])
         hmin, hmax = np.min(flat_vals), np.max(flat_vals)
         self.calc_discrete_derivatives(dataset=dataset, threshold=[hmin-0.1, hmax+0.1], cv_dataset=cv_dataset, noe=noe,
-                                       bootstrap=bootstrap)
+                                       free_energy=False, bootstrap=bootstrap)
 
     def print_derivative(self, dataset: str, outfile: Optional[str] = None, bootstrap: bool = False):
         self.print_discrete_derivatives(dataset, free_energy=False, outfile=outfile, bootstrap=bootstrap)
@@ -942,10 +942,11 @@ class ThermoDiff:
         :param target: list, if specified, will also calculate required change so that req_change = (target-mean)/derivative
         :return: None
         """
+
         if outfile is not None:
-            outfile = open(outfile, mode='w')
             if target:
                 outtar = open('req_chg_' + outfile, mode='w')
+            outfile = open(outfile, mode='w')
         derivs = self.discrete_free_energy_derivatives if free_energy else self.discrete_observable_derivatives
         uncerts = self.discrete_free_energy_derivative_uncertainties if free_energy else self.discrete_observable_derivative_uncertainties
         means = self.discrete_free_energy_means if free_energy else self.discrete_observable_means

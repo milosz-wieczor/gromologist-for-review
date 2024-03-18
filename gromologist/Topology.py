@@ -245,7 +245,7 @@ class Top:
         for ssect in self.parameters.subsections:
             types = {t for e in ssect.entries_param for t in e.types}
             if types.difference(deftyp):
-                print(f"Warning: atomtypes {types.difference(deftyp)} required in {ssect.header} not found in [ atomtypes ]")
+                print(f"WARNING: atomtypes {types.difference(deftyp)} required in {ssect.header} not found in [ atomtypes ]")
 
     def list_molecules(self):
         """

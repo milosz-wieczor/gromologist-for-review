@@ -587,7 +587,7 @@ class SectionMol(Section):
         :return: None
         """
         if not remove_dummies:
-            print("Warning: dropping state A parameters, but keeping dummies (if exist). To remove all atoms with "
+            print("WARNING: dropping state A parameters, but keeping dummies (if exist). To remove all atoms with "
                   "type names starting with D, rerun this fn with 'remove_dummies=True'.")
         if atomname or resname or resid or atomtype:
             selected = set()
@@ -674,7 +674,7 @@ class SectionMol(Section):
         :return: None
         """
         if not remove_dummies:
-            print("Warning: dropping all state B parameters, but keeping dummies (if exist). To remove all atoms with "
+            print("WARNING: dropping all state B parameters, but keeping dummies (if exist). To remove all atoms with "
                   "names starting with D, rerun this fn with 'remove_dummies=True'.")
         if atomname or resname or resid or atomtype:
             selected = set()

@@ -1,6 +1,8 @@
 import os
 from glob import glob
 from shutil import copy2
+from itertools import permutations
+from copy import deepcopy
 
 import gromologist as gml
 from typing import Optional, Iterable, Union
@@ -494,7 +496,8 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
     dna_atoms, dna_bonds, dna_connectors = {}, {}, {}
     rna_atoms, rna_bonds, rna_connectors = {}, {}, {}
     impropers = {}
-    for prep in glob(amb + "/prep/all*.in") + glob(amb + "/prep/nuc*.in") + extra_prep:
+    prepsel = "/prep/all*.in"
+    for prep in glob(amb + prepsel) + glob(amb + "/prep/nuc*.in") + extra_prep:
         impropers.update(read_prep_impropers(prep))
     print('\n')
     for lib in libs:
@@ -513,6 +516,21 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
     pro_impropers = fix_rtp(dict_filter(impropers, 'protein'), impr=True)
     dna_impropers = dict_filter(impropers, 'DNA')
     rna_impropers = fix_rtp(dict_filter(impropers, 'RNA'), impr=True, rna=True)
+    imp_types_all = set()
+    for atm, imp in zip([pro_atoms, dna_atoms, rna_atoms], [pro_impropers, dna_impropers, rna_impropers]):
+        for key in atm.keys():
+            typedict = {ent[0]: ent[1] for ent in atm[key]}
+            try:
+                imp_names = imp[key]
+            except:
+                continue
+            for impn in imp_names:
+                try:
+                    imp_types = tuple(typedict[i.lstrip('-+')] for i in impn)
+                except:
+                    continue
+                if imp_types not in imp_types_all and imp_types[::-1] not in imp_types_all:
+                    imp_types_all.add(imp_types)
     new_top = gml.Top(amber=True)
     cmaptypes, rtp_cmap = {}, {}
     print('\n')
@@ -522,11 +540,19 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
     print('\n')
     for k in cmaptypes.keys():
         rtp_cmap[k[1]] = [f'-C N CA C +N'.split()]
-    new_top = reorder_amber_impropers(new_top)
+    new_top = reorder_amber_impropers(new_top, imp_types_all)
+    for typical_dummy in ['EP', 'DR']:
+        new_top.parameters.add_dummy_def(typical_dummy)
     outdir = outdir + '.ff' if not outdir.endswith('.ff') else outdir
     atomtypes = read_addAtomTypes(leaprc)
     os.mkdir(outdir)
     os.chdir(outdir)
+    all_types_rtp = set()
+    for atoms_dict in [pro_atoms, dna_atoms, rna_atoms]:
+        all_types_rtp.update({at[1] for res in atoms_dict.keys() for at in atoms_dict[res]})
+    if all_types_rtp.difference(new_top.defined_atomtypes):
+        print(f"WARNING: Type(s) {all_types_rtp.difference(new_top.defined_atomtypes)} defined in .rtp but not in "
+              f"ffparams.itp, consider removing the entry from .rtp or adding it to ffparams.itp")
     for atype in new_top.parameters.atomtypes.entries_param:
         if atype.modifiers[0] == '0' and atype.types[0] in atomtypes.keys():
             atype.modifiers[0] = str(atomtypes[atype.types[0]][0])
@@ -561,7 +587,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
     # TODO set up watermodels.dat
 
 
-def reorder_amber_impropers(new_top: "gml.Top") -> "gml.Top":
+def reorder_amber_impropers(new_top: "gml.Top", rtp_dihedrals: set) -> "gml.Top":
     """
     Modifying improper dihedral order, empirically checked against GMX FFs
     when errors come up
@@ -573,17 +599,45 @@ def reorder_amber_impropers(new_top: "gml.Top") -> "gml.Top":
     except KeyError:
         pass
     else:
-        new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CT', 'C*', 'CW'), '1203')
-        new_top.parameters.dihedraltypes.reorder_improper(('CT', 'CW', 'CC', 'NB'), '0213')
-        new_top.parameters.dihedraltypes.reorder_improper(('CB', 'N2', 'CA', 'NC'), '0321')
-        new_top.parameters.dihedraltypes.reorder_improper(('CB', 'C5', 'N*', 'CT'), '3201')
-        new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CP', 'N*', 'CT'), '3201')
-        new_top.parameters.dihedraltypes.reorder_improper(('C', 'C4', 'N*', 'CT'), '3201')
-        new_top.parameters.dihedraltypes.reorder_improper(('C', 'CS', 'N*', 'CT'), '3201')
-        new_top.parameters.dihedraltypes.reorder_improper(('C4', 'N2', 'CA', 'NC'), '1203')
-        new_top.parameters.dihedraltypes.reorder_improper(('N2', 'NA', 'CA', 'NC'), '1320')
+        dih_sub = new_top.parameters.dihedraltypes
+        defined_imps = [dih.types for dih in dih_sub.entries_param if str(dih.interaction_type) in '24']
+        rtp_imps = list(rtp_dihedrals)
+        reorders = {}
+        for rtp_imp in rtp_imps:
+            if rtp_imp not in defined_imps and rtp_imp[::-1] not in defined_imps:
+                pers = permutations(rtp_imp)
+                match = False
+                for per in pers:
+                    if match:
+                        break
+                    for ref in defined_imps:
+                        if dih_match(per, ref):
+                            if 'X' not in ref:
+                                match = per
+                            break
+                if match:
+                    reorders[match] = rtp_imp
+        for types_to_dup in reorders.keys():
+            imp = [e for e in dih_sub.get_entries_by_types(*types_to_dup) if str(e.interaction_type) in '24'][0]
+            imp.types = reorders[types_to_dup]
+        # previous attempt at listing problematic dihedrals, but this gets out of hand too fast
+        # new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CT', 'C*', 'CW'), '1203')
+        # new_top.parameters.dihedraltypes.reorder_improper(('CT', 'CW', 'CC', 'NB'), '0213')
+        # new_top.parameters.dihedraltypes.reorder_improper(('CB', 'N2', 'CA', 'NC'), '0321')
+        # new_top.parameters.dihedraltypes.reorder_improper(('CB', 'C5', 'N*', 'CT'), '3201')
+        # new_top.parameters.dihedraltypes.reorder_improper(('CB', 'CP', 'N*', 'CT'), '3201')
+        # new_top.parameters.dihedraltypes.reorder_improper(('C', 'C4', 'N*', 'CT'), '3201')
+        # new_top.parameters.dihedraltypes.reorder_improper(('C', 'CS', 'N*', 'CT'), '3201')
+        # new_top.parameters.dihedraltypes.reorder_improper(('C4', 'N2', 'CA', 'NC'), '1203')
+        # new_top.parameters.dihedraltypes.reorder_improper(('N2', 'NA', 'CA', 'NC'), '1320')
     return new_top
 
+
+def dih_match(query, ref):
+    if all([q == r for q, r in zip(query, ref) if r != "X"]) or all([q == r for q, r in zip(query, ref[::-1]) if r != "X"]):
+        return True
+    else:
+        return False
 
 def read_addAtomTypes(textfile: str) -> dict:
     text = open(textfile).readlines()

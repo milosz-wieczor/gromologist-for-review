@@ -642,11 +642,7 @@ def dih_match(query, ref):
 def read_addAtomTypes(textfile: str) -> dict:
     text = open(textfile).readlines()
     reading, brack = False, 0
-    element_properties = {
-        "H": (1, 1.008), "O": (8, 15.999), "C": (6, 12.011), "N": (7, 14.007), "S": (16, 32.06), "P": (15, 30.974),
-        "F": (9, 18.998), "Cl": (17, 35.45), "Br": (35, 79.904), "I": (53, 126.90), "Mg": (12, 24.305),
-        "Ca": (20, 40.078)
-    }
+    element_properties = gml.guess_element_properties()
     types = {}
     for line in text:
         if line.strip().startswith('addAtomTypes'):
@@ -668,6 +664,13 @@ def read_addAtomTypes(textfile: str) -> dict:
             types[k] = (0, 0.0)
     return types
 
+def guess_element_properties():
+    element_properties = {
+        "H": (1, 1.008), "O": (8, 15.999), "C": (6, 12.011), "N": (7, 14.007), "S": (16, 32.06), "P": (15, 30.974),
+        "F": (9, 18.998), "Cl": (17, 35.45), "Br": (35, 79.904), "I": (53, 126.90), "Mg": (12, 24.305),
+        "Ca": (20, 40.078)
+    }
+    return element_properties
 
 def read_prep_impropers(prepfile: str) -> dict:
     """

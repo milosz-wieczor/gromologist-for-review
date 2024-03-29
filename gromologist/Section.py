@@ -482,7 +482,7 @@ class SectionMol(Section):
         self.del_atom(h1.num)
         other.del_atom(h2.num)
         found = self.find_rtp(rtp)
-        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(found)
+        types, charges, dihedrals, impropers, improper_type, _ = self.parse_rtp(found)
         disulf_names = {'CYX', 'CYS2'}
         disulf = set([x[0] for x in types.keys()]).intersection(disulf_names)
         if len(disulf) == 0:
@@ -517,7 +517,7 @@ class SectionMol(Section):
             raise RuntimeError(f"Residue 2 has to be a zinc or iron/heme, not {x2.resname}")
         if c1.resname == 'CYS':
             found = self.find_rtp(rtp)
-            types, charges, dihedrals, impropers, improper_type = self.parse_rtp(found)
+            types, charges, dihedrals, impropers, improper_type, _ = self.parse_rtp(found)
             h1 = self.get_atom(f'resid {resid1} and name HG HG1')
             x1 = self.get_atom(f'resid {resid1} and name SG')
             self.del_atom(h1.num)
@@ -546,6 +546,68 @@ class SectionMol(Section):
                 x1 = self.get_atom(f'resid {resid1} and name ND1')
         self.merge_two(other, x1.num, x2.num)
         self._check_correct()
+
+    def alchemize(self, resid: int, new_resname: str, rtp: str, matching_atoms: Optional[dict] = None):
+        types, charges, dihedrals, impropers, bondedtypes, bonds = self.parse_rtp(rtp)
+        if new_resname not in {x[0] for x in types.keys()}:
+            raise RuntimeError(f"New residue name {new_resname} not found in file {rtp}")
+        atoms_in_res = self.get_atoms(f"resid {resid}")
+        old_resname = atoms_in_res[0].resname
+        old_atomnames = {a.atomname for a in atoms_in_res}
+        new_atomnames = {x[1] for x in types.keys() if x[0] == new_resname}
+        old_atomnames_with_matches = set(matching_atoms.keys())
+        new_atomnames_with_matches = set(matching_atoms.values())
+        # orphans are ones that will be turned into dummies
+        orphans = old_atomnames.difference(new_atomnames.union(old_atomnames_with_matches))
+        if orphans:
+            self.top.parameters.add_dummy_def('DH')
+        # newbies are ones that will have to be created from dummies, and bonded to existing ones
+        newbies = new_atomnames.difference(old_atomnames.union(new_atomnames_with_matches))
+        # first let's add the easy ones (identical + user-matched)
+        overlapping = old_atomnames.intersection(new_atomnames)
+        masses = gml.guess_element_properties()
+        for alch in list(overlapping) + list(old_atomnames_with_matches):
+            alch_atom = alch if alch in overlapping else matching_atoms[alch]
+            new_type = types[(new_resname, alch_atom)]
+            if new_type in self.top.defined_atomtypes:
+                new_mass = self.top.parameters.get_subsection('atomtypes').get_entries_by_types(new_type)[0].modifiers[1]
+            elif new_type[0] in masses.keys():
+                new_mass = masses[new_type[0].upper()][1]
+            else:
+                new_mass = 1.008
+            self.gen_state_b(alch, old_resname, resid, new_type=new_type,
+                             new_charge=charges[(new_resname, alch_atom)], new_mass=float(new_mass))
+        # then let's turn orphans into dummies
+        for alch in orphans:
+            self.gen_state_b(alch, old_resname, resid, new_type='DH', new_charge=0.0, new_mass=1.008)
+        # then let's add new ones
+        for new_alch in newbies:
+            last_atom = self.get_atoms(f"resid {resid}")[-1]
+            new_type = types[(new_resname, new_alch)]
+            if new_type in self.top.defined_atomtypes:
+                new_mass = self.top.parameters.get_subsection('atomtypes').get_entries_by_types(new_type)[0].modifiers[
+                    1]
+            elif new_type[0] in masses.keys():
+                new_mass = masses[new_type[0].upper()][1]
+            else:
+                new_mass = 1.008
+            self.add_atom(last_atom.num + 1, "D" + new_alch, atom_type='DH', charge=0.0, resid=resid,
+                          resname=old_resname, mass=1.008)
+            new_bonds = [bds for bds in bonds[new_resname] if new_alch in bds]
+            for new_bond in new_bonds:
+                other = [atnm for atnm in new_bond if atnm != new_alch][0]
+                if other in newbies:
+                    other = 'D' + other
+                elif other in matching_atoms.values():
+                    other = [k for k, v in matching_atoms.items() if v == other][0]
+                try:
+                    other_num = self.get_atom(f"resid {resid} and name {other}").num
+                except:
+                    continue
+                else:
+                    self.add_bond(other_num, last_atom.num + 1)
+            self.gen_state_b("D" + new_alch, old_resname, resid, new_type=new_type,
+                             new_charge=charges[(new_resname, new_alch)], new_mass=float(new_mass))
 
     def gen_state_b(self, atomname: Optional[str] = None, resname: Optional[str] = None,
                     resid: Optional[int] = None, atomtype: Optional[str] = None, new_type: Optional[str] = None,
@@ -1155,7 +1217,17 @@ class SectionMol(Section):
         else:
             subsections_to_add = [add_section]
         self.printed = []
-        self.get_subsection('atoms').check_defined_types()
+        missing = self.get_subsection('atoms').check_defined_types()
+        if missing and fix_by_analogy:
+            for tp in missing:
+                if tp in fix_by_analogy.keys():
+                    self.top.parameters.clone_type(atomtype=fix_by_analogy[tp], new_type=tp)
+                    print(f"Adding atomtype {tp}, copied from atomtype {fix_by_analogy[tp]}")
+        elif missing and fix_dummy:
+            for tp in missing:
+                if tp.startswith('D'):
+                    self.top.parameters.add_dummy_def(tp)
+                    print(f"Adding dummy atomtype {tp}")
         for sub in subsections_to_add:
             try:
                 subsections = [s for s in self.subsections if s.header == sub]
@@ -1282,7 +1354,7 @@ class SectionMol(Section):
         self.top.print("\n  Mutating residue {} (resid {}) into {}\n".format(orig.resname, resid, targ))
         atoms_add, hooks, _, _, extra_bonds, afters = mutant.atoms_to_add()
         atoms_remove = mutant.atoms_to_remove()
-        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(rtp, remember=True)
+        types, charges, dihedrals, impropers, improper_type, _ = self.parse_rtp(rtp, remember=True)
         # some residue-specific modifications here
         if targ == 'HIS':
             targ = 'HSD' if ('HSD', 'CA') in types.keys() else 'HID'
@@ -1451,7 +1523,7 @@ class SectionMol(Section):
         if not 'rtp':
             raise RuntimeError("Failed to locate .rtp files from a local Gromacs installation, please specify"
                                " a custom .rtp file through rtp='/path/to/rtp/file'")
-        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(rtp, remember=True)
+        types, charges, dihedrals, impropers, improper_type, _ = self.parse_rtp(rtp, remember=True)
         if not('N' + new_n_term.resname in types.keys() and 'C' + new_c_term.resname in types.keys()):
             creplaces, cadds, cimpropers = self.parse_tdb(rtp.replace('rtp', 'c.tdb'), 'COO-')
             nterm_res = 'GLY-NH3+' if new_n_term.resname == 'GLY' else 'PRO-NH3+' if new_n_term.resname == 'PRO' else 'NH3+'
@@ -1511,21 +1583,33 @@ class SectionMol(Section):
                    self.top.rtp['impropers'], self.top.rtp['bondedtypes']
         chargedict, typedict = {}, {}
         impropers, dihedrals = {}, {}
+        bonds, angles = {}, {}
         bondedtypes = 0
         rtp_cont = [line for line in open(rtp) if not line.strip().startswith(';')]
         resname = None
         reading_atoms = False
+        reading_bonds = False
+        reading_angles = False
         reading_impropers = False
         reading_dihedrals = False
         reading_bondedtypes = False
         for line in rtp_cont:
             if line.strip().startswith('[') and line.strip().split()[1] not in ['bondedtypes', 'atoms', 'bonds',
-                                                                                'dihedrals', 'impropers']:
+                                                                                'exclusions', 'angles', 'dihedrals',
+                                                                                'impropers']:
                 resname = line.strip().split()[1]
             if line.strip().startswith('[') and line.strip().split()[1] == 'atoms':
                 reading_atoms = True
             if line.strip().startswith('[') and line.strip().split()[1] != 'atoms':
                 reading_atoms = False
+            if line.strip().startswith('[') and line.strip().split()[1] == 'bonds':
+                reading_bonds = True
+            if line.strip().startswith('[') and line.strip().split()[1] != 'bonds':
+                reading_bonds = False
+            if line.strip().startswith('[') and line.strip().split()[1] == 'angles':
+                reading_angles = True
+            if line.strip().startswith('[') and line.strip().split()[1] != 'angles':
+                reading_angles = False
             if line.strip().startswith('[') and line.strip().split()[1] == 'dihedrals':
                 reading_dihedrals = True
             if line.strip().startswith('[') and line.strip().split()[1] != 'dihedrals':
@@ -1551,6 +1635,11 @@ class SectionMol(Section):
                 impropers[resname].append(line.strip().split())
             if len(line.strip().split()) > 7 and resname is None and reading_bondedtypes:
                 bondedtypes = line.strip().split()[3]
+            if len(line.strip().split()) == 2 and resname is not None and reading_bonds:
+                if resname not in bonds.keys():
+                    bonds[resname] = []
+                bonds[resname].append(line.strip().split())
+            # TODO one day we might need angles + bonded entries with parameters?
         # substitute CHARMM's HN for AMBER's H
         for k in list(typedict.keys()):
             if 'HN' in k:
@@ -1565,8 +1654,9 @@ class SectionMol(Section):
         self.top.rtp['impropers'] = impropers
         # TODO we need a method for explicitly setting just a single dihedral (should be easy)
         self.top.rtp['bondedtypes'] = bondedtypes
+        self.top.rtp['bonds'] = bonds
         return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['dihedrals'], \
-            self.top.rtp['impropers'], self.top.rtp['bondedtypes']
+            self.top.rtp['impropers'], self.top.rtp['bondedtypes'], self.top.rtp['bonds']
 
     def parse_tdb(self, tdb: str, terminus: str):
         replaces, adds, impropers = [], [], []
@@ -1973,7 +2063,7 @@ class SectionMol(Section):
             resname = deprot_dict[resname]
         atoms = self.get_atoms(f'resid {resid}')
         rtp = self.find_rtp(rtp)
-        types, charges, dihedrals, impropers, improper_type = self.parse_rtp(rtp)
+        types, charges, dihedrals, impropers, improper_type, _ = self.parse_rtp(rtp)
         for atom in atoms:
             try:
                 atom.type_b = types[(resname, atom.atomname)]

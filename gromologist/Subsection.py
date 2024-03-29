@@ -783,15 +783,19 @@ class SubsectionAtom(Subsection):
             self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
 
     def check_defined_types(self):
+        missing = set()
         typelist = self.section.top.defined_atomtypes
         for atom in self.entries_atom:
             if atom.type not in typelist:
                 print(f'Couldn\'t find definition of atom type {atom.type} (atom {atom.num} in molecule '
                       f'{self.section.mol_name}) in parameters')
+                missing.add(atom.type)
             if atom.type_b:
                 if atom.type_b not in typelist:
                     print(f'Couldn\'t find definition of atom type {atom.type_b} (atom {atom.num} in molecule '
                           f'{self.section.mol_name}) in parameters')
+                    missing.add(atom.type)
+        return missing
 
     def _mol_type_nums(self):
         """

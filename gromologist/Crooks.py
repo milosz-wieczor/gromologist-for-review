@@ -1,4 +1,5 @@
 from concurrent.futures import ProcessPoolExecutor
+import multiprocessing
 import gromologist as gml
 import os
 from math import ceil
@@ -402,6 +403,9 @@ class CrooksPool:
         crook.grompp_me(runtype)
 
     def mdrun_multi(self, runtype):
+        ncpus = self.ncpus()
+        if len(self.workers) % ncpus != 0:
+            raise RuntimeError("Number of simulations should be divisible by the number of available CPUs, but {} and {} were specified")
         tpr = runtype if runtype in ['mini', 'eq'] else 'dyn'
         if self.plumed and runtype == 'eq':
             plu = ' -plumed plumed.dat '
@@ -409,8 +413,28 @@ class CrooksPool:
             plu = ''
         multi = ['run{}_l{}'.format(w.id, w.initlambda) for w in self.workers]
         if not all(['{}.gro'.format(tpr) in os.listdir('run{}_l{}'.format(w.id, w.initlambda)) for w in self.workers]):
-            print(gml.gmx_command(f'mpiexec {self.gmx}', 'mdrun', deffnm=tpr, v=plu, cpi=True, multidir=multi,
-                                  answer=True))
+            for multi_batch in [multi[ncpus*i : ncpus*(i+1)] for i in range(len(multi) // ncpus)]:
+                print(gml.gmx_command(f'mpiexec {self.gmx}', 'mdrun', deffnm=tpr, v=plu, cpi=True,
+                                      multidir=multi_batch, answer=True))
+
+    @staticmethod
+    def ncpus():
+        """
+        Returns the total number of available CPUs across all nodes.
+        """
+        if 'SLURM_NTASKS' in os.environ:
+            total_cpus = int(os.environ['SLURM_NTASKS'])
+            return total_cpus
+        elif 'PBS_NUM_NODES' in os.environ and 'PBS_NUM_PPN' in os.environ:
+            nodes = int(os.environ['PBS_NUM_NODES'])
+            cpus_per_node = int(os.environ['PBS_NUM_PPN'])
+            total_cpus = nodes * cpus_per_node
+            return total_cpus
+        elif 'OMPI_UNIVERSE_SIZE' in os.environ:
+            total_cpus = int(os.environ['OMPI_UNIVERSE_SIZE'])
+            return total_cpus
+        else:
+            return multiprocessing.cpu_count()
 
     @staticmethod
     def read_results(crook):

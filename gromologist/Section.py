@@ -1173,7 +1173,8 @@ class SectionMol(Section):
         new_dihedrals = [dih for dih in new_dihedrals if dih[0] != dih[-1]]
         return new_pairs, new_dihedrals
     
-    def add_ff_params(self, add_section: str = 'all', force_all: bool = False):
+    def add_ff_params(self, add_section: str = 'all', force_all: bool = False,
+                      external_paramsB: Optional["gml.SectionParam"] = None):
         """
         Looks for FF parameters to be put for every bonded term in the topology,
         then adds them so that they can be explicitly seen/modified
@@ -1192,7 +1193,7 @@ class SectionMol(Section):
                 pass
             else:
                 for ssub in subsections:
-                    ssub.add_ff_params(force_all)
+                    ssub.add_ff_params(force_all, external_paramsB)
 
     def find_used_ff_params(self, section: str = 'all') -> list:
         used_params = []
@@ -1211,7 +1212,8 @@ class SectionMol(Section):
         return used_params
 
     def find_missing_ff_params(self, add_section: str = 'all', fix_by_analogy: bool = False, fix_B_from_A: bool = False,
-                               fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):
+                               fix_A_from_B: bool = False, fix_dummy: bool = False, fix_from_external: Optional[str] = None,
+                               once: bool = False):
         if add_section == 'all':
             subsections_to_add = ['bonds', 'angles', 'dihedrals']
         else:

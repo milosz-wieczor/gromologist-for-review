@@ -213,15 +213,20 @@ class SubsectionBonded(Subsection):
         for entry in self.entries_bonded:
             entry.explicit_defines()
     
-    def add_ff_params(self, force_all: bool = False):
+    def add_ff_params(self, force_all: bool = False, external_paramsB: Optional["gml.SectionParam"] = None):
         """
         Adds explicit values of FF parameters in sections 'bonds', 'angles', 'dihedrals'
         :param force_all: bool, whether to add params from scratch if some are assigned already
+        :param external_paramsB: gml.SectionParam, if reading parameters from an external file for state B
         :return: None
         """
         matchings = {'bonds': 'bondtypes', 'angles': 'angletypes', 'dihedrals': 'dihedraltypes'}
         subsect_params = [sub for sub in self.section.top.parameters.subsections
                           if sub.header == matchings[self.header]]
+        if external_paramsB is not None:
+            subsect_paramsB = [sub for sub in external_paramsB.subsections if sub.header == matchings[self.header]]
+        else:
+            subsect_paramsB = None
         self.bkp_entries = self.entries[:]  # we can't change what we're iterating over, so we modify the copy
         for entry in self.entries_bonded:
             # let's omit the ones that already have params assigned:
@@ -229,11 +234,11 @@ class SubsectionBonded(Subsection):
                 if not force_all:
                     continue
                 else:
-                    entry.params_state_a = []
                     entry.params_state_b = []
-                    entry.params_state_a_entry = []
                     entry.params_state_b_entry = []
-            self._add_ff_params_to_entry(entry, subsect_params)
+                    entry.params_state_a = []
+                    entry.params_state_a_entry = []
+            self._add_ff_params_to_entry(entry, subsect_params, subsect_paramsB)
         self.entries = self.bkp_entries[:]  # now restore the modified copy
 
     def find_used_ff_params(self) -> list:
@@ -386,19 +391,19 @@ class SubsectionBonded(Subsection):
             break
         return [y for x in new_params for y in x]
     
-    def _add_ff_params_to_entry(self, entry, subsect_params):
+    def _add_ff_params_to_entry(self, entry, subsect_params, subsect_params_B = None):
         """
         Given a bonded term (e.g. "21     24     26    5") converts it to atomtypes,
         finds the respective FF parameters and adds them to the bonded entry
         :param entry: Entry, an EntryBonded instance to add FF params to
         :param subsect_params: list, SubsectionParam instances that hold all FF params
+        :param subsect_params_B: list, a separate SubsectionParam instances for state B if needed
         :return: None
         """
         int_type = entry.interaction_type
         entry.read_types()
-        for types, params, parmentry in zip([entry.types_state_a, entry.types_state_b],
-                                            [entry.params_state_a, entry.params_state_b],
-                                            [entry.params_state_a_entry, entry.params_state_b_entry]):
+
+        def setparam(types, params, parmentry, inttype, subsect_params):
             wildcard_present = []
             non_wildcard_present = []
             for subsections in subsect_params:
@@ -406,9 +411,10 @@ class SubsectionBonded(Subsection):
                     if parm_entry.match(types, int_type):
                         is_wildcard = 'X' in parm_entry.types
                         if not wildcard_present and not is_wildcard:
-                            params += parm_entry.params
-                            parmentry.append(parm_entry)
-                            non_wildcard_present += parm_entry.types
+                            if not (len(params) > 0 and inttype in (1, 5)):
+                                params += parm_entry.params
+                                parmentry.append(parm_entry)
+                                non_wildcard_present += parm_entry.types
                         elif not wildcard_present and is_wildcard and not non_wildcard_present:
                             params += parm_entry.params
                             parmentry.append(parm_entry)
@@ -422,12 +428,18 @@ class SubsectionBonded(Subsection):
                                 parmentry.append(parm_entry)
                             else:
                                 pass
+
+        # first pass fixes stateA params, second fixes stateB params
+        setparam(entry.types_state_a, entry.params_state_a, entry.params_state_a_entry, int(entry.interaction_type), subsect_params)
+        spar = subsect_params if subsect_params_B is None else subsect_params_B
+        setparam(entry.types_state_b, entry.params_state_b, entry.params_state_b_entry, int(entry.interaction_type), spar)
         if not entry.params_state_a and entry.subsection.header == 'dihedrals' \
-                and any('DUM' in t for t in entry.types_state_a):
+                and any(t.startswith('D') for t in entry.types_state_a):
             entry.params_state_a = [0.0, 0.0, '1']
         if not entry.params_state_b and entry.subsection.header == 'dihedrals' and entry.types_state_b \
-                and any('DUM' in t for t in entry.types_state_b):
+                and any(t.startswith('D') for t in entry.types_state_b):
             entry.params_state_b = [0.0, 0.0, '1']
+        # unpacking dihedrals if only stateA is present
         if entry.params_state_a and entry.subsection.header == 'dihedrals' and (not entry.params_state_b) \
                 and entry.interaction_type in ('9', '4', '1'):
             if len(entry.params_state_a) > 3:
@@ -442,6 +454,7 @@ class SubsectionBonded(Subsection):
                     entry.subsection.bkp_entries[entry_location+counter].params_state_a = leftover[:3]
                     leftover = leftover[3:]
                     counter += 1
+        # unpacking dihedrals if both states are involved
         if entry.params_state_a and entry.subsection.header == 'dihedrals' and entry.params_state_b \
                 and entry.interaction_type in ('9', '4', '1'):
             if len(entry.params_state_a) > 3 or len(entry.params_state_b) > 3 \
@@ -472,7 +485,7 @@ class SubsectionBonded(Subsection):
                     _ = all_multiplicities.pop()
         if not entry.params_state_a and entry.subsection.header == 'dihedrals' and entry.params_state_b \
                 and entry.interaction_type in ('9', '4', '1'):
-            raise RuntimeError(f'Warning: in line {entry}, parameters were found for state A, but not for state B.'
+            raise RuntimeError(f'Warning: in line {entry}, parameters were found for state B, but not for state A.'
                                f'Try to add parameters for types {entry.types_state_a}')
     
     def _check_parm_type(self):

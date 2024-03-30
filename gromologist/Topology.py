@@ -297,17 +297,18 @@ class Top:
         else:
             self.pdb = pdbfile
 
-    def add_ff_params(self, section: str = 'all'):
+    def add_ff_params(self, section: str = 'all', external_paramsB: Optional["gml.SectionParam"] = None):
         """
         Explicitly puts FF parameters in sections 'bonds', 'angles',
         'dihedrals' so that the resulting topology is independent of
         FF sections
         :param section: str, 'all' or name of the section, e.g. 'bonds'
+        :param external_paramsB: gml.SectionParam, an external section to look for parameters for state B
         :return: None
         """
         # TODO make sure params are not duplicated
         for mol in self.molecules:
-            mol.add_ff_params(add_section=section)
+            mol.add_ff_params(add_section=section, external_paramsB=external_paramsB)
 
     def load_frcmod(self, frcmod: str):
         """

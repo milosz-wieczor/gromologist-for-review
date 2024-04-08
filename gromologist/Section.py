@@ -1021,7 +1021,9 @@ class SectionMol(Section):
         """
         Creates a new bond by either merging two distinct
         molecules (both being part of the same topology)
-        or adding a new bond within a single molecule
+        or adding a new bond within a single molecule;
+        if anchor_own is less than 1, it will simply
+        merge two sections without adding any bonds
         :param other: an SectionMol instance, the other molecule that participates in the bond (can be self)
         :param anchor_own: int, number of the atom that will form the new bond in self
         :param anchor_other: int, number of the atom that will form the new bond in other (or self, if other is self)
@@ -1035,7 +1037,8 @@ class SectionMol(Section):
         if other is not self:
             other.offset_numbering(self.natoms)
             anchor_other += self.natoms
-        self._make_bond(anchor_own, anchor_other, other)
+        if anchor_own > 0:
+            self._make_bond(anchor_own, anchor_other, other)
         if other is not self:
             self._merge_fields(other)
             self.top.sections.remove(other)

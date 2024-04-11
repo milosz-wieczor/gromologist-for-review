@@ -303,7 +303,9 @@ class Pdb:
                     curr_resid = atom.resnum
                     if dist > cutoff:
                         base_char += 1
-                if base_char > 90:
+                if base_char == 91:
+                    base_char += 6
+                if base_char > 122:
                     break
                 atom.chain = chr(base_char)
         else:

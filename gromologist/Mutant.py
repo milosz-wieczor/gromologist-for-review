@@ -4,7 +4,7 @@ class ProteinMutant:
     # W > Z -> not working
     map_pro = {'ALA': 'A', 'ASH': 'B', 'ASPP': 'B', 'CYS': 'C', 'CYX': 'C', 'CYM': 'C', 'ASP': 'D', 'GLU': 'E',
                'PHE': 'F', 'GLY': 'G', 'HIS': 'H', 'HIE': 'H', 'HID': 'H', 'HSD': 'H', 'HSE': 'H', 'ILE': 'I',
-               'GLH': 'J', 'GLPP': 'J', 'LYS': 'K', 'LYN': 'O', 'LEU': 'L', 'MET': 'M', 'ASN': 'N', 'PRO': 'P',
+               'GLH': 'J', 'GLUP': 'J', 'LYS': 'K', 'LYN': 'O', 'LEU': 'L', 'MET': 'M', 'ASN': 'N', 'PRO': 'P',
                'GLN': 'Q', 'ARG': 'R', 'SER': 'S', 'THR': 'T', 'VAL': 'V', 'TRP': 'W', 'TYR': 'Y'}
     map_inv = {'A': 'ALA', 'B': 'ASH', 'C': 'CYS', 'D': 'ASP', 'E': 'GLU', 'F': 'PHE', 'G': 'GLY', 'H': 'HIS',
                'I': 'ILE', 'J': 'GLH', 'K': 'LYS', 'L': 'LEU', 'M': 'MET', 'N': 'ASN', 'O': 'LYN', 'P': 'PRO',

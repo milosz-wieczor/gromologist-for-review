@@ -1363,6 +1363,10 @@ class SectionMol(Section):
         # some residue-specific modifications here
         if targ == 'HIS':
             targ = 'HSD' if ('HSD', 'CA') in types.keys() else 'HID'
+        elif targ == 'ASH':
+            targ = 'ASPP' if ('ASPP', 'CA') in types.keys() else 'ASH'
+        elif targ == 'GLH':
+            targ = 'GLUP' if ('GLUP', 'CA') in types.keys() else 'GLH'
         elif targ == 'GLY':
             self.get_atom('resid {} and name HA'.format(resid)).atomname = 'HA1'
         if orig.resname == 'GLY':

@@ -296,6 +296,7 @@ class Top:
             self.pdb = gml.Pdb(pdbfile, top=self)
         else:
             self.pdb = pdbfile
+            self.pdb.add_top(self)
 
     def add_ff_params(self, section: str = 'all', external_paramsB: Optional["gml.SectionParam"] = None):
         """

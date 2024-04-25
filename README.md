@@ -3,6 +3,8 @@
 Gromologist is a package designed to facilitate handling, editing and manipulating GROMACS topology files 
 (.top and .itp), as well as compatible structures (.pdb and .gro).
 
+For a growing base of common applications, workflows and use cases, check out [the Gromologist wiki](https://gitlab.com/KomBioMol/gromologist/-/wikis/Tutorials).
+
 - [Gromologist](#gromologist)
   * [Installation](#installation)
   * [How to cite](#how-to-cite)

@@ -69,7 +69,7 @@ class Pdb:
             return "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                    "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
 
-    def add_top(self, top: str, **kwargs):
+    def add_top(self, top: Union[str, "gml.Top"], **kwargs):
         """
         Adds a Top object to the current Pdb object, enabling some
         operations that couple the two
@@ -77,7 +77,10 @@ class Pdb:
         :param kwargs: dict, extra parameters to pass to Top constructor
         :return: None
         """
-        self.top = gml.Top(top, **kwargs)
+        if isinstance(top, str):
+            self.top = gml.Top(top, **kwargs)
+        else:
+            self.top = top
         if self.top and not self.top.pdb:
             self.top.pdb = self
 
@@ -1007,7 +1010,8 @@ class Pdb:
                                  bondlength=bond_length,
                                  vector=vec, atomname=atom_add, resname=mutant.target_3l)
         self.renumber_atoms()
-        processed_residue = self.get_atoms(f'{chstr}resid {resid}')
+        prot_resids = list(self.prot_map.keys())
+        processed_residue = self.get_atoms(f'{chstr}resid {resid} and resname {" ".join(prot_resids)}')
         for atom in processed_residue:
             atom.resname = mutant.target_3l
 

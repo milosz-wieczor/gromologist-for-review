@@ -699,6 +699,47 @@ def read_prep_impropers(prepfile: str) -> dict:
     return impropers
 
 
+def prep_to_rtp(prepfile, outfile = "new.rtp", ff = 'amber'):
+    content = [l.strip() for l in open(prepfile)]
+    atoms = {}
+    bonds = {}
+    impropers = {}
+    connectors = {}
+    current_res = ""
+    reading_loop_closing = False
+    reading_impropers = False
+    for ln in content:
+        if len(ln.split()) > 2 and ln.split()[1].upper() == "INT":
+            current_res = ln.split()[0]
+            atoms[current_res] = []
+            bonds[current_res] = []
+            impropers[current_res] = []
+            connectors[current_res] = []
+        elif len(ln.split()) > 9 and ln.split()[3].upper() in "MSB3456E":
+            if ln.split()[2] != "DU":
+                atoms[current_res].append((ln.split()[1], ln.split()[2], float(ln.split()[-1]), len(atoms[current_res]) + 1))
+                if len(atoms[current_res]) > 1:
+                    bonds[current_res].append((int(ln.split()[4]) - 3, len(atoms[current_res])))
+        elif ln.strip() == "IMPROPER":
+            reading_impropers = True
+        elif ln.strip().split() and ln.strip().split()[0] == "LOOP":
+            reading_loop_closing = True
+            reading_impropers = False
+        elif ln.strip() == "DONE":
+            reading_loop_closing = False
+        elif reading_loop_closing and len(ln.split()) > 1:
+            at1 = ln.split()[0]
+            at2 = ln.split()[1]
+            n1 = [ent[3] for ent in atoms[current_res] if ent[0] == at1][0]
+            n2 = [ent[3] for ent in atoms[current_res] if ent[0] == at2][0]
+            bonds[current_res].append((int(n1), int(n2)))
+        elif reading_impropers and len(ln.split()) > 3:
+            impropers[current_res].append(ln.split())
+    bonds[current_res] = sorted(bonds[current_res], key=lambda x: x[0])
+    write_rtp(atoms, bonds, connector=connectors, outfile=outfile, impropers=impropers, ff=ff)
+
+
+
 def calc_Coulomb_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_on: str, force_from: str):
     """
     Calculates Coulomb forces exerted by one subset of atoms on each atom in another subset. Does NOT take into accout

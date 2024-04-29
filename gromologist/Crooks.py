@@ -93,23 +93,25 @@ class CrooksPool:
         :return: None
         """
         exec = ProcessPoolExecutor
+        ncpu = self.ncpus()
         self.drop_frames()
         if self.mutate:
             print('mutating structures...'.format())
-            with exec() as executor:
+            with exec(ncpu) as executor:
                 executor.map(self.apply_pmx, [(self.mutate, self.wt_only, w.id, w.initlambda, self.pmxff)
                                               for w in self.workers])
         if self.mini:
-            with exec() as executor:
+            with exec(ncpu) as executor:
                 print("preparing minimization...")
                 executor.map(self.run_worker, [(w, 'mini', self.stride, self.temperature, self.init_nst, self.nst,
                                                 self.lincs, self.extra_args, self.mini) for w in self.workers])
             self.mdrun_multi('mini')
-        with exec() as executor:
+        with exec(ncpu) as executor:
+            print("preparing equilibration...")
             executor.map(self.run_worker, [(w, 'eq', self.stride, self.temperature, self.init_nst, self.nst,
                                             self.lincs, self.extra_args, self.mini) for w in self.workers])
         self.mdrun_multi('eq')
-        with exec() as executor:
+        with exec(ncpu) as executor:
             executor.map(self.run_worker, [(w, 'prod', self.stride, self.temperature, self.init_nst, self.nst,
                                             self.lincs, self.extra_args, self.mini) for w in self.workers])
         self.mdrun_multi('prod')
@@ -417,12 +419,12 @@ class CrooksPool:
             plu = ' -plumed plumed.dat '
         else:
             plu = ''
-        multi = ' '.join(['run{}_l{}'.format(w.id, w.initlambda) for w in self.workers])
+        multi = ['run{}_l{}'.format(w.id, w.initlambda) for w in self.workers]
         gmx_mpi = gml.find_gmx_dir(mpi=True)[1]
         if not all(['{}.gro'.format(tpr) in os.listdir('run{}_l{}'.format(w.id, w.initlambda)) for w in self.workers]):
             for multi_batch in [multi[ncpus*i : ncpus*(i+1)] for i in range(len(multi) // ncpus)]:
                 print(gml.gmx_command(f'mpiexec {gmx_mpi}', 'mdrun', deffnm=tpr, v=plu, cpi=True,
-                                      multidir=multi_batch, answer=True))
+                                      multidir=' '.join(multi_batch), answer=True))
 
     @staticmethod
     def ncpus():

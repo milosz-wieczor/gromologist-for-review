@@ -104,25 +104,26 @@ class CrooksPool:
             with exec(ncpu) as executor:
                 print("preparing minimization...")
                 executor.map(self.run_worker, [(w, 'mini', self.stride, self.temperature, self.init_nst, self.nst,
-                                                self.lincs, self.extra_args, self.mini) for w in self.workers])
+                                                self.lincs, self.extra_args, self.mini, self.dt) for w in self.workers])
             self.mdrun_multi('mini')
         with exec(ncpu) as executor:
             print("preparing equilibration...")
             executor.map(self.run_worker, [(w, 'eq', self.stride, self.temperature, self.init_nst, self.nst,
-                                            self.lincs, self.extra_args, self.mini) for w in self.workers])
+                                            self.lincs, self.extra_args, self.mini, self.dt) for w in self.workers])
         self.mdrun_multi('eq')
         with exec(ncpu) as executor:
             executor.map(self.run_worker, [(w, 'prod', self.stride, self.temperature, self.init_nst, self.nst,
-                                            self.lincs, self.extra_args, self.mini) for w in self.workers])
+                                            self.lincs, self.extra_args, self.mini, self.dt) for w in self.workers])
         self.mdrun_multi('prod')
 
     @staticmethod
     def run_worker(data):
-        worker, runtype, stride, temperature, init_nst, nst, lincs, extra_args, mini = data
+        worker, runtype, stride, temperature, init_nst, nst, lincs, extra_args, mini, dt = data
         if runtype == 'mini':
-            worker.prep_runs('eq', stride, temperature, init_nst, nst, lincs, extra_args)
+            # runtype, stride, temperature, init_nst, nst, lincs, dt, extra_args
+            worker.prep_runs('eq', stride, temperature, init_nst, nst, lincs, dt, extra_args)
             if mini:
-                worker.prep_runs(runtype, stride, temperature, init_nst, nst, lincs, extra_args)
+                worker.prep_runs(runtype, stride, temperature, init_nst, nst, lincs, dt, extra_args)
                 # We can minimize if required
                 worker.log('running energy minimization...'.format())
                 worker.grompp_me(runtype)
@@ -131,12 +132,12 @@ class CrooksPool:
                           'mini{id}_l{lam}.gro'.format(id=worker.id, lam=worker.initlambda))
         elif runtype == 'eq':
             # First there's equilibration:
-            worker.prep_runs(runtype, stride, temperature, init_nst, nst, lincs, extra_args)
+            worker.prep_runs(runtype, stride, temperature, init_nst, nst, lincs, dt, extra_args)
             worker.log('running equilibration...')
             worker.grompp_me(runtype)
         elif runtype == 'prod':
             # The actual alchemistry:
-            worker.prep_runs('prod', stride, temperature, init_nst, nst, lincs, extra_args)
+            worker.prep_runs('prod', stride, temperature, init_nst, nst, lincs, dt, extra_args)
             worker.log('running grompp for all systems...')
             worker.grompp_me('prod')
             worker.log('running mdrun for all systems...')

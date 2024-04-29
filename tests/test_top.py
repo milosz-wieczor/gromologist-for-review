@@ -111,6 +111,133 @@ class BasicTopTest(unittest.TestCase):
         self.assertAlmostEqual(new_ener, ref_ener)
 
 
+    def test_init_valid_file(self):
+        self.assertIsInstance(self.top, gml.Top)
+
+    def test_init_gmx_dir(self):
+        self.assertEqual(self.top.gromacs_dir, '/usr/share/gromacs/top')
+
+    def test_init_gmx_exe(self):
+        self.assertEqual(self.top.gmx_exe, '/usr/bin/gmx')
+
+    def test_init_pdb(self):
+        self.top.add_pdb('pentapeptide.pdb')
+        self.assertIsInstance(self.top.pdb, gml.Pdb)
+
+    def test_init_ignore_ifdef(self):
+        top = gml.Top('pentapeptide.top', ignore_ifdef=True)
+        self.assertTrue(self.top.ignore_ifdef)
+
+    def test_init_define(self):
+        top = gml.Top('pentapeptide.top', define={'TEST': 1})
+        self.assertEqual(top.defines['TEST'], 1)
+
+    def test_init_keep_all(self):
+        top = gml.Top('pentapeptide.top', keep_all=True)
+        self.assertTrue(top.keep_all)
+
+    def test_init_suppress(self):
+        top = gml.Top('pentapeptide.top', suppress=True)
+        self.assertTrue(top.suppress)
+
+    def test_init_amber(self):
+        top = gml.Top('', amber=True)
+        self.assertTrue('#define _FF_AMBER' in top._contents[0])
+
+    def test_init_charmm(self):
+        top = gml.Top('', charmm=True)
+        self.assertTrue('#define _FF_CHARMM' in top._contents[0])
+
+    def test_from_selection_valid(self):
+        selection = 'resid 1'
+        subtop = self.top.from_selection(selection)
+        self.assertIsInstance(subtop, gml.Top)
+
+    def test_from_selection_invalid(self):
+        selection = 'invalid selection'
+        with self.assertRaises(RuntimeError):
+            self.top.from_selection(selection)
+
+    def test_save_from_selection_valid(self):
+        selection = 'resid 1'
+        self.top.save_from_selection(selection, 'subsystem.top')
+        self.assertTrue(os.path.exists('subsystem.top'))
+        os.remove('subsystem.top')
+
+    def test_save_from_selection_invalid(self):
+        selection = 'invalid selection'
+        with self.assertRaises(RuntimeError):
+            self.top.save_from_selection(selection, 'subsystem.top')
+
+    def test_init_pdb(self):
+        top = gml.Top('pentapeptide.top', pdb='pentapeptide.pdb')
+        self.assertIsInstance(top.pdb, gml.Pdb)
+
+    def test_add_pdb_invalid(self):
+        with self.assertRaises(FileNotFoundError):
+            self.top.add_pdb('invalid.pdb')
+
+    def test_add_ff_params_valid(self):
+        self.top.add_ff_params('bonds')
+        self.assertIsEqual(len(self.top.molecules[0].bonds_section.entries_bonded[0].params_state_a), 2)
+
+    def test_add_ff_params_invalid(self):
+        with self.assertRaises(KeyError):
+            self.top.add_ff_params('invalid_section')
+
+
+
+    def test_load_frcmod_valid(self):
+        self.top.load_frcmod('valid.frcmod')
+        self.assertIsNotNone(self.top.parameters.get_subsection('bonds'))
+
+    def test_load_frcmod_invalid(self):
+        with self.assertRaises(FileNotFoundError):
+            self.top.load_frcmod('invalid.frcmod')
+
+    def test_add_molecule_from_file_valid(self):
+        self.top.add_molecule_from_file('valid.itp')
+        self.assertIsNotNone(self.top.get_molecule('NEW_MOL'))
+
+    def test_add_molecule_from_file_invalid(self):
+        with self.assertRaises(FileNotFoundError):
+            self.top.add_molecule_from_file('invalid.itp')
+
+    def test_add_molecule_from_file_molnames(self):
+        self.top.add_molecule_from_file('valid.itp', molnames=['NEW_MOL'])
+        self.assertIsNotNone(self.top.get_molecule('NEW_MOL'))
+
+    def test_add_molecule_from_file_molcount(self):
+        self.top.add_molecule_from_file('valid.itp', molcount=5)
+        self.assertEqual(self.top.nmol('NEW_MOL'), 5)
+
+    def test_add_molecule_from_file_prefix_type(self):
+        self.top.add_molecule_from_file('valid.itp', prefix_type='TEST')
+        mol = self.top.get_molecule('NEW_MOL')
+        self.assertTrue('TEST' in mol.atoms[0].type)
+
+    def test_add_parameters_from_file_valid(self):
+        self.top.add_parameters_from_file('valid.itp')
+        self.assertIsNotNone(self.top.parameters.get_subsection('bonds'))
+
+    def test_add_parameters_from_file_invalid(self):
+        with self.assertRaises(FileNotFoundError):
+            self.top.add_parameters_from_file('invalid.itp')
+
+    def test_add_parameters_from_file_sections(self):
+        self.top.add_parameters_from_file('valid.itp', sections=['bonds'])
+        self.assertIsNotNone(self.top.parameters.get_subsection('bonds'))
+
+    def test_add_parameters_from_file_overwrite(self):
+        self.top.add_parameters_from_file('valid.itp', overwrite=True)
+        self.assertIsNotNone(self.top.parameters.get_subsection('bonds'))
+
+    def test_add_parameters_from_file_prefix_type(self):
+        self.top.add_parameters_from_file('valid.itp', prefix_type='TEST')
+        bonds = self.top.parameters.get_subsection('bonds')
+        self.assertTrue('TEST' in bonds.entries_param[0].types[0])
+
+
 if __name__ == "__main__":
     unittest.main()
 

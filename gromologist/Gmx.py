@@ -94,7 +94,7 @@ def find_gmx_dir(suppress: bool = False, mpi: bool = False) -> (str, str):
     if not gmx and not mpi:
         gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
     if not gmx:
-        gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
+        gmx = os.popen('which gmx_mpi_d 2> /dev/null').read().strip()
     if gmx:
         gmx_dir = '/'.join(gmx.split('/')[:-2]) + '/share/gromacs/top'
         if not suppress:

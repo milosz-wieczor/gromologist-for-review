@@ -416,7 +416,7 @@ class CrooksPool:
         else:
             plu = ''
         multi = ' '.join(['run{}_l{}'.format(w.id, w.initlambda) for w in self.workers])
-        gmx_mpi = gml.find_gmx_dir(mpi=True)
+        gmx_mpi = gml.find_gmx_dir(mpi=True)[1]
         if not all(['{}.gro'.format(tpr) in os.listdir('run{}_l{}'.format(w.id, w.initlambda)) for w in self.workers]):
             for multi_batch in [multi[ncpus*i : ncpus*(i+1)] for i in range(len(multi) // ncpus)]:
                 print(gml.gmx_command(f'mpiexec {gmx_mpi}', 'mdrun', deffnm=tpr, v=plu, cpi=True,
@@ -530,7 +530,7 @@ class Crooks:
                                                         frame=frame), shell=True)
             os.remove('mdout.mdp')
 
-    os.chdir('..')
+        os.chdir('..')
 
     def analyze_me(self):
         """

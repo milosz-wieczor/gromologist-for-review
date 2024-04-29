@@ -77,16 +77,22 @@ def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
         outfile.write(mdp)
 
 
-def find_gmx_dir(suppress: bool = False) -> (str, str):
+def find_gmx_dir(suppress: bool = False, mpi: bool = False) -> (str, str):
     """
     Attempts to find Gromacs internal files to fall back to
     when default .itp files are included using the
     #include statement
+    :param suppress: bool, whether to suppress messaging
+    :param mpi: bool, whether to specifically look for gmx_mpi
     :return: tuple of str, path to share/gromacs/top directory and path to gmx executable
     """
-    gmx = os.popen('which gmx 2> /dev/null').read().strip()
+    gmx = False
+    if not mpi:
+        gmx = os.popen('which gmx 2> /dev/null').read().strip()
     if not gmx:
         gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
+    if not gmx and not mpi:
+        gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
     if not gmx:
         gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
     if gmx:

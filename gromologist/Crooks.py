@@ -4,6 +4,8 @@ import gromologist as gml
 import os
 from math import ceil
 from shutil import copy
+from subprocess import call
+
 # optional?
 import numpy as np
 from scipy.integrate import simps
@@ -90,21 +92,22 @@ class CrooksPool:
         runs grompp and mdrun in parallel
         :return: None
         """
+        exec = ProcessPoolExecutor
         self.drop_frames()
         if self.mutate:
             print('mutating structures...'.format())
             with ProcessPoolExecutor() as executor:
                 executor.map(self.apply_pmx, [(self.mutate, self.wt_only, w.id, w.initlambda, self.pmxff)
                                               for w in self.workers])
-        with ProcessPoolExecutor() as executor:
+        with exec() as executor:
             executor.map(self.run_worker, [(w, 'mini', self.stride, self.temperature, self.init_nst, self.nst,
                                             self.lincs, self.extra_args, self.mini) for w in self.workers])
         self.mdrun_multi('mini')
-        with ProcessPoolExecutor() as executor:
+        with exec() as executor:
             executor.map(self.run_worker, [(w, 'eq', self.stride, self.temperature, self.init_nst, self.nst,
                                             self.lincs, self.extra_args, self.mini) for w in self.workers])
         self.mdrun_multi('eq')
-        with ProcessPoolExecutor() as executor:
+        with exec() as executor:
             executor.map(self.run_worker, [(w, 'prod', self.stride, self.temperature, self.init_nst, self.nst,
                                             self.lincs, self.extra_args, self.mini) for w in self.workers])
         self.mdrun_multi('prod')
@@ -412,10 +415,11 @@ class CrooksPool:
             plu = ' -plumed plumed.dat '
         else:
             plu = ''
-        multi = ['run{}_l{}'.format(w.id, w.initlambda) for w in self.workers]
+        multi = ' '.join(['run{}_l{}'.format(w.id, w.initlambda) for w in self.workers])
+        gmx_mpi = gml.find_gmx_dir(mpi=True)
         if not all(['{}.gro'.format(tpr) in os.listdir('run{}_l{}'.format(w.id, w.initlambda)) for w in self.workers]):
             for multi_batch in [multi[ncpus*i : ncpus*(i+1)] for i in range(len(multi) // ncpus)]:
-                print(gml.gmx_command(f'mpiexec {self.gmx}', 'mdrun', deffnm=tpr, v=plu, cpi=True,
+                print(gml.gmx_command(f'mpiexec {gmx_mpi}', 'mdrun', deffnm=tpr, v=plu, cpi=True,
                                       multidir=multi_batch, answer=True))
 
     @staticmethod
@@ -513,18 +517,20 @@ class Crooks:
         """
         tpr = 'eq' if runtype == 'eq' else 'mini' if runtype == 'mini' else 'dyn'
         mdp = 'mini' if runtype == 'mini' else 'md'
-        trr = ' ' if runtype in ['mini', 'eq'] else ' -t eq{}_l{}.trr -time {} '.format(self.id, self.initlambda,
-                                                                                        self.master.init_length)
+        trr = '' if runtype in ['mini', 'eq'] else ' -t eq.trr -time {} '.format(self.master.init_length)
         os.chdir('run{}_l{}'.format(self.id, self.initlambda))
         master_top = self.master.top if int(self.initlambda) == 0 else self.master.top2
-        frame = 'mini{}_l{}.gro'.format(self.id, self.initlambda) if runtype == 'eq' \
+        frame = 'mini.gro'.format(self.id, self.initlambda) if runtype == 'eq' \
             else 'frame{}_l{}.gro'.format(self.id, self.initlambda)
-        if '{}{}_l{}.tpr'.format(tpr, self.id, self.initlambda) not in os.listdir('.'):
+        if '{}.tpr'.format(tpr) not in os.listdir('.'):
             top = master_top if master_top.startswith('/') else '../' + master_top
-            print(gml.gmx_command(self.master.gmx, f=f'{mdp}.mdp', p=top, c=frame, answer=True,
-                                  o=f'{tpr}{self.id}_l{self.initlambda}.tpr', v=trr, maxwarn=self.master.maxwarn))
+            call('{gmx} grompp -f {mdp}.mdp -p {top} -c {frame} -o {tpr}.tpr {trr}'
+                 '-maxwarn {mw} >> gmp.log 2>&1'.format(gmx=self.master.gmx, l=self.initlambda, trr=trr,
+                                                        top=top, mw=self.master.maxwarn, tpr=tpr, mdp=mdp,
+                                                        frame=frame), shell=True)
             os.remove('mdout.mdp')
-        os.chdir('..')
+
+    os.chdir('..')
 
     def analyze_me(self):
         """

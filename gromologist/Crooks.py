@@ -345,16 +345,16 @@ class CrooksPool:
                 struct = self.struct2 if i == 1 else self.struct
                 nfr = gml.frames_count(self.xtc[i], self.gmx)
                 if not self.random:
-                    frames = np.linspace([0], [nfr - 0.00001], self.nmax).astype(int)[
+                    frames = np.linspace(0, nfr - 0.00001, self.nmax).astype(int)[
                              self.offset:self.offset + self.nruns]
                 else:
                     frames = np.random.choice(nfr, size=self.nmax, replace=False)
-                with open('frames.ndx') as ndxf:
+                with open('frames.ndx', 'w') as ndxf:
                     ndxf.write(' [ frames ] \n')
                     for m in range(ceil(nfr/15.0)):
-                        ndxf.write(' '.join([str(x) for x in frames[15*m:15*(m+1)]]) + '\n')
+                        ndxf.write(' '.join([str(x + 1) for x in frames[15*m:15*(m+1)]]) + '\n')
                 gml.gmx_command(self.gmx, 'trjconv', fr='frames.ndx', f=self.xtc[i], s=struct, sep=True, o='frame.gro')
-                for fr in range(nfr):
+                for fr in range(len(frames)):
                     os.rename(f'frame{fr}.gro', f'run{fr}_l{i}/frame{fr}_l{i}.gro')
             else:
                 print("frames for lambda {} already present, skipping generating new ones".format(i))

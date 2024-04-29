@@ -353,7 +353,8 @@ class CrooksPool:
                     ndxf.write(' [ frames ] \n')
                     for m in range(ceil(nfr/15.0)):
                         ndxf.write(' '.join([str(x + 1) for x in frames[15*m:15*(m+1)]]) + '\n')
-                gml.gmx_command(self.gmx, 'trjconv', fr='frames.ndx', f=self.xtc[i], s=struct, sep=True, o='frame.gro')
+                gml.gmx_command(self.gmx, 'trjconv', fr='frames.ndx', f=self.xtc[i], s=struct, sep=True,
+                                o='frame.gro', pass_values=[0, 0])
                 for fr in range(len(frames)):
                     os.rename(f'frame{fr}.gro', f'run{fr}_l{i}/frame{fr}_l{i}.gro')
             else:

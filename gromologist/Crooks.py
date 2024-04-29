@@ -96,13 +96,15 @@ class CrooksPool:
         self.drop_frames()
         if self.mutate:
             print('mutating structures...'.format())
-            with ProcessPoolExecutor() as executor:
+            with exec() as executor:
                 executor.map(self.apply_pmx, [(self.mutate, self.wt_only, w.id, w.initlambda, self.pmxff)
                                               for w in self.workers])
-        with exec() as executor:
-            executor.map(self.run_worker, [(w, 'mini', self.stride, self.temperature, self.init_nst, self.nst,
-                                            self.lincs, self.extra_args, self.mini) for w in self.workers])
-        self.mdrun_multi('mini')
+        if self.mini:
+            with exec() as executor:
+                print("preparing minimization...")
+                executor.map(self.run_worker, [(w, 'mini', self.stride, self.temperature, self.init_nst, self.nst,
+                                                self.lincs, self.extra_args, self.mini) for w in self.workers])
+            self.mdrun_multi('mini')
         with exec() as executor:
             executor.map(self.run_worker, [(w, 'eq', self.stride, self.temperature, self.init_nst, self.nst,
                                             self.lincs, self.extra_args, self.mini) for w in self.workers])
@@ -524,10 +526,12 @@ class Crooks:
             else 'frame{}_l{}.gro'.format(self.id, self.initlambda)
         if '{}.tpr'.format(tpr) not in os.listdir('.'):
             top = master_top if master_top.startswith('/') else '../' + master_top
-            call('{gmx} grompp -f {mdp}.mdp -p {top} -c {frame} -o {tpr}.tpr {trr}'
-                 '-maxwarn {mw} >> gmp.log 2>&1'.format(gmx=self.master.gmx, l=self.initlambda, trr=trr,
-                                                        top=top, mw=self.master.maxwarn, tpr=tpr, mdp=mdp,
-                                                        frame=frame), shell=True)
+            gml.gmx_command(self.master.gmx, f=f'{mdp}.mdp', p=top, c=frame, answer=True,
+                            o=f'{tpr}.tpr', v=trr, maxwarn=self.master.maxwarn)
+            # call('{gmx} grompp -f {mdp}.mdp -p {top} -c {frame} -o {tpr}.tpr {trr}'
+            #      '-maxwarn {mw} >> gmp.log 2>&1'.format(gmx=self.master.gmx, l=self.initlambda, trr=trr,
+            #                                             top=top, mw=self.master.maxwarn, tpr=tpr, mdp=mdp,
+            #                                             frame=frame), shell=True)
             os.remove('mdout.mdp')
 
         os.chdir('..')

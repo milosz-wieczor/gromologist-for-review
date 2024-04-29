@@ -16,7 +16,7 @@ from sklearn.model_selection import LeaveOneOut
 
 
 class CrooksPool:
-    def __init__(self, struct, top, xtc0, xtc1, nruns=100, length=500, gmx=None, maxwarn=1, convergence=False,
+    def __init__(self, struct, top, xtc0, xtc1, nruns=100, length=500, gmx=None, maxwarn=2, convergence=False,
                  alias='free', debug=False, offset=0, nmax=None, init_eq=50, temperature=300, stride=20,
                  plumed='', top2='', tmpi=True, mutate='', pmxff='', wt_only=False, mini=False, struct2='',
                  plumed2='', hbond=False, dt=2, weights=None, random=False, **kwargs):
@@ -100,12 +100,11 @@ class CrooksPool:
             with exec(ncpu) as executor:
                 executor.map(self.apply_pmx, [(self.mutate, self.wt_only, w.id, w.initlambda, self.pmxff)
                                               for w in self.workers])
-        if self.mini:
-            with exec(ncpu) as executor:
-                print("preparing minimization...")
-                executor.map(self.run_worker, [(w, 'mini', self.stride, self.temperature, self.init_nst, self.nst,
+        with exec(ncpu) as executor:
+            print("preparing minimization...")
+            executor.map(self.run_worker, [(w, 'mini', self.stride, self.temperature, self.init_nst, self.nst,
                                                 self.lincs, self.extra_args, self.mini, self.dt) for w in self.workers])
-            self.mdrun_multi('mini')
+        self.mdrun_multi('mini')
         with exec(ncpu) as executor:
             print("preparing equilibration...")
             executor.map(self.run_worker, [(w, 'eq', self.stride, self.temperature, self.init_nst, self.nst,
@@ -120,16 +119,14 @@ class CrooksPool:
     def run_worker(data):
         worker, runtype, stride, temperature, init_nst, nst, lincs, extra_args, mini, dt = data
         if runtype == 'mini':
-            # runtype, stride, temperature, init_nst, nst, lincs, dt, extra_args
-            worker.prep_runs('eq', stride, temperature, init_nst, nst, lincs, dt, extra_args)
             if mini:
                 worker.prep_runs(runtype, stride, temperature, init_nst, nst, lincs, dt, extra_args)
                 # We can minimize if required
                 worker.log('running energy minimization...'.format())
                 worker.grompp_me(runtype)
             else:
-                worker.cp('run{id}_l{lam}/frame{id}_l{lam}.gro'.format(id=worker.id, lam=worker.initlambda),
-                          'mini{id}_l{lam}.gro'.format(id=worker.id, lam=worker.initlambda))
+                worker.cp(f'run{worker.id}_l{worker.initlambda}/frame{worker.id}_l{worker.initlambda}.gro',
+                          'mini.gro'.format())
         elif runtype == 'eq':
             # First there's equilibration:
             worker.prep_runs(runtype, stride, temperature, init_nst, nst, lincs, dt, extra_args)
@@ -169,12 +166,16 @@ class CrooksPool:
         np.savetxt('prob_0.dat', np.hstack([grid, dens0]), fmt='%10.5f')
         np.savetxt('prob_1.dat', np.hstack([grid, dens1]), fmt='%10.5f')
         result_bar = self.solve_bar(works_0, works_1)
+        result_cgi = self.solve_cgi(works_0, works_1)
+        result_kde = self.solve_kde(dens0, dens1, grid)
         np.savetxt('normalized_overlap_{}.dat'.format(self.name), self.bhattacharyya(dens0, dens1, grid),
                    fmt='%10.5f')
         if self.convergence:
             self.analyze_convergence(works_0, works_1, grid)
         with open(f'result_{self.name}.dat', 'w') as out:
-            out.write(str(result_bar) + '\n')
+            out.write(f'Result from CGI: {result_cgi:8.3f}\n')
+            out.write(f'Result from KDE: {result_kde:8.3f}\n')
+            out.write(f'Result from BAR: {result_bar:8.3f} (should be the most accurate)\n')
 
     @staticmethod
     def bhattacharyya(d0, d1, grid):
@@ -337,6 +338,10 @@ class CrooksPool:
         plt.close()
 
     def drop_frames(self):
+        """
+        Selects frames from the provided equilibrium trajectories, either in equal intervals or randomly
+        :return: None
+        """
         for i in [0, 1]:
             for worker in [w for w in self.workers if w.initlambda == i]:
                 worker.mkdir()
@@ -412,6 +417,13 @@ class CrooksPool:
         crook.grompp_me(runtype)
 
     def mdrun_multi(self, runtype):
+        """
+        Runs gmx mdrun with the -multidir option for maximum efficiency
+        :param runtype: str, 'mini', 'eq' or 'dyn'
+        :return: None
+        """
+        if runtype == 'mini' and not self.mini:
+            return
         ncpus = self.ncpus()
         if len(self.workers) % ncpus != 0:
             raise RuntimeError("Number of simulations should be divisible by the number of available CPUs, but {} and {} were specified")

@@ -209,11 +209,7 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
     :return: dict of lists, one list of per-frame values per each selected term
     """
     if not gmx:
-        gmx = os.popen('which gmx 2> /dev/null').read().strip()
-    if not gmx:
-        gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
-    if not gmx:
-        gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
+        gmx = gml.find_gmx_dir()[1]
     if (group_b or group_a) and not (group_a and group_b):
         raise RuntimeError("If you're choosing individual groups, please specify both group_a and group_b")
     if group_a and group_b:
@@ -278,11 +274,7 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
     :return: dict of lists, one list of per-frame values per each selected term
     """
     if not gmx:
-        gmx = os.popen('which gmx 2> /dev/null').read().strip()
-    if not gmx:
-        gmx = os.popen('which gmx_mpi 2> /dev/null').read().strip()
-    if not gmx:
-        gmx = os.popen('which gmx_d 2> /dev/null').read().strip()
+        gmx = gml.find_gmx_dir()[1]
     gen_mdp('rerun.mdp', free__energy="yes", fep__lambdas="0 1", nstdhdl="1", separate__dhdl__file="yes",
             dhdl__derivatives="yes", init__lambda__state="0")
     print(

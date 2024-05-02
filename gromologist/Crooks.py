@@ -19,7 +19,7 @@ class CrooksPool:
     def __init__(self, struct, top, xtc0, xtc1, nruns=100, length=500, gmx=None, maxwarn=2, convergence=False,
                  alias='free', debug=False, offset=0, nmax=None, init_eq=50, temperature=300, stride=20,
                  plumed='', top2='', tmpi=True, mutate='', pmxff='', wt_only=False, mini=False, struct2='',
-                 plumed2='', hbond=False, dt=2, weights=None, random=False, **kwargs):
+                 plumed2='', hbond=False, dt=2, weights=None, random=False, ncpu=None, **kwargs):
         """
         A pool of workers that will initialize all simulations
         and collect the results afterwards
@@ -77,6 +77,7 @@ class CrooksPool:
             self.gmx = gmx
         self.gmx = 'gmx' if gmx is None else gmx
         self.tmpi = tmpi
+        self.ncpu = self.ncpus() if ncpu is None else ncpu
         self.workers = [Crooks(self, n, lam) for n in range(offset, self.nruns + offset) for lam in [0, 1]]
         self.analysis_only = [Crooks(self, n, lam) for n in range(offset) for lam in [0, 1]]
         if weights is None:
@@ -292,7 +293,7 @@ class CrooksPool:
             kde = KernelDensity(kernel='gaussian', bandwidth=bandwidth).fit(y.reshape(-1, 1))
         return np.exp(kde.score_samples(x)).reshape(-1, 1)
 
-    def plot_results(self, w0, w1, p0, p1, result_kde, result_cgi, result_bar, result_bar_pmx):
+    def plot_results(self, w0='work_0.dat', w1='work_1.dat', p0='prob_0.dat', p1='prob_1.dat'):
         """
         Plots the two densities, their intersection
         and all individual work values at the bottom;
@@ -302,9 +303,6 @@ class CrooksPool:
         :param w1: np.array, -work values for B->A
         :param p0: np.array, X:Y two columns for the first density
         :param p1: np.array, X:Y two columns for the second density
-        :param result_kde: float, KDE result
-        :param result_cgi: float, CGI result
-        :param result_bar: float, BAR result
         :return: None
         """
         try:
@@ -314,12 +312,8 @@ class CrooksPool:
         fig, axes = plt.subplots(2, 1)
         axes[0].plot(*p0.T, c='C0')
         axes[0].plot(*p1.T, c='C1')
-        with open('dG_{}.dat'.format(self.name), 'w') as outfile:
-            axes[0].axvline(result_kde, ls='--', c='k', lw=3)
-            outfile.write("KDE: " + str(result_kde) + '\n')
-            outfile.write("CGI: " + str(result_cgi) + '\n')
-            outfile.write("BAR: " + str(result_bar) + '\n')
-            outfile.write("BAR-PMX: " + str(result_bar_pmx) + '\n')
+        result_bar = self.solve_bar(w0, w1)
+        axes[0].axvline(result_bar, ls='--', c='k', lw=3)
         axes[0].fill_between(*p0.T, color='C0', alpha=0.25)
         axes[0].fill_between(*p1.T, color='C1', alpha=0.25)
         axes[0].plot(*p1.T, c='C1')

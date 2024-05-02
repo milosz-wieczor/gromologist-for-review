@@ -5,7 +5,7 @@ import numpy as np
 import gromologist as gml
 from typing import Union, Optional, TypeVar, Tuple
 from itertools import combinations_with_replacement
-from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Pool
 from copy import deepcopy
 
 gmlMod = TypeVar("gmlMod", bound="Mod")
@@ -614,7 +614,7 @@ class ThermoDiff:
                     print(f"Calculating rerun for {str(mod)}, traj {traj['path']}")
                     pairs.append((mod, traj, datasets))
         if parallel:
-            with ProcessPoolExecutor(maxcores) as p:
+            with Pool(maxcores) as p:
                 deriv_dicts = p.map(self.launch_rerun, pairs)
         else:
             deriv_dicts = [self.launch_rerun(p) for p in pairs]
@@ -663,6 +663,8 @@ class ThermoDiff:
         for data extraction
         :return: None
         """
+        if not gml.find_gmx_dir()[1]:
+            raise RuntimeError("ERROR: Gromacs executable not identified, cannot perform reruns")
         self.prep_files()
         self.launch_reruns(parallel, maxcores)
         self.calc_weights()

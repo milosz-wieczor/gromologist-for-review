@@ -72,13 +72,7 @@ class Mod:
         self.topname = path
         final_name = self.topname + '/' + name + '-' + self.top.fname.split('/')[-1]
         if not os.path.exists(final_name):
-            bkptop = self.top
-            self.top = deepcopy(self.top)
-            # we only need to have the fully modified top before writing it
-            self.mod()
             self.top.save_top(final_name)
-            # once it's written, we can return to the reference to the original
-            self.top = bkptop
         else:
             print(f'file {final_name} already exists, leaving as it is')
 
@@ -114,8 +108,6 @@ class ModAtom(Mod):
             raise ValueError("no mode selected appropriate for an ModAtom object")
         self.types_are_consistent()
         self.type = self.atoms[0].type
-
-    def mod(self):
         if not self.chg:
             self.top.parameters.clone_type(atomtype=self.type, prefix='Y')
         self.mod_sigma_eps()
@@ -200,8 +192,6 @@ class ModNbfix(Mod):
         else:
             self.prefixes = ['Q', 'Y']
         self.types_are_consistent()
-
-    def mod(self):
         for type, prefix in zip(self.types, self.prefixes):
             if prefix + type not in self.top.defined_atomtypes:
                 self.top.parameters.clone_type(atomtype=type, prefix=prefix)
@@ -288,8 +278,6 @@ class ModParam(Mod):
         self.types_are_consistent()
         self.types = [atoms[0].type for atoms in self.atoms]
         self.nums = [[atom.num for atom in atomset] for atomset in self.atoms]
-
-    def mod(self):
         if self.ang:
             for molname in list({atom.molname for atomset in self.atoms for atom in atomset}):
                 self.top.get_molecule(molname).add_ff_params('angles')
@@ -425,9 +413,9 @@ class ThermoDiff:
         print(f"Finding all combinations between types: {' '.join(types)}")
         for type_pair in sorted(list(combinations_with_replacement(types, 2))):
             print(f"Adding modification: {type_pair[0]}, {type_pair[1]}")
-            self.add_mod(topology, structure, modtype='n',
+            self.add_mod(deepcopy(topology), structure, modtype='n',
                          selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
-            self.add_mod(topology, structure, modtype='m',
+            self.add_mod(deepcopy(topology), structure, modtype='m',
                          selections=[f'type {type_pair[0]}', f'type {type_pair[1]}'])
 
     def add_all_sigma_mods(self, top: Union[str, gml.Top], structure: str, exclude: Optional[list] = None,
@@ -478,7 +466,7 @@ class ThermoDiff:
         for n, dih in enumerate(dihtypes):
             sels = [f'type {t}' for t in dih[0]]
             print(f"Adding modification: {', '.join(sels)}, {n}/{len(dihtypes)}")
-            self.add_mod(topology, structure, 'd', sels, dih[1])
+            self.add_mod(deepcopy(topology), structure, 'd', sels, dih[1])
 
     def add_all_charge_mods(self, top: Union[str, gml.Top], structure: str,
                             molecules: Optional[Union[str, list]] = None):
@@ -499,7 +487,7 @@ class ThermoDiff:
         mods_list = list(set([(a.atomname, a.resname) for mol in mols for a in mol.atoms]))
         for mod in mods_list:
             print(f"Adding modification: {mod[0]}, {mod[1]}")
-            self.add_mod(topology, structure, modtype='c',
+            self.add_mod(deepcopy(topology), structure, modtype='c',
                          selections=[f'name {mod[0]} and resname {mod[1]}'])
 
     def _add_lj_mods(self, top: Union[str, gml.Top], structure: str, which: str, exclude: Optional[list] = None,
@@ -531,7 +519,7 @@ class ThermoDiff:
                 continue
             assert which in ['sigma', 'epsilon']
             print(f"Adding {which} modification: {atomtype}")
-            self.add_mod(topology, structure, modtype=which[0],
+            self.add_mod(deepcopy(topology), structure, modtype=which[0],
                          selections=[f'type {atomtype}'])
 
     def add_traj(self, top: Union[str, gml.Top], traj: str, datasets: Optional[dict] = None,

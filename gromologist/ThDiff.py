@@ -72,7 +72,8 @@ class Mod:
         self.topname = path
         final_name = self.topname + '/' + name + '-' + self.top.fname.split('/')[-1]
         if not os.path.exists(final_name):
-            bkptop = deepcopy(self.top)
+            bkptop = self.top
+            self.top = deepcopy(self.top)
             # we only need to have the fully modified top before writing it
             self.mod()
             self.top.save_top(final_name)

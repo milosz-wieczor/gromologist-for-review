@@ -293,7 +293,8 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
 
 
 def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx: Optional[str] = 'gmx',
-                                 traj: Optional[str] = None, quiet: Optional[bool] = True) -> bool:
+                                 traj: Optional[str] = None, quiet: Optional[bool] = True, group_a: Optional[str] = None,
+                                 group_b: Optional[str] = None) -> bool:
     """
     Given two topologies and a structure file, checks if both yield
     the same potential energy
@@ -302,10 +303,12 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
     :param topfile2: str, path to the other Top file
     :param gmx: str, optional path to the gmx executable if different than simply 'gmx'
     :param quiet: bool, optional to silence gmx output
+    :param group_a: str, 1st selection for which pairwise interactions will be calculated
+    :param group_b: str, 2nd selection for which pairwise interactions will be calculated
     :return: bool, whether the energies are identical
     """
-    en1 = calc_gmx_energy(struct, topfile1, gmx, terms='all', quiet=quiet, traj=traj)
-    en2 = calc_gmx_energy(struct, topfile2, gmx, terms='all', quiet=quiet, traj=traj)
+    en1 = calc_gmx_energy(struct, topfile1, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
+    en2 = calc_gmx_energy(struct, topfile2, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
     print(f"Topology 1 has energy {en1['potential']}, topology 2 has energy {en2['potential']}")
     if all([en1['potential'][i] == en2['potential'][i] for i in range(len(en1['potential']))]):
         return True

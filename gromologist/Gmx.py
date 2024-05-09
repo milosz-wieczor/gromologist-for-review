@@ -261,7 +261,7 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
 
 
 def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bool = False,
-                  cleanup: bool = True, **kwargs) -> list:
+                  cleanup: bool = True, abs_path = '', **kwargs) -> list:
     """
     Calculates selected energy terms given a structure/topology pair or structure/topology/trajectory set.
     :param struct: str, path to the structure file
@@ -271,19 +271,24 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
     :param traj: str, path to the trajectory (optional)
     :param cleanup: bool, whether to remove intermediate files (useful for debugging)
     :param kwargs: dict, additional "-key value" parameter sets to be passed to mdrun
+    :param abs_path: str, absolute path for all temporarily created files
     :return: dict of lists, one list of per-frame values per each selected term
     """
     if not gmx:
         gmx = gml.find_gmx_dir()[1]
-    gen_mdp('rerun.mdp', free__energy="yes", fep__lambdas="0 1", nstdhdl="1", separate__dhdl__file="yes",
+    mdp = abs_path + 'rerun.mdp'
+    tpr = abs_path + 'rerun.tpr'
+    log = abs_path + 'rerun.log'
+    edr = abs_path + 'rerun.edr'
+    gen_mdp(mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="1", separate__dhdl__file="yes",
             dhdl__derivatives="yes", init__lambda__state="0")
     print(
-        gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5, answer=True))
-    print(gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj, answer=True,
-                      ntomp=1, ntmpi=1, **kwargs))
+        gmx_command(gmx, 'grompp', quiet=quiet, f=mdp, p=topfile, c=struct, o=tpr, maxwarn=5, answer=True))
+    print(gmx_command(gmx, 'mdrun', quiet=quiet, s=tpr, e=edr, g=log, rerun=struct if traj is None else traj,
+                      answer=True, ntomp=1, ntmpi=1, **kwargs))
     out = read_xvg('rerun.xvg', cols=[0])
     if cleanup:
-        to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log']
+        to_remove = [mdp, tpr, log, edr, abs_path + 'mdout.mdp']
         for filename in to_remove:
             try:
                 os.remove(filename)

@@ -634,20 +634,21 @@ class ThermoDiff:
         """
         derivatives = {}
         mod, traj, datasets = mod_traj_ds
-        mod.goto_mydir()
-        if 'rerun.xvg' not in os.listdir('.'):
-            derivatives[(mod.counter, traj['id'])] = gml.calc_gmx_dhdl('../../' + mod.structure,
-                                                                       str(mod) + '-' + mod.top.top,
-                                                                       '../../' + traj['path'],
+        mdir = mod.topname + '/'
+        if 'rerun.xvg' not in os.listdir(mdir):
+            print(f"Running rerun nr {mod.counter} in dir {os.getcwd()}")
+            derivatives[(mod.counter, traj['id'])] = gml.calc_gmx_dhdl(mdir + '../../' + mod.structure,
+                                                                       mdir + str(mod) + '-' + mod.top.top,
+                                                                       mdir + '../../' + traj['path'], abs_path=mdir,
                                                                        nb='cpu', pme='cpu', cleanup=True)
         else:
-            derivatives[(mod.counter, traj['id'])] = gml.read_xvg('rerun.xvg', [0])
+            print(f"Already calculated. Reading results for rerun {mod.counter} from dir {os.getcwd()}")
+            derivatives[(mod.counter, traj['id'])] = gml.read_xvg(mdir + 'rerun.xvg', [0])
         for key in datasets.keys():
             if not len(derivatives[(mod.counter, traj['id'])]) == len(datasets[key]):
                 raise RuntimeError(f"The number of points in dataset {key} for trajectory num {traj['id']} "
                                    f"({len(datasets[key])}) does not match the derivatives "
                                    f"({len(derivatives[(mod.counter, traj['id'])])})")
-        os.chdir('..')
         return derivatives
 
     def calc_weights(self):

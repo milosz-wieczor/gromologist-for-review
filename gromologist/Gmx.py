@@ -280,15 +280,16 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
     tpr = abs_path + 'rerun.tpr'
     log = abs_path + 'rerun.log'
     edr = abs_path + 'rerun.edr'
+    dhdl = abs_path + 'rerun.xvg'
     gen_mdp(mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="1", separate__dhdl__file="yes",
             dhdl__derivatives="yes", init__lambda__state="0")
     print(
         gmx_command(gmx, 'grompp', quiet=quiet, f=mdp, p=topfile, c=struct, o=tpr, maxwarn=5, answer=True))
     print(gmx_command(gmx, 'mdrun', quiet=quiet, s=tpr, e=edr, g=log, rerun=struct if traj is None else traj,
-                      answer=True, ntomp=1, ntmpi=1, **kwargs))
-    out = read_xvg('rerun.xvg', cols=[0])
+                      dhdl=dhdl, answer=True, ntomp=1, ntmpi=1, **kwargs))
+    out = read_xvg(dhdl, cols=[0])
     if cleanup:
-        to_remove = [mdp, tpr, log, edr, abs_path + 'mdout.mdp']
+        to_remove = [mdp, tpr, log, edr]
         for filename in to_remove:
             try:
                 os.remove(filename)

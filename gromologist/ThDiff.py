@@ -5,7 +5,7 @@ import numpy as np
 import gromologist as gml
 from typing import Union, Optional, TypeVar, Tuple
 from itertools import combinations_with_replacement
-from multiprocessing import Pool
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 gmlMod = TypeVar("gmlMod", bound="Mod")
@@ -617,11 +617,10 @@ class ThermoDiff:
                     print(f"Calculating rerun for {str(mod)}, traj {traj['path']}")
                     pairs.append((mod, traj, datasets))
         if parallel:
-            with Pool(maxcores) as p:
-                p.map(self.launch_rerun, pairs)
+            with ThreadPoolExecutor(maxcores) as p:
+                deriv_dicts = p.map(self.launch_rerun, pairs)
         else:
-            [self.launch_rerun(p) for p in pairs]
-        deriv_dicts = [self.read_rerun(p) for p in pairs]
+            deriv_dicts = [self.launch_rerun(p) for p in pairs]
         for dd in deriv_dicts:
             self.derivatives.update(dd)
 
@@ -633,24 +632,16 @@ class ThermoDiff:
         :param mod_traj_ds: tuple, contains the mod, traj and dataset objects
         :return: None
         """
-        mod, traj, datasets = mod_traj_ds
-        mod.goto_mydir()
-        _ = gml.calc_gmx_dhdl('../../' + mod.structure, str(mod) + '-' + mod.top.top, '../../' + traj['path'], nb='cpu',
-                              pme='cpu')
-        os.chdir('..')
-
-    @staticmethod
-    def read_rerun(mod_traj_ds):
-        """
-        Launches an individual alchemical rerun and reads the data, can be parallelized
-        (skips the calculation if already performed)
-        :param mod_traj_ds: tuple, contains the mod, traj and dataset objects
-        :return: None
-        """
         derivatives = {}
         mod, traj, datasets = mod_traj_ds
         mod.goto_mydir()
-        derivatives[(mod.counter, traj['id'])] = gml.read_xvg('rerun.xvg', [0])
+        if 'rerun.xvg' not in os.listdir('.'):
+            derivatives[(mod.counter, traj['id'])] = gml.calc_gmx_dhdl('../../' + mod.structure,
+                                                                       str(mod) + '-' + mod.top.top,
+                                                                       '../../' + traj['path'],
+                                                                       nb='cpu', pme='cpu', cleanup=True)
+        else:
+            derivatives[(mod.counter, traj['id'])] = gml.read_xvg('rerun.xvg', [0])
         for key in datasets.keys():
             if not len(derivatives[(mod.counter, traj['id'])]) == len(datasets[key]):
                 raise RuntimeError(f"The number of points in dataset {key} for trajectory num {traj['id']} "

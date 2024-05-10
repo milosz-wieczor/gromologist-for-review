@@ -785,7 +785,7 @@ class ThermoDiff:
             unc_data = {st: 0 for st in states + [None]}
             counter = {st: 0 for st in states + [None]}
             if noe and not free_energy:
-                deriv_data = [x ** (-6) for x in deriv_data]
+                deriv_data = deriv_data ** (-6)
             # first preparing/sorting values into different states
             state_index = None
             if threshold is not None:

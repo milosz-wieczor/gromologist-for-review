@@ -939,14 +939,14 @@ class ThermoDiff:
                     outfile.write(f"{round(derivs[key][1] - derivs[key][0], 3)}\n")
 
     def print_discrete_derivatives(self, dataset: str, free_energy: bool, outfile: Optional[str] = None,
-                                   bootstrap: bool = False, target: Optional[list] = None):
+                                   bootstrap: bool = False, target: Optional[Union[list, float]] = None):
         """
         Prints discrete derivatives to the screen or a file
         :param dataset: str, for which dataset the derivatives should be selected
         :param free_energy: bool, whether the 1st state should be set to reference (equal to 0.0)
         :param outfile: str, optional filename if the result is to be printed to a file
         :param bootstrap: bool, whether to add uncertainty
-        :param target: list, if specified, will also calculate required change so that req_change = (target-mean)/derivative
+        :param target: list or float, if specified, will also calculate required change so that req_change = (target-mean)/derivative
         :return: None
         """
 
@@ -958,6 +958,10 @@ class ThermoDiff:
         uncerts = self.discrete_free_energy_derivative_uncertainties if free_energy else self.discrete_observable_derivative_uncertainties
         means = self.discrete_free_energy_means if free_energy else self.discrete_observable_means
         thrs = self.thresholds[dataset]
+        try:
+            _ = target[0]
+        except TypeError:
+            target = [target]
         for x in range(len(thrs)//2):
             x1 = round(thrs[2 * x], 3)
             x2 = round(thrs[2 * x + 1], 3)

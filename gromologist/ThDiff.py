@@ -849,7 +849,7 @@ class ThermoDiff:
                         mean_der[key] = mean_obs_der
                         mean_obs[key] = mean_data[key]
                     else:
-                        mean_obs[key] = mean_data[key] ** (-1/6)
+                        mean_obs[key] = mean_data[key] ** (-1/6) if mean_data[key] != 0 else 0
                         mdk = mean_data[key] ** (-7/6) if mean_data[key] != 0 else 0
                         mean_der[key] = -1/6 * mdk * mean_obs_der
                     if bootstrap:

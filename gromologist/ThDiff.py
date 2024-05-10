@@ -787,19 +787,26 @@ class ThermoDiff:
             if noe and not free_energy:
                 deriv_data = [x ** (-6) for x in deriv_data]
             # first preparing/sorting values into different states
-            for n in range(len(binning_data)):
-                state_index = None
-                if threshold is not None:
-                    for x, y in zip(threshold[::2], threshold[1::2]):
-                        if x <= binning_data[n] <= y:
-                            state_index = (round(x, 6), round(y, 6))
-                            break
-                else:
-                    state_index = binning_data[n]
-                vals_derivatives[state_index].append(derivs[n])
-                vals_data[state_index].append(deriv_data[n])
-                vals_weights[state_index].append(weights[n])
-                counter[state_index] += weights[n]
+            state_index = None
+            if threshold is not None:
+                # Create a boolean mask for each bin
+                bin_masks = [np.logical_and(binning_data >= x, binning_data < y) for x, y in
+                             zip(threshold[::2], threshold[1::2])]
+                # Round the bin edges
+                bin_edges = [(round(x, 6), round(y, 6)) for x, y in zip(threshold[::2], threshold[1::2])]
+                # Assign values to the corresponding bins
+                for mask, bin_edge in zip(bin_masks, bin_edges):
+                    vals_derivatives[bin_edge] = derivs[mask]
+                    vals_data[bin_edge] = deriv_data[mask]
+                    vals_weights[bin_edge] = weights[mask]
+                    counter[bin_edge] = np.sum(weights[mask])
+            else:
+                for val in sorted(list(set(binning_data))):
+                    inds = np.where(binning_data == val)[0]
+                    vals_derivatives[val].append(derivs[inds])
+                    vals_data[val].append(deriv_data[inds])
+                    vals_weights[val].append(weights[inds])
+                    counter[val] = np.sum(weights[inds])
             # then calculating the weighted means of all components
             for state_index in counter.keys():
                 if counter[state_index] > 0:

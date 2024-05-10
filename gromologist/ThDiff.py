@@ -708,7 +708,7 @@ class ThermoDiff:
         else:
             raise RuntimeError(f"Dataset {dataset} contains mixed numeric and non-numeric entries")
 
-    def get_flat_data(self, binning_dataset: str, deriv_dataset: str, mod) -> Tuple[list, list, list, list]:
+    def get_flat_data(self, binning_dataset: str, deriv_dataset: str, mod) -> Tuple[np.array, np.array, np.array, np.array]:
         """
         Selects all numeric datasets that correspond to a given alias
         and provides flat (1-D) lists for data, weights, and derivatives
@@ -722,12 +722,12 @@ class ThermoDiff:
                                   and deriv_dataset in traj['datasets'].keys()]
         active_counters_trajids = [ct for ct in counters_trajids if ct[1] in active_dataset_trajids
                                    and ct[0] == mod.counter]
-        flat_bin_data = [data for ct in active_counters_trajids for data in
-                         self.get_traj(ct[1])['datasets'][binning_dataset]] # ids of the bins
-        flat_deriv_data = [data for ct in active_counters_trajids for data in
-                           self.get_traj(ct[1])['datasets'][deriv_dataset]] # the property
-        flat_weights = [wght for ct in active_counters_trajids for wght in self.get_traj(ct[1])['weights']] # normalized
-        flat_derivs = [der for ct in active_counters_trajids for der in self.derivatives[ct]] # the dU/d(sigma) values
+        flat_bin_data = np.array([data for ct in active_counters_trajids for data in
+                         self.get_traj(ct[1])['datasets'][binning_dataset]]) # ids of the bins
+        flat_deriv_data = np.array([data for ct in active_counters_trajids for data in
+                           self.get_traj(ct[1])['datasets'][deriv_dataset]]) # the property
+        flat_weights = np.array([wght for ct in active_counters_trajids for wght in self.get_traj(ct[1])['weights']]) # normalized
+        flat_derivs = np.array([der for ct in active_counters_trajids for der in self.derivatives[ct]]) # the dU/d(sigma) values
         return flat_bin_data, flat_deriv_data, flat_weights, flat_derivs
 
     def calc_derivative(self, dataset: Optional[str] = None, cv_dataset: Optional[str] = None,
@@ -790,12 +790,11 @@ class ThermoDiff:
             state_index = None
             if threshold is not None:
                 # Create a boolean mask for each bin
-                bin_masks = [np.logical_and(binning_data >= x, binning_data < y) for x, y in
-                             zip(threshold[::2], threshold[1::2])]
+                bin_indices = [np.arange(len(binning_data))[np.logical_and(binning_data >= x, binning_data < y)] for x, y in zip(threshold[::2], threshold[1::2])]
                 # Round the bin edges
                 bin_edges = [(round(x, 6), round(y, 6)) for x, y in zip(threshold[::2], threshold[1::2])]
                 # Assign values to the corresponding bins
-                for mask, bin_edge in zip(bin_masks, bin_edges):
+                for mask, bin_edge in zip(bin_indices, bin_edges):
                     vals_derivatives[bin_edge] = derivs[mask]
                     vals_data[bin_edge] = deriv_data[mask]
                     vals_weights[bin_edge] = weights[mask]

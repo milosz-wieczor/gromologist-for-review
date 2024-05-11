@@ -695,7 +695,7 @@ class Top:
             return filename, pref
         elif os.path.isfile(self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
             return self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
-        elif os.path.isfile(self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
+        elif self.gromacs_dir is not None and os.path.isfile(self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
             return self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
         else:
             raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'

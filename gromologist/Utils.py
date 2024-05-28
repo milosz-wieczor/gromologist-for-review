@@ -558,6 +558,7 @@ def amber2gmxFF(leaprc: str, outdir: str, amber_dir: Optional[str] = None, base_
             atype.modifiers[0] = str(atomtypes[atype.types[0]][0])
         if atype.modifiers[1] == '0' and atype.types[0] in atomtypes.keys():
             atype.modifiers[1] = str(atomtypes[atype.types[0]][1])
+    new_top.parameters.sort_dihedrals()
     new_top.save_top('forcefield.itp', split=True)
     gml.write_rtp(pro_atoms, pro_bonds, pro_connectors, 'aminoacids.rtp', impropers=pro_impropers, cmap=rtp_cmap)
     if dna_atoms:

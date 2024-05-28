@@ -245,7 +245,8 @@ class Top:
         for ssect in self.parameters.subsections:
             types = {t for e in ssect.entries_param for t in e.types}
             if types.difference(deftyp):
-                print(f"WARNING: atomtypes {types.difference(deftyp)} required in {ssect.header} not found in [ atomtypes ]")
+                print(f"WARNING: atomtypes {types.difference(deftyp)} required in {ssect.header} not found "
+                      f"in [ atomtypes ]")
 
     def list_molecules(self):
         """
@@ -274,7 +275,7 @@ class Top:
         used_params = []
         for mol in self.molecules:
             used_params.extend(mol.find_used_ff_params(section=section))
-        for pairsect in ['nonbond_params', 'pairtypes']: # TODO mod the part below to work with section = ...
+        for pairsect in ['nonbond_params', 'pairtypes']:  # TODO mod the part below to work with section = ...
             try:
                 ssect = self.parameters.get_subsection(pairsect)
                 for ent in ssect.entries_param:
@@ -325,6 +326,8 @@ class Top:
         Adds a molecule from an external file (can be .itp or .top) to the current topology
         :param filename: name of the file containing the molecule to be added
         :param molnames: list, enumerates molecules to be added (can be just 1-element list), None means add all
+        :param molcount: list, enumerates numbers of molecules that will be added, by default 1 per moleculetype
+        :param prefix_type: str, if specified, all atomtypes will be prefixed with this str to disambiguate
         :return: None
         """
         contents = [line for line in open(filename)]
@@ -359,7 +362,7 @@ class Top:
                        "this function to automatically add the desired number of molecules to the system.")
         else:
             try:
-                _ =  len(molcount)
+                _ = len(molcount)
             except TypeError:
                 molcount = [molcount] * len(inserted_mols)
             else:
@@ -694,7 +697,8 @@ class Top:
             return filename, pref
         elif os.path.isfile(self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
             return self.dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
-        elif self.gromacs_dir is not None and os.path.isfile(self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff):
+        elif self.gromacs_dir is not None and os.path.isfile(self.gromacs_dir.rstrip(os.sep) + os.sep + pref +
+                                                             os.sep + suff):
             return self.gromacs_dir.rstrip(os.sep) + os.sep + pref + os.sep + suff, pref
         else:
             raise FileNotFoundError('file {} not found in neither local nor Gromacs directory.\n'

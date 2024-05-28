@@ -238,7 +238,7 @@ class SubsectionBonded(Subsection):
                     entry.params_state_b_entry = []
                     entry.params_state_a = []
                     entry.params_state_a_entry = []
-            self._add_ff_params_to_entry(entry, subsect_params, subsect_paramsB)
+            self._add_ff_params_to_entry(entry, subsect_params, subsect_paramsB, parmtype=matchings[self.header])
         self.entries = self.bkp_entries[:]  # now restore the modified copy
 
     def find_used_ff_params(self) -> list:
@@ -391,7 +391,7 @@ class SubsectionBonded(Subsection):
             break
         return [y for x in new_params for y in x]
     
-    def _add_ff_params_to_entry(self, entry, subsect_params, subsect_params_B = None):
+    def _add_ff_params_to_entry(self, entry, subsect_params, subsect_params_B = None, parmtype='bondtypes'):
         """
         Given a bonded term (e.g. "21     24     26    5") converts it to atomtypes,
         finds the respective FF parameters and adds them to the bonded entry
@@ -400,39 +400,59 @@ class SubsectionBonded(Subsection):
         :param subsect_params_B: list, a separate SubsectionParam instances for state B if needed
         :return: None
         """
-        int_type = entry.interaction_type
         entry.read_types()
 
-        def setparam(types, params, parmentry, inttype, subsect_params):
-            wildcard_present = []
-            non_wildcard_present = []
+        def setparam(types, params, parmentry, int_type, subsect_params, parmtype):
+            params_from_nonwildcards = []
+            params_from_wildcards = []
+            parmentry_from_nonwildcards = []
+            parmentry_from_wildcards = []
+            index_from_nonwildcards = []
+            index_from_wildcards = []
             for subsections in subsect_params:
-                for parm_entry in subsections.entries_param:
-                    if parm_entry.match(types, int_type):
-                        is_wildcard = 'X' in parm_entry.types
-                        if not wildcard_present and not is_wildcard:
-                            if not (len(params) > 0 and inttype in (1, 5)):
-                                params += parm_entry.params
-                                parmentry.append(parm_entry)
-                                non_wildcard_present += parm_entry.types
-                        elif not wildcard_present and is_wildcard and not non_wildcard_present:
-                            params += parm_entry.params
-                            parmentry.append(parm_entry)
-                            wildcard_present = parm_entry.types
-                        elif wildcard_present and not is_wildcard:
-                            raise RuntimeError("Wildcard ('X') entries were found prior to regular ones, please fix"
-                                               "your FF parameters")
-                        elif wildcard_present and is_wildcard:  # only add if multiple entries per given wildcard
-                            if parm_entry.types == wildcard_present:
-                                params += parm_entry.params
-                                parmentry.append(parm_entry)
-                            else:
-                                pass
+                for nen, parm_entry in enumerate(subsections.entries_param):
+                    if parm_entry.match(types, str(int_type)):
+                        if 'X' in parm_entry.types:
+                            params_from_wildcards += parm_entry.params
+                            parmentry_from_wildcards.append(parm_entry)
+                            index_from_wildcards.append(nen)
+                        else:
+                            params_from_nonwildcards += parm_entry.params
+                            parmentry_from_nonwildcards.append(parm_entry)
+                            index_from_nonwildcards.append(nen)
+            if params_from_nonwildcards:
+                if len(index_from_nonwildcards) > 1:
+                    if parmtype == "dihedraltypes":
+                        assert int_type == 9, (f"Found {len(index_from_nonwildcards)} entries corresponding to dihedral"
+                                               f" {types} but only type 9-dihedrals allow for multiple entries")
+                    if parmtype != "dihedraltypes":
+                        if not all([parm.params[p] == parmentry_from_nonwildcards[0].params[p]
+                                    for parm in parmentry_from_nonwildcards
+                                    for p in range(len(parm.params))]):
+                            raise RuntimeError(f"Found at least two {parmtype} entries with different parameter values."
+                                               f" Fix your topology!")
+                    elif not all([j - i == 1 for i, j in zip(index_from_nonwildcards[:-1], index_from_nonwildcards[1:])]):
+                        raise RuntimeError(f"Found multiple non-consecutive {parmtype} entries associated "
+                                           f"with dihedral {types}. Fix your topology!")
+                params += params_from_nonwildcards
+                parmentry.extend(parmentry_from_nonwildcards)
+            elif params_from_wildcards:
+                if len(index_from_wildcards) > 1:
+                    if not all([j - i == 1 for i, j in zip(index_from_wildcards[:-1], index_from_wildcards[1:])]):
+                        raise RuntimeError(f"Found multiple non-consecutive {parmtype} entries associated "
+                                           f"with dihedral {types}. Fix your topology!")
+                params += params_from_wildcards
+                parmentry.extend(parmentry_from_wildcards)
+            else:
+                if types is not None:
+                    self.section.top.print(f"Could not locate parameters for types {types} in section {parmtype}")
 
         # first pass fixes stateA params, second fixes stateB params
-        setparam(entry.types_state_a, entry.params_state_a, entry.params_state_a_entry, int(entry.interaction_type), subsect_params)
+        setparam(entry.types_state_a, entry.params_state_a, entry.params_state_a_entry, int(entry.interaction_type),
+                 subsect_params, parmtype)
         spar = subsect_params if subsect_params_B is None else subsect_params_B
-        setparam(entry.types_state_b, entry.params_state_b, entry.params_state_b_entry, int(entry.interaction_type), spar)
+        setparam(entry.types_state_b, entry.params_state_b, entry.params_state_b_entry, int(entry.interaction_type),
+                 spar, parmtype)
         if not entry.params_state_a and entry.subsection.header == 'dihedrals' \
                 and any(t.startswith('D') for t in entry.types_state_a):
             entry.params_state_a = [0.0, 0.0, '1']
@@ -564,7 +584,7 @@ class SubsectionParam(Subsection):
             raise RuntimeError(f"No entry found with types: {types}")
         return found
 
-    def plot_term_energy(self, atomtypes, interaction_type=None, label=None, color='C0'):
+    def plot_term_energy(self, atomtypes, interaction_type=None, label=None, sep=False, color='C0'):
         import matplotlib.pyplot as plt
         import numpy as np
         if isinstance(atomtypes, str):
@@ -594,6 +614,8 @@ class SubsectionParam(Subsection):
                     if mult == 0:
                         continue
                     y += k * (1 + np.cos(np.deg2rad(mult * x - phi0)))
+                    if sep:
+                        plt.plot(x, k * (1 + np.cos(np.deg2rad(mult * x - phi0))), label=label, color=color, lw=0.5)
                 y -= np.min(y)
                 plt.plot(x, y, label=label, color=color)
             else:

@@ -791,10 +791,12 @@ class ThermoDiff:
             if threshold is not None:
                 # Create a boolean mask for each bin
                 bin_indices = [np.arange(len(binning_data))[np.logical_and(binning_data >= x, binning_data < y)] for x, y in zip(threshold[::2], threshold[1::2])]
+                assigned = {a for bind in bin_indices for a in bind}
+                unassigned = np.array(sorted(list(set(np.arange(len(binning_data))).difference(assigned))))
                 # Round the bin edges
                 bin_edges = [(round(x, 6), round(y, 6)) for x, y in zip(threshold[::2], threshold[1::2])]
                 # Assign values to the corresponding bins
-                for mask, bin_edge in zip(bin_indices, bin_edges):
+                for mask, bin_edge in zip(bin_indices + [unassigned], bin_edges + [None]):
                     vals_derivatives[bin_edge] = derivs[mask]
                     vals_data[bin_edge] = deriv_data[mask]
                     vals_weights[bin_edge] = weights[mask]
@@ -955,9 +957,12 @@ class ThermoDiff:
         :param target: list or float, if specified, will also calculate required change so that req_change = (target-mean)/derivative
         :return: None
         """
-
+        if target is None:
+            targetisnone = True
+        else:
+            targetisnone = False
         if outfile is not None:
-            if target:
+            if not targetisnone:
                 outtar = open('req_chg_' + outfile, mode='w')
             outfile = open(outfile, mode='w')
         derivs = self.discrete_free_energy_derivatives if free_energy else self.discrete_observable_derivatives
@@ -967,17 +972,17 @@ class ThermoDiff:
         try:
             _ = target[0]
         except TypeError:
-            target = [target]
+            target = [target] if target is not None else None
         for x in range(len(thrs)//2):
             x1 = round(thrs[2 * x], 3)
             x2 = round(thrs[2 * x + 1], 3)
             xx = f"{x1}-{x2}"
             print(f'  {xx:20s}', end='|', file=outfile)
-            if target:
+            if not targetisnone:
                 print(f'  {xx:20s}', end='|', file=outtar)
         print(f'{"  others":20s}  |', file=outfile)
         print(23 * (len(thrs)//2 + 1) * '-', file=outfile)
-        if target:
+        if not targetisnone:
             print(f'{"  others":20s}  |', file=outtar)
             print(23 * (len(thrs) // 2 + 1) * '-', file=outtar)
         all_ders = [q for q in derivs.keys() if q[1] == dataset]
@@ -1023,7 +1028,7 @@ class ThermoDiff:
             # strings[mod].append(23 * (len(thrs)//2 + 1) * '-')
         for sormod in sorted_ders:
             print(''.join(strings[sormod]), file=outfile)
-            if target:
+            if not targetisnone:
                 print(''.join(strmeans[sormod]), file=outtar)
         if outfile is not None:
             outfile.close()

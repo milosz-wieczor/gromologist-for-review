@@ -309,12 +309,24 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
     :param topfile2: str, path to the other Top file
     :param gmx: str, optional path to the gmx executable if different than simply 'gmx'
     :param quiet: bool, optional to silence gmx output
-    :param group_a: str, 1st selection for which pairwise interactions will be calculated
+    :param group_a: str, 1st selection for which pairwise interactions will be calculated, or selection for the subset that should be compared
     :param group_b: str, 2nd selection for which pairwise interactions will be calculated
     :return: bool, whether the energies are identical
     """
-    en1 = calc_gmx_energy(struct, topfile1, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
-    en2 = calc_gmx_energy(struct, topfile2, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
+    if type(group_a) == type(group_b):
+        en1 = calc_gmx_energy(struct, topfile1, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
+        en2 = calc_gmx_energy(struct, topfile2, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
+    else:
+        if traj is not None:
+            raise RuntimeError("For a single-subset calculation, 'traj' is not supported")
+        gml.Top(topfile1, suppress=quiet).save_from_selection(group_a, 'xtop1.top')
+        gml.Top(topfile2, suppress=quiet).save_from_selection(group_a, 'xtop2.top')
+        gml.Pdb(struct).save_from_selection(group_a, 'xpdb.pdb')
+        en1 = calc_gmx_energy('xpdb.pdb', 'xtop1.top', gmx, terms='all', quiet=quiet, traj=traj)
+        en2 = calc_gmx_energy('xpdb.pdb', 'xtop2.top', gmx, terms='all', quiet=quiet, traj=traj)
+        os.remove('xtop1.top')
+        os.remove('xtop2.top')
+        os.remove('xpdb.pdb')
     print(f"Topology 1 has energy {en1['potential']}, topology 2 has energy {en2['potential']}")
     if all([en1['potential'][i] == en2['potential'][i] for i in range(len(en1['potential']))]):
         return True

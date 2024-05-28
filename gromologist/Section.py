@@ -1037,6 +1037,8 @@ class SectionMol(Section):
         if other is not self:
             other.offset_numbering(self.natoms)
             anchor_other += self.natoms
+            if self.top.pdb:
+                print("WARNING: if merging molecules that are not consecutive, make sure to adjust your PDB numbering")
         if anchor_own > 0:
             self._make_bond(anchor_own, anchor_other, other)
         if other is not self:
@@ -1045,8 +1047,6 @@ class SectionMol(Section):
             # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
             system_setup = self.top.sections[-1].get_subsection('molecules')
             system_setup.entries = [e for e in system_setup if other.mol_name not in e]
-        if self.top.pdb:
-            print("WARNING: if merging molecules that are not consecutive, make sure to adjust your PDB numbering")
 
     def merge_molecules(self, other: "gml.SectionMol"):
         other.offset_numbering(self.natoms)
@@ -1427,7 +1427,6 @@ class SectionMol(Section):
                 aftnr = self.select_atom('resid {} and name {}'.format(resid, aft))
             hnum = self.atoms[self.select_atom(hooksel)].num
             atnum = aftnr + 2
-            # actual addition of atoms
             self.add_atom(atnum, atom_add, atom_type=types[(targ, atom_add)], charge=charges[(targ, atom_add)],
                           resid=orig.resid, resname=targ, mass=None, prnt=False)
             self.add_bond(hnum, atnum)
@@ -1589,7 +1588,7 @@ class SectionMol(Section):
         if self.top.rtp and not rtp and remember:
             print("Using previously selected .rtp file")
             return self.top.rtp['typedict'], self.top.rtp['chargedict'], self.top.rtp['dihedrals'], \
-                   self.top.rtp['impropers'], self.top.rtp['bondedtypes']
+                   self.top.rtp['impropers'], self.top.rtp['bondedtypes'], self.top.rtp['bonds']
         chargedict, typedict = {}, {}
         impropers, dihedrals = {}, {}
         bonds, angles = {}, {}

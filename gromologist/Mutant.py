@@ -133,7 +133,7 @@ class ProteinMutant:
                  'PD': ['CD', 'HD1', 'HD2'],
                  'PG': ['CG', 'HG1', 'HG2'],
                  'PB': ['CB', 'HB1', 'HB2'],
-                 'PH': ['HN'],
+                 'PH': ['H'],
                  'WR': ['CG', 'CD1', 'HD1', 'NE1', 'HE1', 'CE2', 'CD2', 'CE3', 'HE3', 'CZ3', 'HZ3', 'CH2', 'HH2', 'CZ2',
                         'HZ2']
                  }

@@ -202,16 +202,25 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
     :param traj: str, path to the trajectory (optional)
     :param terms: str or list, terms which will be calculated according to gmx energy naming (can also be "all")
     :param cleanup: bool, whether to remove intermediate files (useful for debugging)
-    :param group_a: str, selection defining group A to calculate interactions between group A and B
+    :param group_a: str, selection defining group A to calculate interactions between group A and B (or only energetics of group A if group_b is left unspecified)
     :param group_b: str, selection defining group B to calculate interactions between group A and B
     :param sum_output: bool, whether to add a term "sum" that will contain all terms added up
     :param kwargs: dict, options that will be added to the .mdp file
     :return: dict of lists, one list of per-frame values per each selected term
     """
+    tempfiles = False
     if not gmx:
         gmx = gml.find_gmx_dir()[1]
-    if (group_b or group_a) and not (group_a and group_b):
-        raise RuntimeError("If you're choosing individual groups, please specify both group_a and group_b")
+    if group_b and not group_a:
+        raise RuntimeError("To do a calculation on a subset of the system, specify group_a and leave out group_b")
+    if group_a and not group_b:
+        if traj is not None:
+            raise RuntimeError("For a single-subset calculation, 'traj' is not supported")
+        gml.Top(topfile, suppress=quiet).save_from_selection(group_a, 'xtopx.top')
+        topfile = 'xtopx.top'
+        gml.Pdb(struct).save_from_selection(group_a, 'xpdbx.pdb')
+        struct = 'xpdbx.pdb'
+        tempfiles = True
     if group_a and group_b:
         group_names = ndx(gml.Pdb(struct), [group_a, group_b, 'all'])
         gen_mdp('rerun.mdp', energygrps=f"{group_names[0]} {group_names[1]} ", **kwargs)
@@ -240,6 +249,8 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
         to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log', 'energy.xvg']
         if group_a and group_b:
             to_remove.append('gml.ndx')
+        if tempfiles:
+            to_remove.extend(['xtopx.top', 'xpdbx.pdb'])
         for filename in to_remove:
             try:
                 os.remove(filename)
@@ -313,20 +324,8 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
     :param group_b: str, 2nd selection for which pairwise interactions will be calculated
     :return: bool, whether the energies are identical
     """
-    if type(group_a) == type(group_b):
-        en1 = calc_gmx_energy(struct, topfile1, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
-        en2 = calc_gmx_energy(struct, topfile2, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
-    else:
-        if traj is not None:
-            raise RuntimeError("For a single-subset calculation, 'traj' is not supported")
-        gml.Top(topfile1, suppress=quiet).save_from_selection(group_a, 'xtop1.top')
-        gml.Top(topfile2, suppress=quiet).save_from_selection(group_a, 'xtop2.top')
-        gml.Pdb(struct).save_from_selection(group_a, 'xpdb.pdb')
-        en1 = calc_gmx_energy('xpdb.pdb', 'xtop1.top', gmx, terms='all', quiet=quiet, traj=traj)
-        en2 = calc_gmx_energy('xpdb.pdb', 'xtop2.top', gmx, terms='all', quiet=quiet, traj=traj)
-        os.remove('xtop1.top')
-        os.remove('xtop2.top')
-        os.remove('xpdb.pdb')
+    en1 = calc_gmx_energy(struct, topfile1, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
+    en2 = calc_gmx_energy(struct, topfile2, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
     print(f"Topology 1 has energy {en1['potential']}, topology 2 has energy {en2['potential']}")
     if all([en1['potential'][i] == en2['potential'][i] for i in range(len(en1['potential']))]):
         return True

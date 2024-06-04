@@ -31,6 +31,9 @@ class Pdb:
             if self.fname.endswith('gro'):
                 self.atoms, self.box, self.remarks = self._parse_contents_gro([line.rstrip()
                                                                                for line in open(self.fname)])
+            elif self.fname.endswith('cif'):
+                self.atoms, self.box, self.remarks = self._parse_contents_cif([line.rstrip()
+                                                                               for line in open(self.fname)])
             else:
                 self.atoms, self.box, self.remarks = self._parse_contents([line.strip() for line in open(self.fname)],
                                                                           qt)
@@ -50,6 +53,11 @@ class Pdb:
         self._ter_format = "TER   {:>5d}      {:3s} {:1s}{:>4d}   \n"
         self._atom_format_gro = "{:>5d}{:5s}{:>5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
+        # clear altloc if all are identical
+        if self.atoms[0].altloc.strip():
+            if all([a.altloc == self.atoms[0].altloc for a in self.atoms]):
+                for a in self.atoms:
+                    a.altloc = ' '
 
     def __repr__(self) -> str:
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
@@ -744,7 +752,8 @@ class Pdb:
             ap.type = at.type
         self.qt = True
 
-    def get_atom_indices(self, selection_string: str, as_plumed: bool = False, as_ndx: bool = False) -> [list, str]:
+    def get_atom_indices(self, selection_string: str = 'all', as_plumed: bool = False, as_ndx: bool = False,
+                         from_pdb: Optional[Union[str, "gml.Pdb"]] = None) -> [list, str]:
         """
         Applies a selection to the structure and returns the 0-based indices of selected atoms
         :param selection_string: str, consistent with the selection language syntax (see README)
@@ -752,8 +761,24 @@ class Pdb:
         :param as_ndx: bool, whether to format as an .ndx-compatible atom selection
         :return: list of int, 0-based (!!!) indices of atoms, or a formatted string
         """
-        sel = gml.SelectionParser(self)
-        indices = sel(selection_string)
+        if from_pdb is None:
+            sel = gml.SelectionParser(self)
+            indices = sel(selection_string)
+        else:
+            pdb = gml.obj_or_str(from_pdb)
+            indices = []
+            for atom in pdb.atoms:
+                chsel = f" and chain {atom.chain}" if atom.chain.strip() else ""
+                fullsel = (f'{selection_string} and resid {atom.resnum} and resname {atom.resname} '
+                           f'and name {atom.atomname}{chsel}')
+                inds = self.get_atom_indices(fullsel)
+                if len(inds) == 1:
+                    indices.append(inds[0])
+                elif len(inds) == 0:
+                    print(f"Skipping selection '{fullsel}' as it returned no atoms")
+                else:
+                    raise RuntimeError(f"Selection {fullsel} returned multiple atoms ({inds}), make sure a combination "
+                                       f"of resid + resname + atomname + chain is unique within the structure")
         if not as_plumed and not as_ndx:
             return indices
         elif as_plumed:
@@ -897,7 +922,7 @@ class Pdb:
         :return: (list of Atom instances, tuple of floats of len 6, list of str)
         """
         atoms, remarks, conect = [], [], {}
-        box = [7.5, 7.5, 7.5, 90, 90, 90]  # generic default, will be overwritten if present
+        box = [75, 75, 75, 90, 90, 90]  # generic default, will be overwritten if present
         for line in contents:
             if line.startswith('ATOM') or line.startswith('HETATM'):
                 atoms.append(Atom(line, qt))
@@ -1234,6 +1259,22 @@ class Pdb:
                                                                                                                4)
         else:
             raise RuntimeError('Can\'t read box properties')
+        return atoms, tuple(box), remarks
+
+    @staticmethod
+    def _parse_contents_cif(contents):
+        """
+        A parser to extract data from .cif files
+        and convert them to internal parameters
+        :param contents: list of str, contents of the .gro file
+        :return: (list of Atom instances, tuple of floats of len 6, list of str)
+        """
+        contents = [x for x in contents if x.strip() if x.startswith('ATOM') or x.startswith('HETATM')]
+        atoms, remarks = [], []
+        for line in contents:
+            atoms.append(Atom.from_cif(line))
+        # TODO look into reading box?
+        box = [75, 75, 75] + [90., 90., 90.]
         return atoms, tuple(box), remarks
 
     def make_term(self, term_type, atom_serial):
@@ -1584,6 +1625,24 @@ class Atom:
         atomnum = int(line[15:20].strip())
         x, y, z = [float(line[20 + 8 * i:20 + 8 * (i + 1)].strip()) * 10 for i in range(3)]
         return cls(data.format(atomnum, atomname[:4], resname[:4], resnum, x, y, z))
+
+    @classmethod
+    def from_cif(cls, line):
+        """
+        Reads fields from a line formatted according
+        to the .gro format specification
+        :param line: str, line from a .gro file
+        :return: an Atom instance
+        """
+        data = "ATOM  {:>5d} {:4s} {:4s}{:1s}{:>4d}    {:>8.3f}{:>8.3f}{:>8.3f}  1.00{:6.2f}"
+        resnum = int(line.split()[8]) % 10000
+        resname = line.split()[5]
+        atomname = line.split()[3]
+        atomnum = int(line.split()[1])
+        chain = line.split()[6]
+        beta = float(line.split()[14])
+        x, y, z = [float(line.split()[i]) for i in range(10, 13)]
+        return cls(data.format(atomnum, atomname[:4], resname[:4], chain, resnum, x, y, z, beta))
 
     @classmethod
     def from_top_entry(cls, entry):

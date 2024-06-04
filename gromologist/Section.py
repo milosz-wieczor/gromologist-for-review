@@ -1058,8 +1058,9 @@ class SectionMol(Section):
 
     def _merge_fields(self, other: "gml.SectionMol"):
         self.top.print('WARNING watch out for #ifdef POSRES keywords that might get misplaced')
-        for subs in ['atoms', 'bonds', 'angles', 'pairs', 'dihedrals', 'cmap', 'position_restraints']:
-            # TODO merge all subsections
+        all_sections_own = set(a.header for a in self.subsections if a.header != 'moleculetype')
+        all_sections_other = set(a.header for a in other.subsections if a.header != 'moleculetype')
+        for subs in list(all_sections_own.union(all_sections_other)):
             # TODO check for a "conditional" attribute of a section
             try:
                 subsection_other = other.get_subsection(subs)

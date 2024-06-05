@@ -1801,11 +1801,12 @@ class SectionMol(Section):
                     heavy_with_h.append(heavy)
         lines = []
         renamed = {}
-        for n, hwh in enumerate(heavy_with_h, 1):
+        for n, hwh in enumerate(heavy_with_h):
             hs = [a for a in hwh.bound_atoms if a.ish]
             nhs = [a for a in hwh.bound_atoms if not a.ish]
             numh = len(hs)
-            hname = f"H{n}"
+            nn = chr(65+n) if n <= 25 else chr(64+n//26) + chr(65+n%26)
+            hname = f"H{nn}"
             for nn, i in enumerate(range(len(hs)), 1):
                 renamed[hs[i].atomname] = hname + str(nn) if len(hs) > 1 else hname
             nhsnh = [a for a in nhs[0].bound_atoms if a.num != hwh.num]

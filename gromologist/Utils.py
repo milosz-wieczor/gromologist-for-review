@@ -403,7 +403,7 @@ def fix_rtp(rtp_dict: dict, impr: bool = False, rna: bool = False) -> dict:
                                 rtp_dict[res][n][m] = 'OC2'
                             elif atname == "OXT":
                                 rtp_dict[res][n][m] = 'OC1'
-            for mid in ["A", "B", "G", "D", "E", "G1"]:
+            for mid in ["A", "B", "G", "D", "E", "G1", "Z"]:
                 if f"H{mid}3" in [e[0] for e in rtp_dict[res]] and f"H{mid}1" not in [e[0] for e in rtp_dict[res]]:
                     for n, ent in enumerate(rtp_dict[res]):
                         if ent[0] == f"H{mid}3":

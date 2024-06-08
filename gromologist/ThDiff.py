@@ -972,7 +972,7 @@ class ThermoDiff:
         means = self.discrete_free_energy_means if free_energy else self.discrete_observable_means
         thrs = self.thresholds[dataset]
         if thrs is None:
-            thrs = list(range())
+            thrs = list(range(len(means[list(means.keys())[0]])))
         try:
             _ = target[0]
         except TypeError:

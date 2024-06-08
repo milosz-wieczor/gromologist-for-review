@@ -804,9 +804,9 @@ class ThermoDiff:
             else:
                 for val in sorted(list(set(binning_data))):
                     inds = np.where(binning_data == val)[0]
-                    vals_derivatives[val].append(derivs[inds])
-                    vals_data[val].append(deriv_data[inds])
-                    vals_weights[val].append(weights[inds])
+                    vals_derivatives[val] = derivs[inds]
+                    vals_data[val] = deriv_data[inds]
+                    vals_weights[val] = weights[inds]
                     counter[val] = np.sum(weights[inds])
             # then calculating the weighted means of all components
             for state_index in counter.keys():
@@ -971,6 +971,8 @@ class ThermoDiff:
         uncerts = self.discrete_free_energy_derivative_uncertainties if free_energy else self.discrete_observable_derivative_uncertainties
         means = self.discrete_free_energy_means if free_energy else self.discrete_observable_means
         thrs = self.thresholds[dataset]
+        if thrs is None:
+            thrs = list(range())
         try:
             _ = target[0]
         except TypeError:

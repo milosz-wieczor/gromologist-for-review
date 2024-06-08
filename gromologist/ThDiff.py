@@ -815,25 +815,27 @@ class ThermoDiff:
                                                          in zip(vals_weights[state_index],
                                                                 vals_derivatives[state_index])]) /
                                                      (counter[state_index] * mod.dpar))
-                    mean_product[state_index] = (sum([w*d*dr for w, d, dr
-                                                     in zip(vals_weights[state_index],
-                                                            vals_data[state_index],
-                                                            vals_derivatives[state_index])]) /
-                                                 (counter[state_index] * mod.dpar))
-                    mean_data[state_index] = (sum([w*d for w, d
-                                                  in zip(vals_weights[state_index],
-                                                         vals_data[state_index])]) /
-                                              counter[state_index])
+                    if not any(isinstance(x, str) for x in vals_data[state_index]):
+                        mean_product[state_index] = (sum([w*d*dr for w, d, dr
+                                                         in zip(vals_weights[state_index],
+                                                                vals_data[state_index],
+                                                                vals_derivatives[state_index])]) /
+                                                     (counter[state_index] * mod.dpar))
+                        mean_data[state_index] = (sum([w*d for w, d
+                                                      in zip(vals_weights[state_index],
+                                                             vals_data[state_index])]) /
+                                                  counter[state_index])
                     # finally, if needed, computing the uncertainties with bootstrap
                     if bootstrap:
                         unc_derivatives[state_index] = self.bootstrap(vals_derivatives[state_index],
                                                                       weights=vals_weights[state_index]) / mod.dpar
-                        unc_data[state_index] = self.bootstrap(vals_data[state_index],
-                                                               weights=vals_weights[state_index])
-                        unc_product[state_index] = self.bootstrap([d*dr for d, dr
-                                                                   in zip(vals_data[state_index],
-                                                                          vals_derivatives[state_index])],
-                                                                  weights=vals_weights[state_index]) / mod.dpar
+                        if not any(isinstance(x, str) for x in vals_data[state_index]):
+                            unc_data[state_index] = self.bootstrap(vals_data[state_index],
+                                                                   weights=vals_weights[state_index])
+                            unc_product[state_index] = self.bootstrap([d*dr for d, dr
+                                                                       in zip(vals_data[state_index],
+                                                                              vals_derivatives[state_index])],
+                                                                      weights=vals_weights[state_index]) / mod.dpar
             # here just writing the results to the final dictionaries
             if free_energy:
                 self.discrete_free_energy_means[(str(mod), dataset)] = [mean_data[x]

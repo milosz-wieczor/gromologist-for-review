@@ -1,6 +1,5 @@
 import gromologist as gml
 
-
 class Entry:
     """
     A generic class representing a single line in the topology.

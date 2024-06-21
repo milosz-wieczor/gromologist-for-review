@@ -24,6 +24,7 @@ For a growing base of common applications, workflows and use cases, check out [t
         * [Adding position restraints](#adding-position-restraints)
         * [Removing or swapping alchemical states](#removing-or-swapping-alchemical-states)
         * [Duplicating and reassigning types](#duplicating-and-reassigning-types)
+        * [Setting custom 1-4 fudge factors](#setting-custom-1-4-fudge-factors)
         * [Adding parameters or molecules from other topology files](#adding-external-params)
         * [Editing the contents of the system](#editing-contents-system)
         * [Modifying Lennard-Jones parameters](#modifying-lj-terms)

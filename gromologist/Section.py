@@ -2102,18 +2102,32 @@ class SectionMol(Section):
             charge += atom.charge
             atom.comment = f'qtot {charge:.3f}'
 
-    def set_pairs_fudge(self, fudge_LJ=None, fudge_QQ=None):
+    def set_pairs_fudge(self, fudge_LJ=None, fudge_QQ=None, selection=None):
+        """
+        Sets explicit 1-4 parameters by taking standard LJ/charges and converting it
+        according to [ pairs ] type 2 potential
+        :param fudge_LJ: float, scaling factor for epsilon (by default taken from [ defaults ])
+        :param fudge_QQ: float, scaling factor for the charge products (by default taken from [ defaults ])
+        :param selection: str, will apply the modification to all pairs that are fully within this selection
+        :return: None
+        """
         if fudge_LJ is None:
             fudge_LJ = self.top.defaults['fudgeLJ']
             self.top.print(f"Setting fudge_LJ to {fudge_LJ} as specified in [ defaults ]")
         if fudge_QQ is None:
             fudge_QQ = self.top.defaults['fudgeQQ']
             self.top.print(f"Setting fudge_QQ to {fudge_QQ} as specified in [ defaults ]")
+        if selection is None:
+            chosen = []
+        else:
+            chosen = self.get_atoms(selection)
         pairs_sect = self.get_subsection('pairs')
         all_ats = self.atoms
         for entry in pairs_sect.entries_bonded:
             at1ind, at2ind = entry.atom_numbers
             at1, at2 = all_ats[at1ind-1], all_ats[at2ind-1]
+            if selection is not None and (at1 not in chosen or at2 not in chosen):
+                continue
             q1, q2 = at1.charge, at2.charge
             s = self.top.parameters.sigma_ij(at1, at2)
             e = self.top.parameters.epsilon_ij(at1, at2)

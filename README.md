@@ -538,6 +538,27 @@ To then set e.g. all CA atoms in the 1st molecule to the new type, run the follo
 >>> t.molecules[0].set_type("CY", atomname="CA", resname=["ALA", "LYS"])  # sets CAs in ALA and LYS as CY
 ```
 
+##### Setting custom 1-4 fudge factors
+<a name="setting-custom-1-4-fudge-factors"/>
+
+If a different 1-4 scaling fudge factor has to be introduced for a single molecule (as e.g. the case
+with the GLYCAM force field), one can automatically generate parameters for the `[ pairs ]` section 
+that will be read using custom fudge factors:
+
+```
+>>> t.molecules[0].set_pairs_fudge(fudge_LJ=0.5, fudge_QQ=0.83333)
+```
+
+This will put the values of fudge_QQ, Q1, Q2, sigma and epsilon explicitly in the topology.
+
+If only a subset of the atoms should have different fudge atoms, a `selection` can be supplemented to 
+only set modified 1-4 pairs for atoms that are *both* in this selection:
+
+```
+>>> t.molecules[0].set_pairs_fudge(fudge_LJ=1.0, fudge_QQ=1.0, selection='not protein')
+```
+
+
 ##### Adding parameters or molecules from other topology files
 <a name="adding-external-params"/>
 

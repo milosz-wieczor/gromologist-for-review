@@ -173,6 +173,20 @@ class Top:
                     atomlist.append(a)
         return atomlist
 
+    @property
+    def defaults(self) -> dict:
+        """
+        Returns a dictionary with the values set in the [ defaults ] section
+        :return: dict with named 'defaults' values
+        """
+        def_values = [lin for lin in self.parameters.get_subsection('defaults').entries_param][0].modifiers
+        try:
+            return {'nbfunc': int(def_values[0]), 'comb-rule': int(def_values[1]), 'gen-pairs': def_values[2],
+                    'fudgeLJ': float(def_values[3]), 'fudgeQQ': float(def_values[4])}
+        except IndexError:
+            return {'nbfunc': int(def_values[0]), 'comb-rule': int(def_values[1]), 'gen-pairs': def_values[2],
+                    'fudgeLJ': 1.0, 'fudgeQQ': 1.0}
+
     def remove_molecule(self, molname: str):
         """
         Removes a molecule definition and the corresponding entry from the system

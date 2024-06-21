@@ -54,7 +54,7 @@ class Pdb:
         self._atom_format_gro = "{:>5d}{:5s}{:>5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
         # clear altloc if all are identical
-        if self.atoms[0].altloc.strip():
+        if self.atoms and  self.atoms[0].altloc.strip():
             if all([a.altloc == self.atoms[0].altloc for a in self.atoms]):
                 for a in self.atoms:
                     a.altloc = ' '

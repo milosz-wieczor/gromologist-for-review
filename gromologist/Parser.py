@@ -28,7 +28,7 @@ class SelectionParser:
         rna_selection = "resname RA RG RC RU RA5 RG5 RC5 RU5 RA3 RG3 RC3 RU3 A G C U A3 A5 G3 G5 C3 C5 U 3 U5"
         solvent_selection = "resname HOH TIP3 SOL OPC SPC WAT K CL NA POT K+ NA+ CLA CL-"
         backbone_selection = ("name P O1P O2P OP1 OP2 O5' H5T C5' H5'1 H5'2 H5' H5'' C4' H4' O4' C1' H1' C3' H3' C2' "
-                              "H2'1 H2'2 H2' H2'' O2' HO2' O3' H3T 1H5' 2H5' 1H2' 2H2' N HN CA HA C O HA1 HA2 H")
+                              "H2'1 H2'2 H2' H2'' O2' HO2' O3' H3T 1H5' 2H5' 1H2' 2H2' N HN CA HA C O HA1 HA2 H HO'2")
         all_selection = "serial < 10000000"
         noh_selection = "not element H"
         selection_string = selection_string.replace('solvent', solvent_selection)

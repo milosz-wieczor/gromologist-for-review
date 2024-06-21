@@ -30,10 +30,15 @@ class Entry:
         :param dpmax: default limit on the number of decimal places
         :return: str, format specifier
         """
-        try:
-            nf = len(str(flt).split('.')[1])
-        except IndexError:
-            nf = 3
+        if 'e-' in str(flt):
+            base_power = int(str(flt).split('-')[-1])
+            decim = len(str(flt).split('.')[-1].split('e')[0])
+            nf = base_power + decim
+        else:
+            try:
+                nf = len(str(flt).split('.')[1])
+            except IndexError:
+                nf = 3
         if nf > 12:
             flt = float(str(flt).split('.')[0] + '.' + str(flt).split('.')[1][:12])
             nf = len(str(flt).split('.')[1])
@@ -94,6 +99,8 @@ class EntryBonded(Entry):
     """
     fstr_suff = {('bonds', '1'): (float, float),
                  ('bonds', '2'): (float, float),
+                 ('pairs_nb', '1'): (float, float, float, float),
+                 ('pairs', '2'): (float, float, float, float, float),
                  ('angles', '1'): (float, float),
                  ('angles', '2'): (float, float),
                  ('angles', '5'): (float, float, float, float),

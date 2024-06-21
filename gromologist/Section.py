@@ -66,7 +66,7 @@ class Section:
         until = content[0].index(']')
         header = content[0][:until].strip().strip('[]').strip()
         if header in {'bonds', 'pairs', 'angles', 'dihedrals', 'settles', 'exclusions', 'cmap', 'position_restraints',
-                      'virtual_sites2', 'constraints'}:
+                      'virtual_sites2', 'constraints', 'pairs_nb'}:
             return gml.SubsectionBonded(content, self)
         elif header == 'atoms':
             return gml.SubsectionAtom(content, self)
@@ -2102,6 +2102,60 @@ class SectionMol(Section):
             charge += atom.charge
             atom.comment = f'qtot {charge:.3f}'
 
+    def set_pairs_fudge(self, fudge_LJ=None, fudge_QQ=None):
+        if fudge_LJ is None:
+            fudge_LJ = self.top.defaults['fudgeLJ']
+            self.top.print(f"Setting fudge_LJ to {fudge_LJ} as specified in [ defaults ]")
+        if fudge_QQ is None:
+            fudge_QQ = self.top.defaults['fudgeQQ']
+            self.top.print(f"Setting fudge_QQ to {fudge_QQ} as specified in [ defaults ]")
+        pairs_sect = self.get_subsection('pairs')
+        all_ats = self.atoms
+        for entry in pairs_sect.entries_bonded:
+            at1ind, at2ind = entry.atom_numbers
+            at1, at2 = all_ats[at1ind-1], all_ats[at2ind-1]
+            q1, q2 = at1.charge, at2.charge
+            s = self.top.parameters.sigma_ij(at1, at2)
+            e = self.top.parameters.epsilon_ij(at1, at2)
+            entry.interaction_type = '2'
+            entry.params_state_a = [fudge_QQ, q1, q2, s, e * fudge_LJ]
+
+    def set_pairs_nb(self, group_a, group_b, params):
+        try:
+            subsect = self.get_subsection('pairs_nb')
+        except:
+            self.subsections.append(gml.SubsectionBonded(['[ pairs_nb ]'], self))
+            subsect = self.get_subsection('pairs_nb')
+        entries = []
+        counter = 0
+        for i in [a.num for a in self.get_atoms(group_a)]:
+            for j in [a.num for a in self.get_atoms(group_b)]:
+                q, s, e = params[counter]
+                entries.append(subsect.yield_entry(f" {i} {j} 1 1.0 {q:.12f} {s:.12f} {e:.12f}"))
+                counter += 1
+        subsect.add_entries(entries)
+        print(f"Added {len(entries)} pairs_nb entries")
+
+    def exclude_from_pairs_nb(self):
+        try:
+            subsect = self.get_subsection('exclusions')
+        except:
+            self.subsections.append(gml.SubsectionBonded(['[ exclusions ]'], self))
+            subsect = self.get_subsection('exclusions')
+        excls = {}
+        nb = self.get_subsection('pairs_nb')
+        for en in nb.entries_bonded:
+            at1, at2 = en.atom_numbers
+            if at1 not in excls.keys():
+                excls[at1] = []
+            if at2 not in excls.keys():
+                excls[at2] = []
+            excls[at1].append(at2)
+            excls[at2].append(at1)
+        entries = []
+        for atn in sorted(excls.keys()):
+            entries.append(subsect.yield_entry(f"{atn} " + " ".join([f"{i}" for i in excls[atn]])))
+        subsect.add_entries(entries)
 
 class SectionParam(Section):
     """

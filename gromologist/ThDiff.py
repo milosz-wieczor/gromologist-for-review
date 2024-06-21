@@ -949,7 +949,8 @@ class ThermoDiff:
                     outfile.write(f"{round(derivs[key][1] - derivs[key][0], 3)}\n")
 
     def print_discrete_derivatives(self, dataset: str, free_energy: bool, outfile: Optional[str] = None,
-                                   bootstrap: bool = False, target: Optional[Union[list, float]] = None):
+                                   bootstrap: bool = False, target: Optional[Union[list, float]] = None,
+                                   absolute=False):
         """
         Prints discrete derivatives to the screen or a file
         :param dataset: str, for which dataset the derivatives should be selected
@@ -1009,7 +1010,7 @@ class ThermoDiff:
                     err = f' +/- {uncerts[mod][nd]}'
                 else:
                     err = ''
-                if free_energy:
+                if free_energy and not absolute:
                     strings[mod].append(f'  {d-derivs[mod][0]:20.5f}{err}|')
                     strmeans[mod].append(f'  {((tg - target[0]) - (mn - means[mod][0]))/(d-derivs[mod][0]):20.5f}{err}|')
                 else:

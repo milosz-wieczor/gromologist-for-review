@@ -820,7 +820,7 @@ def calc_LJ_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_
 
 
 class ConvergeLambdas:
-    def __init__(self, topfile, grofile, grofile2, njobs=12, mpiexec='srun', initguess=None, xtc=None, xtc2=None,
+    def __init__(self, topfile, grofile, grofile2=None, njobs=12, mpiexec='srun', initguess=None, xtc=None, xtc2=None,
                  maxwarn=5, hrex=True, threshold=0.25):
         self.mini_mdp = 'minimize.mdp'
         self.dyn_mdp = 'md.mdp'
@@ -906,20 +906,17 @@ class ConvergeLambdas:
                     self.pick_from_xtc(self.grofile, self.xtc2, self.njobs // 2, self.njobs)
         # then mdp file
         if self.dyn_mdp:
-            nsteps_set = False
-            with open(self.dyn_mdp) as mdpfile:
-                text = mdpfile.readlines()
-            for linenumber in range(len(text)):
-                line = text[linenumber]
-                if line.startswith('nsteps'):
-                    text[linenumber] = 'nsteps = {:d}\n'.format(int(self.nsteps))
-                    nsteps_set = True
-            if nsteps_set:
-                with open(self.dyn_mdp, 'w') as mdpfile:
-                    for line in text:
-                        mdpfile.write(line)
-            else:
-                raise ValueError(f'Couldn\'t find nsteps in file {self.dyn_mdp}, cannot proceed with optimization')
+            gml.gen_mdp(self.dyn_mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
+                        dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
+                        sc__coul="yes", constraints='all-bonds', pcoupl="no", nsteps=self.nsteps)
+            for i in range(self.njobs):
+                self.set_lambdas(self.dyn_mdp, self.lambdas, i)
+        if self.mini_mdp:
+            gml.gen_mdp(self.mini_mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
+                        dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
+                        sc__coul="yes")
+            for i in range(self.njobs):
+                self.set_lambdas(self.mini_mdp, self.lambdas, i)
 
     @staticmethod
     def pick_from_xtc(grofile, xtc, initial, final):

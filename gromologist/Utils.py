@@ -950,7 +950,7 @@ class ConvergeLambdas:
             copy2(f'mymini{i}.tpr', f'mn{i}/mymini.tpr')
         dirlist = ' '.join([f'mn{q}' for q in range(self.njobs)])
         gmx = gml.find_gmx_dir(mpi=True)
-        gml.gmx_command(gmx[1], 'mdrun', deffnm='mymini', multidir=dirlist, answer=True, fail_on_error=True)
+        gml.gmx_command(f"{self.mpiexec} {gmx[1]}", 'mdrun', deffnm='mymini', multidir=dirlist, answer=True, fail_on_error=True)
         for i in range(self.njobs):
             copy2(f'mn{i}/mymini.gro', f'mymini{i}.gro')
             rmtree(f'mn{i}')
@@ -996,7 +996,7 @@ class ConvergeLambdas:
                 open(f'dn{i}/plumed.dat', 'a').close()
         dirlist = ' '.join([f'dn{q}' for q in range(self.njobs)])
         gmx = gml.find_gmx_dir(mpi=True)
-        gml.gmx_command(gmx[1], 'mdrun', deffnm='mydyn', multidir=dirlist, replex=250, plumed=plumed,
+        gml.gmx_command(f"{self.mpiexec} {gmx[1]}", 'mdrun', deffnm='mydyn', multidir=dirlist, replex=250, plumed=plumed,
                         answer=True, fail_on_error=True)
         for i in range(self.njobs):
             copy2(f'dn{i}/mydyn.gro', f'mydyn{i}.gro')

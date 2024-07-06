@@ -6,6 +6,7 @@ from copy import deepcopy
 
 import gromologist as gml
 from typing import Optional, Iterable, Union
+
 try:
     import numpy as np
 except ImportError:
@@ -159,7 +160,7 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
         elif current == 'NONB':
             if dat:
                 try:
-                   _ = float(line.split()[1])
+                    _ = float(line.split()[1])
                 except:
                     if len(line.split()) >= 2 and all([t in atomtypes.keys() for t in line.split()]):
                         identical_nonbonded[line.split()[0]] = line.split()[1:]
@@ -178,7 +179,8 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
                     atomtypes[atype] = [0, rmin * 0.2 * 2 ** (-1 / 6), eps * 4.184]
         elif current == 'LJED':
             if dat:
-                if not(len(line.split()) > 1 and line.split()[0] in atomtypes.keys() and line.split()[1] in atomtypes.keys()):
+                if not (len(line.split()) > 1 and line.split()[0] in atomtypes.keys() and line.split()[
+                    1] in atomtypes.keys()):
                     continue
             types = tuple(line.split()[:2])
             vals = tuple(line.split()[2:])
@@ -198,10 +200,10 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
             entry = [vals[1], 4.184 * vals[0], int((vals[2] ** 2) ** 0.5)]
             impropertypes[types] = entry
         elif current == 'CMAP':
-            types = tuple('C N CT C N'.split()) # in case the format ever changes in the future
+            types = tuple('C N CT C N'.split())  # in case the format ever changes in the future
             if line.startswith('%FLAG'):
                 if line.split()[1] == "CMAP_RESLIST":
-                    cmapres = content[nl+1].split()
+                    cmapres = content[nl + 1].split()
                 elif line.split()[1] == "CMAP_RESOLUTION":
                     cmapresol = line.split()[2]
                 elif line.split()[1] == "CMAP_PARAMETER":
@@ -225,7 +227,7 @@ def parse_frcmod(filename: str) -> (dict, dict, dict, dict, dict, dict, dict):
     return atomtypes, bondtypes, angletypes, dihedraltypes, impropertypes, nonbonded, cmaptypes
 
 
-def load_frcmod(top: Union[str, "gml.Top"], filename: str, return_cmap: bool = False, pro_atoms: Optional[dict] = None)\
+def load_frcmod(top: Union[str, "gml.Top"], filename: str, return_cmap: bool = False, pro_atoms: Optional[dict] = None) \
         -> Optional[dict]:
     """
     Loads an .frcmod file into an existing topology. Can be also launched as
@@ -639,10 +641,12 @@ def reorder_amber_impropers(new_top: "gml.Top", rtp_dihedrals: set) -> "gml.Top"
 
 
 def dih_match(query, ref):
-    if all([q == r for q, r in zip(query, ref) if r != "X"]) or all([q == r for q, r in zip(query, ref[::-1]) if r != "X"]):
+    if all([q == r for q, r in zip(query, ref) if r != "X"]) or all(
+            [q == r for q, r in zip(query, ref[::-1]) if r != "X"]):
         return True
     else:
         return False
+
 
 def read_addAtomTypes(textfile: str) -> dict:
     text = open(textfile).readlines()
@@ -669,6 +673,7 @@ def read_addAtomTypes(textfile: str) -> dict:
             types[k] = (0, 0.0)
     return types
 
+
 def guess_element_properties():
     element_properties = {
         "H": (1, 1.008), "O": (8, 15.999), "C": (6, 12.011), "N": (7, 14.007), "S": (16, 32.06), "P": (15, 30.974),
@@ -676,6 +681,7 @@ def guess_element_properties():
         "Ca": (20, 40.078)
     }
     return element_properties
+
 
 def read_prep_impropers(prepfile: str) -> dict:
     """
@@ -704,7 +710,7 @@ def read_prep_impropers(prepfile: str) -> dict:
     return impropers
 
 
-def prep_to_rtp(prepfile, outfile = "new.rtp", ff = 'amber'):
+def prep_to_rtp(prepfile, outfile="new.rtp", ff='amber'):
     content = [l.strip() for l in open(prepfile)]
     atoms = {}
     bonds = {}
@@ -722,7 +728,8 @@ def prep_to_rtp(prepfile, outfile = "new.rtp", ff = 'amber'):
             connectors[current_res] = []
         elif len(ln.split()) > 9 and ln.split()[3].upper() in "MSB3456E":
             if ln.split()[2] != "DU":
-                atoms[current_res].append((ln.split()[1], ln.split()[2], float(ln.split()[-1]), len(atoms[current_res]) + 1))
+                atoms[current_res].append(
+                    (ln.split()[1], ln.split()[2], float(ln.split()[-1]), len(atoms[current_res]) + 1))
                 if len(atoms[current_res]) > 1:
                     bonds[current_res].append((int(ln.split()[4]) - 3, len(atoms[current_res])))
         elif ln.strip() == "IMPROPER":
@@ -744,7 +751,6 @@ def prep_to_rtp(prepfile, outfile = "new.rtp", ff = 'amber'):
     write_rtp(atoms, bonds, connector=connectors, outfile=outfile, impropers=impropers, ff=ff)
 
 
-
 def calc_Coulomb_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_on: str, force_from: str):
     """
     Calculates Coulomb forces exerted by one subset of atoms on each atom in another subset. Does NOT take into accout
@@ -764,14 +770,14 @@ def calc_Coulomb_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], f
     topat = top.atoms
     fon_charges = [a.charge for a in [topat[i] for i in fon_indices]]
     ffr_charges = np.array([a.charge for a in [topat[i] for i in ffr_indices]])
-    fon_coords = np.array([pdb.get_coords(force_on)])[0]/10
-    ffr_coords = np.array([pdb.get_coords(force_from)])[0]/10
+    fon_coords = np.array([pdb.get_coords(force_on)])[0] / 10
+    ffr_coords = np.array([pdb.get_coords(force_from)])[0] / 10
     vec_matrix = np.zeros((len(fon_indices), len(ffr_indices), 3))
     for i in range(len(fon_indices)):
         for j in range(len(ffr_indices)):
             vec_matrix[i, j, :] = fon_coords[i] - ffr_coords[j]
     dist_matrix = np.linalg.norm(vec_matrix, axis=2)[..., None]
-    geom_matrix = vec_matrix / dist_matrix**3
+    geom_matrix = vec_matrix / dist_matrix ** 3
     force_matrix = np.zeros((len(fon_indices), 3))
     for i in range(len(fon_indices)):
         force_matrix[i, :] = k_coul * fon_charges[i] * np.sum(ffr_charges[..., None] * geom_matrix[i, :, :], axis=0)
@@ -797,8 +803,8 @@ def calc_LJ_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_
     sigma_matrix = np.array([[top.parameters.sigma_ij(topat[i], topat[j]) for i in ffr_indices] for j in fon_indices])
     epsilon_matrix = np.array(
         [[top.parameters.epsilon_ij(topat[i], topat[j]) for i in ffr_indices] for j in fon_indices])
-    fon_coords = np.array([pdb.get_coords(force_on)])[0]/10
-    ffr_coords = np.array([pdb.get_coords(force_from)])[0]/10
+    fon_coords = np.array([pdb.get_coords(force_on)])[0] / 10
+    ffr_coords = np.array([pdb.get_coords(force_from)])[0] / 10
     vec_matrix = np.zeros((len(fon_indices), len(ffr_indices), 3))
     for i in range(len(fon_indices)):
         for j in range(len(ffr_indices)):
@@ -808,13 +814,14 @@ def calc_LJ_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_
     s6_matrix = (sigma_matrix / dist_matrix[:, :, 0]) ** 6
     force_matrix = np.zeros((len(fon_indices), 3))
     for i in range(len(fon_indices)):
-        force_matrix[i, :] = 24 * np.sum(epsilon_matrix[i, :][..., None] * geom_matrix[i, :, :] * (2 * s6_matrix**2 - s6_matrix)[i, :][..., None], axis=0)
+        force_matrix[i, :] = 24 * np.sum(epsilon_matrix[i, :][..., None] * geom_matrix[i, :, :] *
+                                         (2 * s6_matrix ** 2 - s6_matrix)[i, :][..., None], axis=0)
     return force_matrix
 
 
 class ConvergeLambdas:
     def __init__(self, topfile, grofile, grofile2, njobs=12, mpiexec='srun', initguess=None, xtc=None, xtc2=None,
-                     maxwarn=5, hrex=True, threshold=0.25):
+                 maxwarn=5, hrex=True, threshold=0.25):
         self.mini_mdp = 'minimize.mdp'
         self.dyn_mdp = 'md.mdp'
         self.topfile = topfile
@@ -838,7 +845,8 @@ class ConvergeLambdas:
         iteration = 0
         # initialize probs
         current_probs = np.zeros(self.njobs - 1)
-        while np.max(current_probs) - np.min(current_probs) > self.threshold*np.max(current_probs) or self.learning_rate > 1.0:
+        while (np.max(current_probs) - np.min(current_probs) > self.threshold * np.max(current_probs) or
+               self.learning_rate > 1.0):
             iteration += 1
             print("Running iteration {}...".format(iteration))
             self.run_minimization()
@@ -847,7 +855,7 @@ class ConvergeLambdas:
             # sometimes calcs break and we get 'nan' as probs, so to avoid, we just restart:
             try:
                 # sort-of running average to flatten out fluctuations in mean probs
-                current_probs = 0.5*self.get_exchange_probs(self.njobs) + 0.5*current_probs
+                current_probs = 0.5 * self.get_exchange_probs(self.njobs) + 0.5 * current_probs
                 self.lambdas = self.update_lambdas(self.lambdas, current_probs, self.learning_rate)
                 self.clear_files()
                 print("lambdas: {}".format(''.join(['{:8.4f}'.format(a) for a in self.lambdas])))
@@ -861,12 +869,14 @@ class ConvergeLambdas:
                 print('Sim crashed, trying again. If this happens frequently, check your system for stability.')
         return self.lambdas, current_probs
 
-    def initialize_lambdas(self, njobs, initguess):
+    @staticmethod
+    def initialize_lambdas(njobs, initguess):
         if initguess:
             # can start from user-defined lambdas
             lambdas = np.loadtxt(initguess)
             if len(lambdas) != njobs:
-                raise ValueError('The number of lambda values specified by user does not match the desired number of jobs')
+                raise ValueError('The number of lambda values specified by user '
+                                 'does not match the desired number of jobs')
         else:
             # otherwise initial guess is equally spaced:
             lambdas = np.linspace(0, 1, njobs, endpoint=True)
@@ -881,9 +891,9 @@ class ConvergeLambdas:
         if self.grofile is not None:
             if self.xtc is None:
                 if self.grofile and self.grofile2:
-                    for i in range(self.njobs//2):
+                    for i in range(self.njobs // 2):
                         gml.Pdb(self.grofile).save_gro(f'mygro{i}.gro')
-                    for i in range(self.njobs//2, self.njobs):
+                    for i in range(self.njobs // 2, self.njobs):
                         gml.Pdb(self.grofile2).save_gro(f'mygro{i}.gro')
                 else:
                     for i in range(self.njobs):
@@ -909,14 +919,14 @@ class ConvergeLambdas:
                     for line in text:
                         mdpfile.write(line)
             else:
-                raise ValueError('Couldn\'t find nsteps in file {}, cannot proceed with optimization'.format(self.dyn_mdp))
+                raise ValueError(f'Couldn\'t find nsteps in file {self.dyn_mdp}, cannot proceed with optimization')
 
     @staticmethod
     def pick_from_xtc(grofile, xtc, initial, final):
         import mdtraj as md
         traj = md.load(xtc, top=grofile)
         nframes = final - initial
-        frames = np.linspace(initial, final, nframes+1).astype(int)[1:]
+        frames = np.linspace(initial, final, nframes + 1).astype(int)[1:]
         for num, fr in enumerate(frames, initial):
             curr = traj[fr]
             curr.save_gro('mygro{}.gro'.format(num))
@@ -947,7 +957,8 @@ class ConvergeLambdas:
             copy2(f'mn{i}/mymini.gro', f'mymini{i}.gro')
             rmtree(f'mn{i}')
 
-    def set_lambdas(self, mdp, lambdas, ln):
+    @staticmethod
+    def set_lambdas(mdp, lambdas, ln):
         lambdas_set = False
         state_set = False
         with open(mdp) as mdpfile:
@@ -996,7 +1007,7 @@ class ConvergeLambdas:
             copy2(f'mydyn{i}.gro', f'mygro{i}.gro')  # as a better guess for subsequent minimization
 
     @staticmethod
-    def get_exchange_probs(njobs, logfile):
+    def get_exchange_probs(njobs, logfile='mydyn0.log'):
         """
         log lines starting with 'Repl pr' contain exchange probabilities for
         alternating sets of windows (e.g. 1-3-5 and 0-2-4-6), with 5 chars per
@@ -1018,7 +1029,7 @@ class ConvergeLambdas:
 
     @staticmethod
     def update_lambdas(lambdas, probs, learning_rate):
-        multipliers = 2**((probs-0.5)*2)
+        multipliers = 2 ** ((probs - 0.5) * 2)
         scaled_multipliers = np.mean(multipliers) + learning_rate * (multipliers - np.mean(multipliers))
         deltas = lambdas[1:] - lambdas[:-1]
         updated_deltas = deltas * scaled_multipliers
@@ -1026,4 +1037,3 @@ class ConvergeLambdas:
         new_lambdas = lambdas * 0.0
         new_lambdas[1:] = np.cumsum(normalized_deltas)
         return new_lambdas
-

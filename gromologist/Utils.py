@@ -1,11 +1,15 @@
 import os
 from glob import glob
-from shutil import copy2
+from shutil import copy2, rmtree
 from itertools import permutations
 from copy import deepcopy
 
 import gromologist as gml
 from typing import Optional, Iterable, Union
+try:
+    import numpy as np
+except ImportError:
+    pass
 
 
 # TODO make top always optional between str/path and gml.Top
@@ -806,3 +810,220 @@ def calc_LJ_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_
     for i in range(len(fon_indices)):
         force_matrix[i, :] = 24 * np.sum(epsilon_matrix[i, :][..., None] * geom_matrix[i, :, :] * (2 * s6_matrix**2 - s6_matrix)[i, :][..., None], axis=0)
     return force_matrix
+
+
+class ConvergeLambdas:
+    def __init__(self, topfile, grofile, grofile2, njobs=12, mpiexec='srun', initguess=None, xtc=None, xtc2=None,
+                     maxwarn=5, hrex=True, threshold=0.25):
+        self.mini_mdp = 'minimize.mdp'
+        self.dyn_mdp = 'md.mdp'
+        self.topfile = topfile
+        self.learning_rate = 2.0  # will multiply scaling factors, decreases over time
+        self.nsteps = 10000  # starting value, increases over time
+        self.threshold = threshold
+        self.njobs = njobs
+        self.hrex = hrex
+        self.maxwarn = maxwarn
+        self.mpiexec = mpiexec
+        self.grofile, self.grofile2 = grofile, grofile2
+        self.xtc, self.xtc2 = xtc, xtc2
+        self.lambdas = self.initialize_lambdas(njobs, initguess)
+        # set filenames and nsteps:
+        self.prepare_inputs()
+        print("All systems set up, ready to go")
+        print("lambdas: {}".format(''.join(['{:8.4f}'.format(a) for a in self.lambdas])))
+        # the 'or' sets up a lower limit on number of iterations
+
+    def run(self):
+        iteration = 0
+        # initialize probs
+        current_probs = np.zeros(self.njobs - 1)
+        while np.max(current_probs) - np.min(current_probs) > self.threshold*np.max(current_probs) or self.learning_rate > 1.0:
+            iteration += 1
+            print("Running iteration {}...".format(iteration))
+            self.run_minimization()
+            self.clear_files()
+            self.run_gromacs()
+            # sometimes calcs break and we get 'nan' as probs, so to avoid, we just restart:
+            try:
+                # sort-of running average to flatten out fluctuations in mean probs
+                current_probs = 0.5*self.get_exchange_probs(self.njobs) + 0.5*current_probs
+                self.lambdas = self.update_lambdas(self.lambdas, current_probs, self.learning_rate)
+                self.clear_files()
+                print("lambdas: {}".format(''.join(['{:8.4f}'.format(a) for a in self.lambdas])))
+                print("probs: {}".format(''.join(['{:8.4f}'.format(a) for a in current_probs])))
+                self.learning_rate *= 0.9
+                self.nsteps *= 1.2
+                self.prepare_inputs()
+            except ValueError:
+                self.clear_files()
+                self.prepare_inputs()
+                print('Sim crashed, trying again. If this happens frequently, check your system for stability.')
+        return self.lambdas, current_probs
+
+    def initialize_lambdas(self, njobs, initguess):
+        if initguess:
+            # can start from user-defined lambdas
+            lambdas = np.loadtxt(initguess)
+            if len(lambdas) != njobs:
+                raise ValueError('The number of lambda values specified by user does not match the desired number of jobs')
+        else:
+            # otherwise initial guess is equally spaced:
+            lambdas = np.linspace(0, 1, njobs, endpoint=True)
+        return lambdas
+
+    def prepare_inputs(self):
+        """
+        Set standard filenames (mygro0.gro, mygro1.gro, ...)
+        and sim length (10000 steps for 50 exchange attemps)
+        """
+        # first gro files
+        if self.grofile is not None:
+            if self.xtc is None:
+                if self.grofile and self.grofile2:
+                    for i in range(self.njobs//2):
+                        gml.Pdb(self.grofile).save_gro(f'mygro{i}.gro')
+                    for i in range(self.njobs//2, self.njobs):
+                        gml.Pdb(self.grofile2).save_gro(f'mygro{i}.gro')
+                else:
+                    for i in range(self.njobs):
+                        gml.Pdb(self.grofile).save_gro(f'mygro{i}.gro')
+            else:
+                if self.grofile2 is None and self.xtc:
+                    self.pick_from_xtc(self.grofile, self.xtc, 0, self.njobs)
+                elif self.grofile and self.xtc and self.xtc2:
+                    self.pick_from_xtc(self.grofile, self.xtc, 0, self.njobs // 2)
+                    self.pick_from_xtc(self.grofile, self.xtc2, self.njobs // 2, self.njobs)
+        # then mdp file
+        if self.dyn_mdp:
+            nsteps_set = False
+            with open(self.dyn_mdp) as mdpfile:
+                text = mdpfile.readlines()
+            for linenumber in range(len(text)):
+                line = text[linenumber]
+                if line.startswith('nsteps'):
+                    text[linenumber] = 'nsteps = {:d}\n'.format(int(self.nsteps))
+                    nsteps_set = True
+            if nsteps_set:
+                with open(self.dyn_mdp, 'w') as mdpfile:
+                    for line in text:
+                        mdpfile.write(line)
+            else:
+                raise ValueError('Couldn\'t find nsteps in file {}, cannot proceed with optimization'.format(self.dyn_mdp))
+
+    @staticmethod
+    def pick_from_xtc(grofile, xtc, initial, final):
+        import mdtraj as md
+        traj = md.load(xtc, top=grofile)
+        nframes = final - initial
+        frames = np.linspace(initial, final, nframes+1).astype(int)[1:]
+        for num, fr in enumerate(frames, initial):
+            curr = traj[fr]
+            curr.save_gro('mygro{}.gro'.format(num))
+
+    @staticmethod
+    def clear_files(final=False):
+        for i in [x for x in os.listdir('.') if x.endswith('log') or x.endswith('xtc') or x.endswith('#')
+                                                or x.endswith('trr') or x.endswith('xvg') or x.endswith('edr')
+                                                or x.endswith('tpr')]:
+            os.remove(i)
+        if final:
+            for i in [x for x in os.listdir('.') if x.startswith('mymini') or x.startswith('mydyn')]:
+                os.remove(i)
+            os.remove('mdout.mdp')
+
+    def run_minimization(self):
+        gmx = gml.find_gmx_dir()
+        for state in range(self.njobs):
+            self.set_lambdas(self.mini_mdp, self.lambdas, state)
+            gml.gmx_command(gmx[1], 'grompp', f=self.mini_mdp, p=self.topfile, c=f'mygro{state}.gro',
+                            o=f'mymini{state}', quiet=True, maxwarn=self.maxwarn, fail_on_error=True)
+        for i in range(self.njobs):
+            os.mkdir(f'mn{i}')
+            copy2(f'mymini{i}.tpr', f'mn{i}/mymini.tpr')
+        dirlist = ' '.join([f'mn{q}' for q in range(self.njobs)])
+        gml.gmx_command(gmx[1], 'mdrun', deffnm='mymini', multidir=dirlist, answer=True, fail_on_error=True)
+        for i in range(self.njobs):
+            copy2(f'mn{i}/mymini.gro', f'mymini{i}.gro')
+            rmtree(f'mn{i}')
+
+    def set_lambdas(self, mdp, lambdas, ln):
+        lambdas_set = False
+        state_set = False
+        with open(mdp) as mdpfile:
+            text = mdpfile.readlines()
+        # need to check if "free-energy = yes" present in mdp
+        if not any([x.split()[0] == 'free-energy' and x.split()[2] == 'yes' for x in text if len(x.split()) > 2]):
+            raise ValueError('Set \'free-energy = yes\' in {}'.format(mdp))
+        for linenumber in range(len(text)):
+            line = text[linenumber]
+            if line.startswith('init-lambda-state'):
+                text[linenumber] = 'init-lambda-state = {}\n'.format(ln)
+                state_set = True
+            if line.startswith('fep-lambdas'):
+                text[linenumber] = 'fep-lambdas = {}\n'.format(' '.join([str(round(a, 5)) for a in lambdas]))
+                lambdas_set = True
+        if lambdas_set and state_set:  # if all ok, write modified files
+            with open("{}_{}".format(ln, mdp), 'w') as mdpfile:
+                for line in text:
+                    mdpfile.write(line)
+        else:
+            raise ValueError('Couldn\'t find either fep-lambdas or init-lambda-state in file {}, '
+                             'cannot proceed with optimization'.format(mdp))
+
+    def run_gromacs(self):
+        for state in range(self.njobs):
+            self.set_lambdas(self.dyn_mdp, self.lambdas, state)
+        hx = '' if not self.hrex else '-hrex -plumed plumed.dat '
+        gmx = gml.find_gmx_dir()
+        for state in range(self.njobs):
+            self.set_lambdas(self.dyn_mdp, self.lambdas, state)
+            gml.gmx_command(gmx[1], 'grompp', f=self.dyn_mdp, p=self.topfile, c=f'mymini{state}.gro',
+                            o=f'mydyn{state}', quiet=True, maxwarn=self.maxwarn, fail_on_error=True)
+        for i in range(self.njobs):
+            os.mkdir(f'dn{i}')
+            copy2(f'mydyn{i}.tpr', f'dn{i}/mydyn.tpr')
+            if self.hrex:
+                open(f'dn{i}/plumed.dat', 'a').close()
+        dirlist = ' '.join([f'dn{q}' for q in range(self.njobs)])
+        gml.gmx_command(gmx[1], 'mdrun', deffnm='mydyn', multidir=dirlist, replex=250, hrex=bool(self.hrex),
+                        answer=True, fail_on_error=True)
+        for i in range(self.njobs):
+            copy2(f'dn{i}/mydyn.gro', f'mydyn{i}.gro')
+            copy2(f'dn{i}/mydyn.log', f'mydyn{i}.log')
+            rmtree(f'dn{i}')
+        for i in range(self.njobs):
+            copy2(f'mydyn{i}.gro', f'mygro{i}.gro')  # as a better guess for subsequent minimization
+
+    @staticmethod
+    def get_exchange_probs(njobs, logfile):
+        """
+        log lines starting with 'Repl pr' contain exchange probabilities for
+        alternating sets of windows (e.g. 1-3-5 and 0-2-4-6), with 5 chars per
+        window -- need to slice, convert to arrays, sum and divide by half the
+        number of lines; also get ride of the last line if num is odd
+        """
+        probs = np.zeros(njobs - 1)
+        with open(logfile) as datafile:
+            lines = [line[8:] for line in datafile.readlines() if line.startswith('Repl pr')]
+        if len(lines) == 0:
+            raise ValueError('no exchange attempts')
+        if len(lines) % 2 == 1:
+            lines = lines[:-1]
+        for line in lines:
+            probs += np.array([float(line[5 * t:5 * (t + 1)] + '0') for t in range(njobs - 1)])
+        if np.isnan(probs).any():
+            raise ValueError('no exchange attempts')
+        return probs / (len(lines) / 2)
+
+    @staticmethod
+    def update_lambdas(lambdas, probs, learning_rate):
+        multipliers = 2**((probs-0.5)*2)
+        scaled_multipliers = np.mean(multipliers) + learning_rate * (multipliers - np.mean(multipliers))
+        deltas = lambdas[1:] - lambdas[:-1]
+        updated_deltas = deltas * scaled_multipliers
+        normalized_deltas = updated_deltas / sum(updated_deltas)
+        new_lambdas = lambdas * 0.0
+        new_lambdas[1:] = np.cumsum(normalized_deltas)
+        return new_lambdas
+

@@ -1718,6 +1718,13 @@ class Traj:
         """
         return len(self.structures)
 
+    def from_selection_inplace(self, selection):
+        new_pdbs = [p.from_selection(selection) for p in self.structures]
+        self.structures = new_pdbs
+        self.atoms = self.structures[0].atoms
+        if self.top is not None:
+            self.top = self.top.from_selection(selection)
+
     def get_coords_from_file(self, infile: str) -> list:
         """
         Reads the full trajectory from a multi-frame .pdb or .gro file

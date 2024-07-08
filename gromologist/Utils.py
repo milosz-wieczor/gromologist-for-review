@@ -836,7 +836,7 @@ class ConvergeLambdas:
         self.xtc, self.xtc2 = xtc, xtc2
         self.lambdas = self.initialize_lambdas(njobs, initguess)
         # set filenames and nsteps:
-        self.prepare_inputs()
+        self.prepare_inputs(first=True)
         print("All systems set up, ready to go")
         print("lambdas: {}".format(''.join(['{:8.4f}'.format(a) for a in self.lambdas])))
         # the 'or' sets up a lower limit on number of iterations
@@ -882,13 +882,13 @@ class ConvergeLambdas:
             lambdas = np.linspace(0, 1, njobs, endpoint=True)
         return lambdas
 
-    def prepare_inputs(self):
+    def prepare_inputs(self, first=False):
         """
         Set standard filenames (mygro0.gro, mygro1.gro, ...)
         and sim length (10000 steps for 50 exchange attemps)
         """
         # first gro files
-        if self.grofile is not None:
+        if first:
             if self.xtc is None:
                 if self.grofile and self.grofile2:
                     for i in range(self.njobs // 2):
@@ -905,18 +905,17 @@ class ConvergeLambdas:
                     self.pick_from_xtc(self.grofile, self.xtc, 0, self.njobs // 2)
                     self.pick_from_xtc(self.grofile, self.xtc2, self.njobs // 2, self.njobs)
         # then mdp file
-        if self.dyn_mdp:
-            gml.gen_mdp(self.dyn_mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
-                        dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
-                        sc__coul="yes", constraints='all-bonds', pcoupl="no", nsteps=self.nsteps)
-            for i in range(self.njobs):
-                self.set_lambdas(self.dyn_mdp, self.lambdas, i)
-        if self.mini_mdp:
-            gml.gen_mdp(self.mini_mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
-                        dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
-                        sc__coul="yes")
-            for i in range(self.njobs):
-                self.set_lambdas(self.mini_mdp, self.lambdas, i)
+            if self.dyn_mdp:
+                gml.gen_mdp(self.dyn_mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
+                            dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
+                            sc__coul="yes", constraints='all-bonds', pcoupl="no", nsteps=self.nsteps)
+            if self.mini_mdp:
+                gml.gen_mdp(self.mini_mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
+                            dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
+                            sc__coul="yes")
+        for i in range(self.njobs):
+            self.set_lambdas(self.mini_mdp, self.lambdas, i)
+            self.set_lambdas(self.dyn_mdp, self.lambdas, i)
 
     @staticmethod
     def pick_from_xtc(grofile, xtc, initial, final):

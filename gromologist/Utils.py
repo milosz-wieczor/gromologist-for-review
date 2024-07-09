@@ -858,8 +858,10 @@ class ConvergeLambdas:
                 current_probs = 0.5 * self.get_exchange_probs(self.njobs) + 0.5 * current_probs
                 self.lambdas = self.update_lambdas(self.lambdas, current_probs, self.learning_rate)
                 self.clear_files()
-                print("lambdas: {}".format(''.join(['{:8.4f}'.format(a) for a in self.lambdas])))
-                print("probs: {}".format(''.join(['{:8.4f}'.format(a) for a in current_probs])))
+                fout = open('opt_lambdas.dat', 'a')
+                print("lambdas: {}".format(''.join(['{:8.4f}'.format(a) for a in self.lambdas])), file=fout)
+                print("probs: {}".format(''.join(['{:8.4f}'.format(a) for a in current_probs])), file=fout)
+                fout.close()
                 self.learning_rate *= 0.9
                 self.nsteps *= 1.2
                 self.prepare_inputs()
@@ -987,7 +989,7 @@ class ConvergeLambdas:
         for state in range(self.njobs):
             self.set_lambdas(self.dyn_mdp, self.lambdas, state)
             gml.gmx_command(gmx[1], 'grompp', f=self.dyn_mdp, p=self.topfile, c=f'mymini{state}.gro',
-                            o=f'mydyn{state}', quiet=True, maxwarn=self.maxwarn, fail_on_error=True)
+                            o=f'mydyn{state}', quiet=False, maxwarn=self.maxwarn, fail_on_error=True)
         for i in range(self.njobs):
             os.mkdir(f'dn{i}')
             copy2(f'mydyn{i}.tpr', f'dn{i}/mydyn.tpr')

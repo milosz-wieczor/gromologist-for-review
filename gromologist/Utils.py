@@ -906,8 +906,8 @@ class ConvergeLambdas:
                     self.pick_from_xtc(self.grofile, self.xtc2, self.njobs // 2, self.njobs)
         # then mdp file
         gml.gen_mdp('dyn.mdp', free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
-                        dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
-                        sc__coul="yes", constraints='all-bonds', pcoupl="no", nsteps=self.nsteps)
+                    dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
+                    sc__coul="yes", constraints='all-bonds', pcoupl="no", nsteps=int(self.nsteps), dt=0.0005)
         gml.gen_mdp('min.mdp', runtype='mini', free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
                     dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
                     sc__coul="yes")

@@ -204,6 +204,11 @@ class SectionMol(Section):
                 reslist.append(f'{at.resname}-{at.resid}')
         return reslist
 
+    @property
+    def atomtypes(self):
+        allt = {atom.type for atom in self.atoms}.union({atom.type_b for atom in self.atoms if atom.type_b is not None})
+        return sorted(list(allt))
+
     def _merge(self):
         parsed_headers = set()
         to_remove = []
@@ -2422,7 +2427,8 @@ class SectionParam(Section):
         ss.set_opt_dih(values)
 
     def add_nbfix(self, type1: str, type2: str, mod_sigma: float = 0.0, mod_epsilon: float = 0.0,
-                  action_default: str = 'x', new_sigma: Optional[float] = None, new_epsilon: Optional[float] = None):
+                  action_default: str = 'x', new_sigma: Optional[float] = None, new_epsilon: Optional[float] = None,
+                  scale_sigma: Optional[float] = None, scale_epsilon: Optional[float] = None):
         """
         Generates NBFIX entries for the chosen pair of atomtypes by modifying the current
         Lorentz-Berthelot rules, or an existing NBFIX
@@ -2432,6 +2438,8 @@ class SectionParam(Section):
         :param mod_epsilon: float, by how much to increase the LJ epsilon (in kJ/mol)
         :param new_sigma: float, if specified instead of mod_sigma sets the value directly (in nm)
         :param new_epsilon: float, if specified instead of mod_epsilon sets the value directly (in kJ/mol)
+        :param scale_sigma: float, if specified instead of mod_sigma, multiplies instead of adding
+        :param scale_epsilon: float, if specified instead of mod_epsilon, multiplies instead of adding
         :param action_default: str, what to do if an NBFIX already exists (check prompt if that happens)
         :return: None
         """
@@ -2464,9 +2472,22 @@ class SectionParam(Section):
                     if action == 't':
                         return
                     elif action == 'm':
-                        new_sig = entry.params[0] + mod_sigma if new_sigma is None else new_sigma
-                        new_eps = entry.params[1] + mod_epsilon if new_epsilon is None else new_epsilon
+                        if new_sigma is None:
+                            if scale_sigma is None:
+                                new_sig = entry.params[0] + mod_sigma
+                            else:
+                                new_sig = entry.params[0] * scale_sigma
+                        else:
+                            new_sig = new_sigma
+                        if new_epsilon is None:
+                            if scale_epsilon is None:
+                                new_eps = entry.params[0] + mod_epsilon
+                            else:
+                                new_eps = entry.params[0] * scale_epsilon
+                        else:
+                            new_eps = new_epsilon
                         comment = entry.comment
+                    # if action == 'r' we leave new_sig and new_eps as they are defined above
                     nbsub.remove_entry(entry)
         entry_line = "{} {} 1 {} {} ; sigma chg by {}, eps chg by {} {}".format(type1, type2, new_sig, new_eps,
                                                                                 mod_sigma, mod_epsilon, comment)

@@ -822,8 +822,6 @@ def calc_LJ_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_
 class ConvergeLambdas:
     def __init__(self, topfile, grofile, grofile2=None, njobs=12, mpiexec='srun', initguess=None, xtc=None, xtc2=None,
                  maxwarn=5, hrex=True, threshold=0.25):
-        self.mini_mdp = 'minimize.mdp'
-        self.dyn_mdp = 'md.mdp'
         self.topfile = topfile
         self.learning_rate = 2.0  # will multiply scaling factors, decreases over time
         self.nsteps = 10000  # starting value, increases over time
@@ -907,17 +905,15 @@ class ConvergeLambdas:
                     self.pick_from_xtc(self.grofile, self.xtc, 0, self.njobs // 2)
                     self.pick_from_xtc(self.grofile, self.xtc2, self.njobs // 2, self.njobs)
         # then mdp file
-            if self.dyn_mdp:
-                gml.gen_mdp(self.dyn_mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
-                            dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
-                            sc__coul="yes", constraints='all-bonds', pcoupl="no", nsteps=self.nsteps)
-            if self.mini_mdp:
-                gml.gen_mdp(self.mini_mdp, free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
-                            dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
-                            sc__coul="yes")
+        gml.gen_mdp('dyn.mdp', free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
+                        dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
+                        sc__coul="yes", constraints='all-bonds', pcoupl="no", nsteps=self.nsteps)
+        gml.gen_mdp('min.mdp', free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
+                    dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
+                    sc__coul="yes", runtype='mini')
         for i in range(self.njobs):
-            self.set_lambdas(self.mini_mdp, self.lambdas, i)
-            self.set_lambdas(self.dyn_mdp, self.lambdas, i)
+            self.set_lambdas('min.mdp', self.lambdas, i)
+            self.set_lambdas('dyn.mdp', self.lambdas, i)
 
     @staticmethod
     def pick_from_xtc(grofile, xtc, initial, final):
@@ -943,8 +939,8 @@ class ConvergeLambdas:
     def run_minimization(self):
         gmx = gml.find_gmx_dir()
         for state in range(self.njobs):
-            self.set_lambdas(self.mini_mdp, self.lambdas, state)
-            gml.gmx_command(gmx[1], 'grompp', f=self.mini_mdp, p=self.topfile, c=f'mygro{state}.gro',
+            self.set_lambdas('min.mdp', self.lambdas, state)
+            gml.gmx_command(gmx[1], 'grompp', f=f'{state}_min.mdp', p=self.topfile, c=f'mygro{state}.gro',
                             o=f'mymini{state}', quiet=True, maxwarn=self.maxwarn, fail_on_error=True)
         for i in range(self.njobs):
             os.mkdir(f'mn{i}')
@@ -982,13 +978,11 @@ class ConvergeLambdas:
                              'cannot proceed with optimization'.format(mdp))
 
     def run_gromacs(self):
-        for state in range(self.njobs):
-            self.set_lambdas(self.dyn_mdp, self.lambdas, state)
-        plumed = 'plumed.dat' if self.hrex else False
+        plumed = 'plumed.dat -hrex ' if self.hrex else False
         gmx = gml.find_gmx_dir()
         for state in range(self.njobs):
-            self.set_lambdas(self.dyn_mdp, self.lambdas, state)
-            gml.gmx_command(gmx[1], 'grompp', f=self.dyn_mdp, p=self.topfile, c=f'mymini{state}.gro',
+            self.set_lambdas('dyn.mdp', self.lambdas, state)
+            gml.gmx_command(gmx[1], 'grompp', f=f'{state}_dyn.mdp', p=self.topfile, c=f'mymini{state}.gro',
                             o=f'mydyn{state}', quiet=False, maxwarn=self.maxwarn, fail_on_error=True)
         for i in range(self.njobs):
             os.mkdir(f'dn{i}')

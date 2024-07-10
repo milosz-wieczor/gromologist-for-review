@@ -67,10 +67,12 @@ def gen_mdp(fname: str, runtype: str = 'md', **extra_args):
     mini_defaults = {"integrator": "steep", "nsteps": 1000, "emtol": 200, "emstep": 0.001, "nstlist": 10,
                      "pbc": "xyz", "coulombtype": "PME", "vdw-type": "Cut-off"}
     mdp_defaults.update(extra_args)
-    for key in list(mdp_defaults.keys()):
-        if '__' in key:
-            mdp_defaults[key.replace('__', '-')] = mdp_defaults[key]
-            del mdp_defaults[key]
+    mini_defaults.update(extra_args)
+    for defaults in [mdp_defaults, mini_defaults]:
+        for key in list(defaults.keys()):
+            if '__' in key:
+                defaults[key.replace('__', '-')] = defaults[key]
+                del defaults[key]
     default = mini_defaults if runtype == 'mini' else mdp_defaults
     mdp = '\n'.join([f"{param} = {value}" for param, value in default.items()])
     with open(fname, 'w') as outfile:

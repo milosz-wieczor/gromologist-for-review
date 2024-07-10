@@ -908,9 +908,9 @@ class ConvergeLambdas:
         gml.gen_mdp('dyn.mdp', free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
                         dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
                         sc__coul="yes", constraints='all-bonds', pcoupl="no", nsteps=self.nsteps)
-        gml.gen_mdp('min.mdp', free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
+        gml.gen_mdp('min.mdp', runtype='mini', free__energy="yes", fep__lambdas="0 1", nstdhdl="500", separate__dhdl__file="yes",
                     dhdl__derivatives="yes", init__lambda__state="0", sc__alpha=0.5, sc__power=1, sc__sigma=0.3,
-                    sc__coul="yes", runtype='mini')
+                    sc__coul="yes")
         for i in range(self.njobs):
             self.set_lambdas('min.mdp', self.lambdas, i)
             self.set_lambdas('dyn.mdp', self.lambdas, i)

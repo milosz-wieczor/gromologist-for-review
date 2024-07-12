@@ -2455,37 +2455,47 @@ class SectionParam(Section):
             raise KeyError('Type {} was not found in the atomtype definitions'.format(type1))
         if sigma2 is None:
             raise KeyError('Type {} was not found in the atomtype definitions'.format(type2))
-        new_sig = 0.5 * (sigma1 + sigma2) + mod_sigma if new_sigma is None else new_sigma
-        new_eps = (eps1 * eps2) ** 0.5 + mod_epsilon if new_epsilon is None else new_epsilon
+        if new_sigma is None:
+            if scale_sigma is None:
+                new_sig = 0.5 * (sigma1 + sigma2) + mod_sigma
+            else:
+                new_sig = 0.5 * scale_sigma * (sigma1 + sigma2)
+        else:
+            new_sig = new_sigma
+        if new_epsilon is None:
+            if scale_epsilon is None:
+                new_eps = (eps1 * eps2) ** 0.5 + mod_epsilon
+            else:
+                new_eps = scale_epsilon * (eps1 * eps2) ** 0.5
+        else:
+            new_eps = new_epsilon
         try:
             nbsub = self.get_subsection('nonbond_params')
         except KeyError:
             self.subsections.append(self._yield_sub(['[ nonbond_params ]']))
             nbsub = self.get_subsection('nonbond_params')
         comment = ''
+        # this part is only important if an entry already exists:
         for entry in nbsub:
             if isinstance(entry, gml.EntryParam):
                 if (entry.types[0], entry.types[1]) in [(type1, type2), (type2, type1)]:
                     action = action_default
                     while action not in 'mrt':
-                        action = input("An entry already exists, shall we replace it (r), modify (m) or terminate (t)?")
+                        action = input("An entry already exists, shall we replace it from scratch (r), modify existing "
+                                       "(m) or terminate (t)?")
                     if action == 't':
                         return
                     elif action == 'm':
-                        if new_sigma is not None:
+                        if new_sigma is None:
                             if scale_sigma is None:
                                 new_sig = entry.params[0] + mod_sigma
                             else:
                                 new_sig = entry.params[0] * scale_sigma
-                        else:
-                            new_sig = new_sigma
-                        if new_epsilon is not None:
+                        if new_epsilon is None:
                             if scale_epsilon is None:
                                 new_eps = entry.params[0] + mod_epsilon
                             else:
                                 new_eps = entry.params[0] * scale_epsilon
-                        else:
-                            new_eps = new_epsilon
                         comment = entry.comment
                     # if action == 'r' we leave new_sig and new_eps as they are defined above
                     nbsub.remove_entry(entry)

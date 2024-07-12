@@ -1031,3 +1031,18 @@ class ConvergeLambdas:
         new_lambdas = lambdas * 0.0
         new_lambdas[1:] = np.cumsum(normalized_deltas)
         return new_lambdas
+
+
+def plumed_maker(struct: "gml.Pdb", selections: list, label_core: str, command: str, params: str = ''):
+    """
+    Can make multiple Plumed group/COM/center/... definitions based on a list of selections.
+    :param struct: gml.Pdb, structure file
+    :param selections: list of str, list of selections
+    :param label_core: str, core name of the label for each input element
+    :param command: str, COM or CENTER or other commands that require ATOMS=...
+    :param params: str, other parameters that should be included in the definition
+    :return: None
+    """
+    for n, sel in enumerate(selections):
+        atoms = struct.get_atom_indices(sel, as_plumed=True)
+        print(f"{label_core}{n}: {command} {atoms} {params}")

@@ -2472,14 +2472,14 @@ class SectionParam(Section):
                     if action == 't':
                         return
                     elif action == 'm':
-                        if new_sigma is None:
+                        if new_sigma is not None:
                             if scale_sigma is None:
                                 new_sig = entry.params[0] + mod_sigma
                             else:
                                 new_sig = entry.params[0] * scale_sigma
                         else:
                             new_sig = new_sigma
-                        if new_epsilon is None:
+                        if new_epsilon is not None:
                             if scale_epsilon is None:
                                 new_eps = entry.params[0] + mod_epsilon
                             else:

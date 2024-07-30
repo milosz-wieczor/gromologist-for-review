@@ -1500,6 +1500,13 @@ class SectionMol(Section):
         self._check_correct()
 
     def cleave_protein(self, after_residue: int, rtp: Optional[str] = None, mutate_in_pdb: bool = True):
+        """
+        Cuts a protein chain into two, adding typical termini (C- and N-terminal charged ends)
+        :param after_residue: int, resid after which the cut will be introduced
+        :param rtp: str, a non-standard .rtp file containing the terminal residue definitions
+        :param mutate_in_pdb: bool, whether to modify the .pdb file too
+        :return:
+        """
         new_c_term = self.get_atom(f'resid {after_residue} and name C')
         new_n_term = self.get_atom(f'resid {after_residue + 1} and name N')
         if mutate_in_pdb:
@@ -1673,6 +1680,12 @@ class SectionMol(Section):
             self.top.rtp['impropers'], self.top.rtp['bondedtypes'], self.top.rtp['bonds']
 
     def parse_tdb(self, tdb: str, terminus: str):
+        """
+        Reads and parses a terminal database (.tdb) file
+        :param tdb: str, an existing .tdb file to read
+        :param terminus: str, the terminal residue to read
+        :return: a tuple of lists containing replacements, additions, and extra impropers
+        """
         replaces, adds, impropers = [], [], []
         tdb_cont = [line for line in open(tdb) if not line.strip().startswith(';')]
         reading = False
@@ -1837,6 +1850,11 @@ class SectionMol(Section):
         return renamed
 
     def write_atomtypes(self, atfile: str = 'atomtypes.dat'):
+        """
+        Writes (or appends, if exists) atomtypes.dat based on atomtypes defined in the molecule
+        :param atfile: str, path to an atomtypes.dat file if has to be appended
+        :return: None
+        """
         if os.path.exists(atfile):
             mode = 'a'
             print('Found an existing file with requested name, will append to it')
@@ -1952,6 +1970,11 @@ class SectionMol(Section):
                                          p2_sel='resid {} and name {}'.format(resid, hook), atomname=at)
 
     def add_dummy_def(self, dummy_type: str):
+        """
+        Adds a dummy type (charge 0, LJ 0) to atomtypes if needed
+        :param dummy_type: str, name for the dummy type
+        :return: None
+        """
         params = self.top.parameters
         atomtypes = params.get_subsection('atomtypes')
         dummy_entries = [e for e in atomtypes if isinstance(e, gml.EntryParam) and e.types[0] == dummy_type]

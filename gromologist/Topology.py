@@ -202,6 +202,17 @@ class Top:
         for entry in entries_to_del:
             system_subsection.entries.remove(entry)
 
+    def merge_molecules(self, molname1: Union[str, int], molname2: Union[str, int]):
+        """
+        Combines two molecules into a single [ moleculetype ]
+        :param molname1: str or int, name of molecule 1 or index of molecule 1
+        :param molname2: str or int, name of molecule 2 or index of molecule 2
+        :return: None
+        """
+        mol1 = self.molecules[molname1] if isinstance(molname1, int) else self.get_molecule(molname1)
+        mol2 = self.molecules[molname2] if isinstance(molname2, int) else self.get_molecule(molname2)
+        mol1.merge_two(mol2, -1, -1)
+
     def select_atoms(self, selection_string: str) -> list:
         """
         Returns atoms' indices according to the specified selection string

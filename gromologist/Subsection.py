@@ -144,7 +144,7 @@ class SubsectionBonded(Subsection):
     """
     n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'pairs_nb': 2,
                'cmap': 5, 'settles': 1, 'exclusions': 2, 'position_restraints': 1,
-               'virtual_sites2': 3, 'constraints': 2}
+               'virtual_sites2': 3, 'virtual_sites3': 4, 'constraints': 2}
     
     def __init__(self, content: list, section: "gml.Section"):
         super().__init__(content, section)

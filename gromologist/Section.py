@@ -66,7 +66,7 @@ class Section:
         until = content[0].index(']')
         header = content[0][:until].strip().strip('[]').strip()
         if header in {'bonds', 'pairs', 'angles', 'dihedrals', 'settles', 'exclusions', 'cmap', 'position_restraints',
-                      'virtual_sites2', 'constraints', 'pairs_nb'}:
+                      'virtual_sites2', 'virtual_sites3', 'constraints', 'pairs_nb'}:
             return gml.SubsectionBonded(content, self)
         elif header == 'atoms':
             return gml.SubsectionAtom(content, self)
@@ -1978,6 +1978,31 @@ class SectionMol(Section):
         ref = self.atoms[atom1-1]
         self.add_atom(len(self.atoms) + 1, atomname, atomtype, resid=ref.resid, resname=ref.resname, mass=0.0)
         ssect.add_entry(gml.EntryBonded(f'{atom1} {atom2} {len(self.atoms)} 1 {fraction}\n', ssect))
+
+    def add_vs3out(self, vsnum: int, atom1: int, atom2: int, atom3: int, a: float, b: float, c: float, atomname: str,
+                   atomtype: str):
+        """
+        Adds an interpolation-type virtual site (between two atoms) just behind the reference (1st) atom.
+        If the respective section does not exist in the topology, it will be created.
+        :param vsnum: int, serial number of the virtual site
+        :param atom1: int, serial numbers of the first atom
+        :param atom2: int, serial numbers of the second atom
+        :param fraction: float, at which point between the 1st (0) and 2nd (1) atom the VS will be created
+        :param atomname: str, name of the new atom
+        :param atomtype: str, type of the new atom
+        :return: None
+        """
+        try:
+            ssect = self.get_subsection('virtual_sites3')
+        except KeyError:
+            self.subsections.append(self._yield_sub(['[ virtual_sites3 ]']))
+            ssect = self.get_subsection('virtual_sites3')
+        ref = self.atoms[atom1 - 1]
+        if any([atom1 > self.natoms, atom2 > self.natoms, atom3 > self.natoms]):
+            raise RuntimeError(f"Can't add the vs3, one of the atoms is outside of the molecule {self.mol_name} in "
+                               f"the topology; merge your molecules using merge_two")
+        self.add_atom(vsnum, atomname, atomtype, resid=ref.resid, resname=ref.resname, mass=0.0)
+        ssect.add_entry(gml.EntryBonded(f'{vsnum} {atom1} {atom2} {atom3} 4 {a} {b} {c}\n', ssect))
 
     def add_constraint(self, atom1: int, atom2: int, distance: float):
         """

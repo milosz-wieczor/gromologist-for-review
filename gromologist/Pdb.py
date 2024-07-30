@@ -156,6 +156,40 @@ class Pdb:
         for at in pdb.get_atoms(selection)[::-1]:
             self.atoms.insert(last_index + 1, at)
 
+    def _match_top_to_pdb(self, serial: int) -> "gml.Entry":
+        if not self.top:
+            raise RuntimeError("Add a topology to the structure in order to match ")
+        selected = self.get_atom_index(f'serial {serial}')
+        assert self.natoms == self.top.natoms
+        assert serial <= self.natoms
+        system = self.top.system
+        for mol_n in system:
+            molname, molnum = mol_n
+            mol = self.top.get_molecule(molname)
+            for i in range(molnum):
+                if selected <= mol.natoms:
+                    return mol.atoms[selected - 1]
+                else:
+                    selected -= mol.atoms
+        raise RuntimeError("Something went wrong, not found the atom in question")
+
+    def _match_top_molecule(self, serial: int) -> "gml.SectionMol":
+        if not self.top:
+            raise RuntimeError("Add a topology to the structure in order to match ")
+        selected = self.get_atom_index(f'serial {serial}')
+        assert self.natoms == self.top.natoms
+        assert serial <= self.natoms
+        system = self.top.system
+        for mol_n in system:
+            molname, molnum = mol_n
+            mol = self.top.get_molecule(molname)
+            for i in range(molnum):
+                if selected <= mol.natoms:
+                    return mol
+                else:
+                    selected -= mol.atoms
+        raise RuntimeError("Something went wrong, not found the atom in question")
+
     def print_protein_sequence(self, gaps: bool = False) -> list:
         """
         Prints protein sequence chain by chain, recognizing amino acids
@@ -1077,6 +1111,7 @@ class Pdb:
         :param chain: str, additional specification to identify the atoms
         :return: None
         """
+        # TODO also add in topology?
         chsel = f' and chain {chain}' if chain is not None else ''
         serial = self.get_atoms(f"resid {resid}{chsel}")[-1].serial + 2 if serial is None else serial
         a1 = self.get_atom(f"resid {resid} and name {name1}{chsel}")
@@ -1085,6 +1120,41 @@ class Pdb:
         self.insert_atom(serial, name=vsname, hooksel=f"resid {resid} and name {name1}{chsel}",
                          bondlength=dist * fraction, p1_sel=f"resid {resid} and name {name1}{chsel}",
                          p2_sel=f"resid {resid} and name {name2}{chsel}", atomname=vsname)
+
+    def add_vs3out(self, resid: int, name1: str, name2: str, name3: str, vsname: str = 'V3', a: float = 0.0,
+                   b: float = 0.0, c: float = 1.5, serial: Optional[int] = None, chain: Optional[str] = None,
+                   resid2: Optional[int] = None, resid3: Optional[int] = None, add_in_top: bool = True):
+        """
+        Adds an out-of-plane virtual site (VS) defined by three atoms, using a cross-product between
+        two vectors defined by three atoms (i,j) and (i,k)
+        :param resid: int, number of the residue that will contain the VS
+        :param name1: str, 1st atom to use for the construction of the VS
+        :param name2: str, 2nd atom to use for the construction of the VS
+        :param name3: str, 3rd atom to use for the construction of the VS
+        :param vsname: str, name of the new virtual site
+        :param a: float, first parameter used to construct the site
+        :param b: float, second parameter used to construct the site
+        :param c: float, third parameter used to construct the site
+        :param serial: int, where to locate the new VS in the atomlist
+        :param chain: str, additional specification to identify the atoms
+        :return: None
+        """
+        chsel = f' and chain {chain}' if chain is not None else ''
+        a1 = self.get_atom(f"resid {resid} and name {name1}{chsel}")
+        serial = a1.serial + 1 if serial is None else serial
+        a2 = self.get_atom(f"resid {resid if resid2 is None else resid2} and name {name2}{chsel}")
+        a3 = self.get_atom(f"resid {resid if resid3 is None else resid3} and name {name3}{chsel}")
+        v1 = self._atoms_vec(a1, a2)
+        v2 = self._atoms_vec(a1, a3)
+        v3 = self._cross_product(v1, v2)
+        n1 = self._normalize(v3)
+        vec = [a * vv1 + b * vv2 + c * nn1 for vv1, vv2, nn1 in zip(v1, v2, n1)]
+        if self.top and add_in_top:
+            self.top.parameters.add_dummy_def('MW')
+            mol = self._match_top_molecule(serial)
+            mol.add_vs3out(serial, a1.serial, a2.serial, a3.serial, a, b, c, vsname, 'MW')
+        self.insert_atom(serial, name=vsname, hooksel=f"resid {resid} and name {name1}{chsel}",
+                         vector=vec, atomname=vsname, bondlength=sum([vec[0] ** 2 + vec[1] ** 2 + vec[2] ** 2]) ** 0.5)
 
     def interatomic_dist(self, resid1=1, resid2=2):
         """

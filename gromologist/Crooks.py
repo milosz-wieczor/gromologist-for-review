@@ -8,11 +8,14 @@ from subprocess import call
 
 # optional?
 import numpy as np
-from scipy.integrate import simps
-from scipy.optimize import fmin
-from sklearn.neighbors import KernelDensity
-from sklearn.model_selection import GridSearchCV
-from sklearn.model_selection import LeaveOneOut
+try:
+    from scipy.integrate import simps
+    from scipy.optimize import fmin
+    from sklearn.neighbors import KernelDensity
+    from sklearn.model_selection import GridSearchCV
+    from sklearn.model_selection import LeaveOneOut
+except ImportError:
+    pass
 
 
 class CrooksPool:

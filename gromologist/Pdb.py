@@ -1134,7 +1134,7 @@ class Pdb:
         :param vsname: str, name of the new virtual site
         :param a: float, first parameter used to construct the site
         :param b: float, second parameter used to construct the site
-        :param c: float, third parameter used to construct the site
+        :param c: float, third parameter used to construct the site, or out-of-plane distance (in nm)
         :param serial: int, where to locate the new VS in the atomlist
         :param chain: str, additional specification to identify the atoms
         :return: None
@@ -1148,7 +1148,7 @@ class Pdb:
         v2 = self._atoms_vec(a1, a3)
         v3 = self._cross_product(v1, v2)
         n1 = self._normalize(v3)
-        vec = [a * vv1 + b * vv2 + c * nn1 for vv1, vv2, nn1 in zip(v1, v2, n1)]
+        vec = [a * vv1 + b * vv2 + 10*c * nn1 for vv1, vv2, nn1 in zip(v1, v2, n1)]
         if self.top and add_in_top:
             self.top.parameters.add_dummy_def('MW')
             mol = self._match_top_molecule(serial)

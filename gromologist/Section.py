@@ -478,6 +478,7 @@ class SectionMol(Section):
         :param rtp: str, optional; if specified, the given .rtp will be used (otherwise interactive)
         :return: None
         """
+        # TODO remove in PDB
         other = self if other is None else other
         s1 = self.get_atom(f'resid {resid1} and name SG')
         h1 = self.get_atom(f'resid {resid1} and name HG HG1')
@@ -513,6 +514,7 @@ class SectionMol(Section):
         :param rtp: str, optional; if specified, the given .rtp will be used (otherwise interactive)
         :return: None
         """
+        # TODO remove in PDB
         other = self if other is None else other
         c1 = self.get_atom(f'resid {resid1} and name CA')
         if c1.resname not in {'CYS', 'HIS', 'HID', 'HIE', 'HSD', 'HSE'}:

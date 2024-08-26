@@ -452,10 +452,10 @@ class Pdb:
             chname = self.chains[chnr]
             new_atoms.extend(self.get_atoms(f'chain {chname}'))
         new_atoms.extend(self.get_atoms(f'not chain {" ".join(self.chains)}'))
+        self.atoms = new_atoms
         if rename:
             self.renumber_atoms()
             self.add_chains()
-        self.atoms = new_atoms
 
     def print_mols(self):
         """

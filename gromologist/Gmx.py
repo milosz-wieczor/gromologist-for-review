@@ -137,6 +137,21 @@ def get_legend(gmx: str, fname: str) -> dict:
             if output[i].isnumeric()}
 
 
+def get_residuetypes() -> dict:
+    """
+    Gets residue names with their major types (Protein, DNA, RNA, Water, Ion)
+    :return: dictionary of type_name: {set of residue names}
+    """
+    where_gmx = gml.find_gmx_dir(suppress=True)[0]
+    if where_gmx:
+        content = [line.strip().split() for line in open(f'{where_gmx}/residuetypes.dat')]
+        types = {l[1] for l in content}
+        return {k: {l[0] for l in content if l[1] == k} for k in types}
+    else:
+        return RuntimeError("Couldn't find residuetypes.dat!")
+
+
+
 def ndx(struct: gml.Pdb, selections: list, fname: Optional[str] = None, append: Optional[str] = None,
         group_names: Optional[list] = None) -> list:
     """
@@ -343,10 +358,11 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
 
 
 def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] = None,
-                   box: Optional[str] = 'dodecahedron', cation: Optional[str] = 'K',
-                   anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15, maxsol: Optional[int] = None,
-                   resize_box=True, box_margin: Optional[float] = 1.5, explicit_box_size=None, quiet=True,
-                   topology: Optional[str] = None, maxwarn=1, minimize=True, **kwargs):
+                   box: Optional[str] = 'dodecahedron', ncation: Optional[int] = None, nanion: Optional[int] = None,
+                   cation: Optional[str] = 'K', anion: Optional[str] = 'CL', ion_conc: Optional[float] = 0.15,
+                   maxsol: Optional[int] = None, resize_box: bool = True, box_margin: Optional[float] = 1.5,
+                   explicit_box_size: Optional[list] = None, quiet: bool = True, topology: Optional[str] = None,
+                   maxwarn: int = 1, minimize: bool = True, solvent_from: Optional[str] = None, **kwargs):
     """
     Implements a full system preparation workflow (parsing the structure with pdb2gmx,
     setting the box size, adding solvent and ions, minimizing, generating a final
@@ -357,6 +373,8 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     :param box: str, box type (default is dodecahedron)
     :param cation: str, the cation to be used (default is K)
     :param anion: str, the anion to be used (default is CL)
+    :param ncation: int, the number of cations to be used (default is from concentration)
+    :param nanion: int, the number of anions to be used (default is from concentration)
     :param ion_conc: float, the ion concentration to be applied (default 0.15)
     :param resize_box: bool, whether to generate a new box size based on the -d option of gmx editconf
     :param box_margin: float, box margin passed to editconf to set box size (default is 1.5 nm)
@@ -365,6 +383,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     :param topology: str, if passed gmx pdb2gmx will be skipped
     :param minimize: bool, whether to do energy minimization at the end
     :param maxwarn: int, how many warnings to tolerate in grompp
+    :param solvent_from: str, reproduce solvent data from a chosen topology file
     :return: None
     """
     gmx = gml.find_gmx_dir()
@@ -413,6 +432,30 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
     else:
         copy2('conf.gro', 'box.gro')
     waterbox = 'spc216.gro' if ('3' in water or 'spc' in water) else 'tip5p.gro' if '5' in water else 'tip4p.gro'
+    if solvent_from is not None:
+        nwater = 0
+        ions = {}
+        t = gml.Top(solvent_from, suppress=True)
+        rtypes = gml.get_residuetypes()
+        system = t.system
+        for subsys in system:
+            if subsys[0] in rtypes['Water']:
+                nwater += subsys[1]
+            elif subsys[0] in rtypes['Ion']:
+                nwater += subsys[1]
+                if subsys[0] in ions.keys():
+                    ions[subsys[0]] += subsys[1]
+                else:
+                    ions[subsys[0]] = subsys[1]
+        if maxsol is None:
+            maxsol = nwater
+        assert len(ions.keys()) <= 2
+        if len(ions.keys()) > 0:
+            cation = list(ions.keys())[0]
+            ncation = ions[cation]
+        if len(ions.keys()) > 1:
+            anion = list(ions.keys())[1]
+            nanion = ions[anion]
     if maxsol is None:
         gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', cs=waterbox, quiet=quiet,
                     answer=True, fail_on_error=True)
@@ -420,7 +463,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
         gmx_command(gmx[1], 'solvate', cp='box.gro', p='topol.top', o='water.gro', maxsol=maxsol, cs=waterbox,
                     quiet=quiet, answer=True, fail_on_error=True)
     gml.gen_mdp('do_minimization.mdp', runtype='mini')
-    if ion_conc == 0:
+    if ion_conc == 0 and (nanion is None or nanion == 0) and (ncation is None or ncation == 0):
         copy2('water.gro', 'ions.gro')
     else:
         gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='water.gro', o='ions',
@@ -428,8 +471,17 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
         answer = gmx_command(gmx[1], 'genion', pass_values=['a'], s='ions', pname=cation, nname=anion, conc=ion_conc,
                              quiet=quiet, neutral=True, p="topol", o='test', answer=True)
         sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
-        gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
-                    quiet=quiet, neutral=True, p="topol", o='ions', answer=True, fail_on_error=True)
+        if nanion is not None or ncation is None:
+            newkwargs = {}
+            if nanion is not None:
+                newkwargs.update({'nname': anion, 'nn': nanion})
+            if ncation is not None:
+                newkwargs.update({'pname': cation, 'np': ncation})
+            gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', quiet=quiet, neutral=True, p="topol",
+                        o='ions', answer=True, fail_on_error=True, **newkwargs)
+        else:
+            gmx_command(gmx[1], 'genion', pass_values=[sol], s='ions', pname=cation, nname=anion, conc=ion_conc,
+                        quiet=quiet, neutral=True, p="topol", o='ions', answer=True, fail_on_error=True)
     output = gmx_command(gmx[1], 'grompp', f='do_minimization.mdp', p='topol.top', c='ions.gro', o='do_mini',
                          quiet=quiet, answer=True, maxwarn=maxwarn, fail_on_error=True)
     if extract_warnings(output):

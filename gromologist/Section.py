@@ -1088,8 +1088,13 @@ class SectionMol(Section):
         new_pairs, new_dihedrals = self._generate_14(other, atom_own, atom_other)
         # TODO remove overlapping pairs between new_bond/new_angles and new_pairs for 4- and 5-membered rings
         # or do we really need it?
-        for sub, entries in zip(['bonds', 'pairs', 'angles', 'dihedrals'],
-                                [new_bond, new_pairs, new_angles, new_dihedrals]):
+        if 'pairs' not in [a.header for a in self.subsections] and 'pairs' not in [a.header for a in other.subsections]:
+            pairs_needed = False
+        else:
+            pairs_needed = True
+        subs = ['bonds', 'pairs', 'angles', 'dihedrals'] if pairs_needed else ['bonds', 'angles', 'dihedrals']
+        news = [new_bond, new_pairs, new_angles, new_dihedrals] if pairs_needed else [new_bond, new_angles, new_dihedrals]
+        for sub, entries in zip(subs, news):
             subsection = self.get_subsection(sub)
             subsection.add_entries([gml.EntryBonded(subsection.fstring.format(*entry, subsection.prmtypes[0]), subsection)
                                     for entry in entries])
@@ -1778,7 +1783,7 @@ class SectionMol(Section):
         # TODO compare against rtp default types
         bonds = self.list_bonds(returning=True, by_params=set_bonded)
         angles = self.list_angles(returning=True, by_params=set_bonded) if set_bonded else []
-        dihedrals = self.list_dihedrals(returning=True, interaction_type=["1", "9"], by_params=set_bonded) if set_bonded else []
+        dihedrals = self.list_dihedrals(returning=True, interaction_type=["1", "3", "9"], by_params=set_bonded) if set_bonded else []
         impropers = self.list_dihedrals(returning=True, interaction_type=["2", "4"], by_params=set_bonded)
         with open(outname, mode) as outfile:
             outfile.write(f"[ {resname} ]\n")

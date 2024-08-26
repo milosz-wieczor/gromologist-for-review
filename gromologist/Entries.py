@@ -256,8 +256,14 @@ class EntryParam(Entry):
             self.params = []
             self.interaction_type = ''
         elif self.subsection.header == 'atomtypes':
-            self.modifiers = self.content[self.atoms_per_entry:self.atoms_per_entry + 4]
-            self.params = [float(x) for x in self.content[self.atoms_per_entry + 4:]]
+            if self.content[4] in 'ASVD':
+                self.modifiers = self.content[self.atoms_per_entry:self.atoms_per_entry + 4]
+                self.params = [float(x) for x in self.content[self.atoms_per_entry + 4:]]
+            elif self.content[3] in 'ASVD':
+                self.modifiers = [''] +  self.content[self.atoms_per_entry:self.atoms_per_entry + 3]
+                self.params = [float(x) for x in self.content[self.atoms_per_entry + 3:]]
+            else:
+                raise RuntimeError(f"Can't determine format of atomtype {self.content}")
             self.interaction_type = ''
         else:
             self.params = [float(x) for x in self.content[self.atoms_per_entry + 1:]]
@@ -414,9 +420,17 @@ class EntryAtom(Entry):
         :return: bool, whether the atom is a hydrogen
         """
         if refstate == 'A':
-            typecheck = self.type[0].upper() == 'H'
+            if self.type.startswith('opls'):
+                typecheck = self.atomname[0].upper() == 'H'
+            else:
+                typecheck = self.type[0].upper() == 'H'
         elif refstate == 'B':
-            typecheck = self.type_b[0].upper() == 'H'
+            if self.type.startswith('opls'):
+                self.subsection.section.top.print("WARNING: in OPLS, we're inferring hydrogens for alchemical state B "
+                                                  "from atomname, this might be incorrect")
+                typecheck = self.atomname[0].upper() == 'H'
+            else:
+                typecheck = self.type_b[0].upper() == 'H'
         else:
             raise RuntimeError("refstate should be 'A' or 'B'")
         return typecheck

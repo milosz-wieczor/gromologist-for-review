@@ -929,10 +929,10 @@ class Pdb:
                     min([abs(at2.z - at1.z), self.box[2] - abs(at2.z - at1.z)]) ** 2) ** 0.5
 
     @staticmethod
-    def _atoms_vec(at1, at2):
+    def _atoms_vec(at1: "gml.Atom", at2: "gml.Atom") -> tuple[float]:
         return at2.x - at1.x, at2.y - at1.y, at2.z - at1.z
 
-    def _atoms_vec_pbc(self, at1, at2):
+    def _atoms_vec_pbc(self, at1: "gml.Atom", at2: "gml.Atom") -> list[float]:
         a = [self.gbox[0] * 10, self.gbox[3] * 10, self.gbox[4] * 10]
         b = [self.gbox[5] * 10, self.gbox[1] * 10, self.gbox[6] * 10]
         c = [self.gbox[7] * 10, self.gbox[8] * 10, self.gbox[2] * 10]
@@ -947,7 +947,7 @@ class Pdb:
                 min([v[2] for v in vecs], key=lambda x: abs(x))]
 
     @staticmethod
-    def _parse_contents(contents, qt):
+    def _parse_contents(contents: list[str], qt: bool) -> tuple:
         """
         A parser to extract data from .pdb files
         and convert them to internal parameters
@@ -974,7 +974,7 @@ class Pdb:
                 break
         return atoms, tuple(box), remarks
 
-    def remove_hydrogens(self):
+    def remove_hydrogens(self) -> None:
         """
         Uses the standard naming convention (see Pdb.add_elements()
         to identify and remove hydrogen atoms
@@ -984,7 +984,7 @@ class Pdb:
         new_list = [a for a in self.atoms if a.element != 'H']
         self.atoms = new_list
 
-    def mutate_protein_residue(self, resid, target, chain=''):
+    def mutate_protein_residue(self, resid: int, target: str, chain: Optional[str] = '') -> None:
         """
         Mutates a chosen residue to a different one (in a standard rotameric state)
         :param resid: int, number of the residue to be mutated
@@ -1074,7 +1074,7 @@ class Pdb:
         for atom in processed_residue:
             atom.resname = mutant.target_3l
 
-    def _vector(self, atnames, resid, chain, nopbc=False):
+    def _vector(self, atnames: list[str], resid: int, chain: Optional[str], nopbc: bool = False) -> list[float]:
         """
         Defines a vector based on a number of atoms within a residue. There are 2 cases:
         (a) if 3 atoms are passed, the vector will be defining a missing 4th atom in an sp2 arrangement,
@@ -1098,7 +1098,7 @@ class Pdb:
         return f * sum(v[0] for v in vecs) / nv, f * sum(v[1] for v in vecs) / nv, f * sum(v[2] for v in vecs) / nv
 
     def add_vs2(self, resid: int, name1: str, name2: str, vsname: str = 'V1', fraction: float = 0.5,
-                serial: Optional[int] = None, chain: Optional[str] = None):
+                serial: Optional[int] = None, chain: Optional[str] = None) -> None:
         """
         Adds a virtual site (VS) defined by two atoms, interpolating between
         their coordinates
@@ -1123,7 +1123,7 @@ class Pdb:
 
     def add_vs3out(self, resid: int, name1: str, name2: str, name3: str, vsname: str = 'V3', a: float = 0.0,
                    b: float = 0.0, c: float = 1.5, serial: Optional[int] = None, chain: Optional[str] = None,
-                   resid2: Optional[int] = None, resid3: Optional[int] = None, add_in_top: bool = True):
+                   resid2: Optional[int] = None, resid3: Optional[int] = None, add_in_top: bool = True) -> None:
         """
         Adds an out-of-plane virtual site (VS) defined by three atoms, using a cross-product between
         two vectors defined by three atoms (i,j) and (i,k)
@@ -1156,7 +1156,7 @@ class Pdb:
         self.insert_atom(serial, name=vsname, hooksel=f"resid {resid} and name {name1}{chsel}",
                          vector=vec, atomname=vsname, bondlength=sum([vec[0] ** 2 + vec[1] ** 2 + vec[2] ** 2]) ** 0.5)
 
-    def interatomic_dist(self, resid1=1, resid2=2):
+    def interatomic_dist(self, resid1: int = 1, resid2: int = 2) -> list[float]:
         """
         Calculates all distances between atoms in two selected residues
         :param resid1: int, 1st residue to consider
@@ -1169,7 +1169,7 @@ class Pdb:
                 dists.append(self._atoms_dist_pbc(atom1, atom2))
         return dists
 
-    def check_chiral_aa(self, nopbc=False, fix=False):
+    def check_chiral_aa(self, nopbc: bool = False, fix: bool = False) -> None:
         """
         Checks for correct chirality in amino acids, first in the backbone
         and then for chiral side chains; to work with "fix", the last one has to be
@@ -1186,8 +1186,9 @@ class Pdb:
         thr_atoms = self.get_atoms('name CB and resname THR')
         self.check_chiral(thr_atoms, 'CG1 CG2', 'CA', 'HB', 'side chain chirality', nopbc=nopbc, fix=fix)
 
-    def check_chiral(self, cent_atoms_list, at1, at2, at3, label='backbone chirality', printing=True, nopbc=False,
-                     fix=False, values_only=False):
+    def check_chiral(self, cent_atoms_list: list["gml.Atom"], at1: str, at2: str, at3: str,
+                     label: str = 'backbone chirality', printing: bool = True, nopbc: bool = False, fix: bool = False,
+                     values_only: bool = False):
         """
         Decides on correct or wrong chirality of selected chiral
         centers by calculating selected dihedrals
@@ -1233,7 +1234,7 @@ class Pdb:
             if not printing:
                 return True
 
-    def fix_chirality(self, h_sel, c_sel):
+    def fix_chirality(self, h_sel: str, c_sel: str) -> None:
         """
         A quick-and-dirty chirality fix that moves the hydrogen to the
         opposite side of the carbon atom (needs minimization afterwards)
@@ -1243,7 +1244,7 @@ class Pdb:
         """
         self.reposition_atom_from_hook(h_sel, c_sel, 1.09, h_sel, c_sel)
 
-    def _get_chirality(self, atomlist, nopbc=False):
+    def _get_chirality(self, atomlist: list, nopbc: bool = False) -> float:
         """
         Calculates a dihedral defined by 4 atoms that
         constitute a chiral center
@@ -1267,7 +1268,7 @@ class Pdb:
         return math.atan2(y, x)
 
     @staticmethod
-    def _cross_product(v1, v2):
+    def _cross_product(v1: Sequence[float], v2: Sequence[float]) -> tuple[float]:
         """
         Calculates a cross product between two vectors
         :param v1: iterable of floats, len 3
@@ -1277,17 +1278,17 @@ class Pdb:
         return v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]
 
     @staticmethod
-    def _scalar_product(v1, v2):
+    def _scalar_product(v1: Sequence[float], v2: Sequence[float]) -> float:
         """
         Calculates a dot product between two vectors
         :param v1: iterable of floats, len 3
         :param v2: iterable of floats, len 3
-        :return: list, vector of length 3
+        :return: float
         """
         return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]
 
     @staticmethod
-    def _normalize(v):
+    def _normalize(v: Sequence[float]) -> list[float]:
         """
         Normalizes a vector
         :param v: iterable of floats, len 3
@@ -1297,7 +1298,7 @@ class Pdb:
         return [a / norm for a in v]
 
     @staticmethod
-    def _parse_contents_gro(contents):
+    def _parse_contents_gro(contents: list[str]) -> tuple:
         """
         A parser to extract data from .gro files
         and convert them to internal parameters
@@ -1332,7 +1333,7 @@ class Pdb:
         return atoms, tuple(box), remarks
 
     @staticmethod
-    def _parse_contents_cif(contents):
+    def _parse_contents_cif(contents: list[str]) -> tuple:
         """
         A parser to extract data from .cif files
         and convert them to internal parameters
@@ -1347,7 +1348,7 @@ class Pdb:
         box = [75, 75, 75] + [90., 90., 90.]
         return atoms, tuple(box), remarks
 
-    def make_term(self, term_type, atom_serial):
+    def make_term(self, term_type: str, atom_serial: int) -> None:
         """
         For introducing protein chain breaks, this adds terminal atoms to N- and C-terminal residues
         :param term_type: str, "C" or "N" for the type of the terminus
@@ -1367,7 +1368,7 @@ class Pdb:
             self.insert_atom(atom.serial + 3, name='H3', hooksel=f'serial {atom_serial}', bondlength=0.95,
                              vector=self._vector(['N', hname, 'HA', 'N'], atom.resnum, atom.chain))
 
-    def add_conect(self, cutoff: float = 2.05, cutoff_h: float = 1.3, pbc: bool = False):
+    def add_conect(self, cutoff: float = 2.05, cutoff_h: float = 1.3, pbc: bool = False) -> None:
         """
         Adds CONECT entries to the PDB, using the value of
         cutoff to determine molecule connectivity
@@ -1418,7 +1419,7 @@ class Pdb:
                 self.conect[atom.serial] = selected
 
     def set_beta(self, values: Sequence, selection: str = None, smooth: Optional[float] = None,
-                 ignore_mem: bool = False):
+                 ignore_mem: bool = False) -> None:
         """
         Enables user to write arbitrary values to the beta field
         of the PDB entry
@@ -1458,7 +1459,7 @@ class Pdb:
                     weights /= np.sum(weights)
                     atom.beta = np.sum(values * weights)
 
-    def translate_selection(self, selection='all', vector=(0, 0, 0)):
+    def translate_selection(self, selection: str = 'all', vector: Sequence = (0, 0, 0)) -> None:
         """
         Translates a subset of atoms defined by the selection by a specified vector in 3D space
         :param selection: str, selection that will be moved
@@ -1472,7 +1473,7 @@ class Pdb:
             atom.y += vector[1]
             atom.z += vector[2]
 
-    def interpolate_struct(self, other, num_inter, write=False):
+    def interpolate_struct(self, other: "gml.Pdb", num_inter: int, write: bool = False) -> Union[None, list]:
         """
         Generates linearly & equally spaced intermediates between two structures,
         the current (self) and another PDB with the same number of atoms
@@ -1502,7 +1503,7 @@ class Pdb:
         else:
             return gml.Traj([self] + inter + [other])
 
-    def save_pdb(self, outname='out.pdb', add_ter=False):
+    def save_pdb(self, outname: str = 'out.pdb', add_ter: bool = False) -> None:
         """
         Saves the structure in the PDB format
         :param outname: str, name of the file being produced
@@ -1520,7 +1521,7 @@ class Pdb:
                 outfile.write(self._write_conect(conect, self.conect[conect]))
             outfile.write('END\n')
 
-    def save_from_selection(self, selection, outname='out.pdb', renum=False):
+    def save_from_selection(self, selection: str, outname: str = 'out.pdb', renum: bool = False) -> None:
         """
         Saves a .pdb of a subset corresponding to a selection
         :param selection: str, a selection compatible with the gromologist selection language
@@ -1533,7 +1534,7 @@ class Pdb:
             pdb.renumber_atoms()
         pdb.save_pdb(outname)
 
-    def save_gro(self, outname='out.gro'):
+    def save_gro(self, outname: str = 'out.gro') -> None:
         """
         Saves the structure in the GRO format
         :param outname: str, name of the file being produced
@@ -1549,7 +1550,7 @@ class Pdb:
             else:
                 outfile.write((3 * "{:10.5f}" + "\n").format(*gbox[:3]))
 
-    def _calc_gro_box(self):
+    def _calc_gro_box(self) -> list[float]:
         """
         Converter function to the matrix-based .gro box definition
         :return: list of float, matrix entries
@@ -1568,7 +1569,7 @@ class Pdb:
             gbox[5] = self.box[1] / 10 * math.cos(self.box[5] * conv)
             return gbox
 
-    def get_coords(self, selection=None):
+    def get_coords(self, selection: Optional[str] = None) -> list[list[float]]:
         """
         Returns all atomic coordinates
         :param selection: str, selection for the coordinates to be retreived
@@ -1580,7 +1581,7 @@ class Pdb:
         else:
             return [[a.x, a.y, a.z] for a in self.atoms]
 
-    def set_coords(self, new_coords, selection=None):
+    def set_coords(self, new_coords: Iterable, selection: Optional[str] = None) -> None:
         """
         Sets all atomic coordinates
         :param new_coords: list of list of int, new coordinates to be set
@@ -1600,8 +1601,11 @@ class Residue:
         self.id = id
         self.name = name
         self.chain = chain
+
+    @property
+    def selection(self):
         chainsel = f'and chain {self.chain}' if self.chain.strip() else ''
-        self.selection = f'resid {self.id} and resname {self.name} {chainsel}'
+        return f'resid {self.id} and resname {self.name} {chainsel}'
 
     @property
     def atoms(self):
@@ -1619,22 +1623,22 @@ class Residue:
         """
         return self.pdb
 
-    def gen_pdb(self):
+    def gen_pdb(self) -> "gml.Pdb":
         """
         Generates a PDB that only contains this residue
         :return: gml.Pdb with the isolated residue
         """
         return Pdb.from_selection(self.pdb, self.selection)
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'{self.name}{self.id}{self.chain.strip()}'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'{self.name}{self.id}{self.chain.strip()}'
 
 
 class Atom:
-    def __init__(self, line, qt=False):
+    def __init__(self, line: str, qt: bool = False):
         """
         Represents a single atom contained in the structure file
         :param line: str, line from the structure file
@@ -1681,7 +1685,7 @@ class Atom:
                 self.element = name[:2]
 
     @classmethod
-    def from_gro(cls, line):
+    def from_gro(cls, line: str) -> "gml.Atom":
         """
         Reads fields from a line formatted according
         to the .gro format specification
@@ -1697,7 +1701,7 @@ class Atom:
         return cls(data.format(atomnum, atomname[:4], resname[:4], resnum, x, y, z))
 
     @classmethod
-    def from_cif(cls, line):
+    def from_cif(cls, line: str) -> "gml.Atom":
         """
         Reads fields from a line formatted according
         to the .gro format specification
@@ -1715,7 +1719,7 @@ class Atom:
         return cls(data.format(atomnum, atomname[:4], resname[:4], chain, resnum, x, y, z, beta))
 
     @classmethod
-    def from_top_entry(cls, entry):
+    def from_top_entry(cls, entry: "gml.EntryAtom") -> "gml.Atom":
         """
         Creates a dummy Atom instance (no coordinates)
         based on atom information provided by the .top file
@@ -1731,22 +1735,22 @@ class Atom:
         return cls(data.format(atomnum, atomname, resname, resnum, x, y, z))
 
     @property
-    def coords(self):
+    def coords(self) -> list:
         """
         The coordinates of a given atom
         :return: list of float
         """
         return [self.x, self.y, self.z]
 
-    def set_coords(self, coords):
+    def set_coords(self, coords: Iterable) -> None:
         """
         A setter for Atom coordinates
-        :param coords: iterable of len 3
+        :param coords: iterable of len-3 elements
         :return: None
         """
         self.x, self.y, self.z = coords
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         chain = self.chain if self.chain != " " else "unspecified"
         return "Atom {} in residue {}{} of chain {}".format(self.atomname, self.resname, self.resnum, chain)
 
@@ -1756,7 +1760,7 @@ class Traj:
     A provisional implementation that stores a trajectory as a list of Pdb objects
     """
 
-    def __init__(self, structures=None, top=None, altloc='A', **kwargs):
+    def __init__(self, structures: Union[str, list] = None, top: Optional["gml.Top"]=None, altloc: str = 'A', **kwargs):
         self.fname = 'gmltraj.pdb' if 'name' not in kwargs.keys() else kwargs['name']
         if isinstance(structures, str):
             self.structures = self.get_coords_from_file(structures)
@@ -1781,14 +1785,19 @@ class Traj:
                                                                        len(self.structures[0].atoms))
 
     @property
-    def nframes(self):
+    def nframes(self) -> int:
         """
         Simply the number of frames in the trajectory
         :return: int, no of frames
         """
         return len(self.structures)
 
-    def from_selection_inplace(self, selection):
+    def from_selection_inplace(self, selection: str) -> None:
+        """
+        Retains a subset of atoms in each frame, in-place (modifies the object instead of returning the modified one)
+        :param selection: str, the selection to restrict the system
+        :return: None
+        """
         new_pdbs = [p.from_selection(selection) for p in self.structures]
         self.structures = new_pdbs
         self.atoms = self.structures[0].atoms
@@ -1820,19 +1829,24 @@ class Traj:
                 structs.append(new_pdb)
         return structs
 
-    def add_frame(self, pdb: Union[str, "gml.Pdb"]):
+    def add_frame(self, pdb: Union[str, "gml.Pdb"], position: Optional[int] = None) -> None:
         """
         Adds a frame to the trajectory
         :param pdb: string or gml.Pdb, structure to be added to the trajectory
+        :param position: int, at which position to place the new frame
         :return:
         """
         if isinstance(pdb, str):
-            self.structures.append(Pdb(pdb))
+            newstr = Pdb(pdb)
         else:
-            self.structures.append(pdb)
+            newstr = pdb
+        if position is None:
+            self.structures.append(newstr)
+        else:
+            self.structures.insert(position, newstr)
         self.check_consistency()
 
-    def add_frames(self, pdb: Union[str, "gml.Traj"]):
+    def add_frames(self, pdb: Union[str, "gml.Traj"]) -> None:
         """
         Adds a frame to the trajectory
         :param pdb: either str or gml.Traj, frames to add to the current traj
@@ -1844,7 +1858,7 @@ class Traj:
             self.structures.extend(pdb.structures)
         self.check_consistency()
 
-    def check_consistency(self):
+    def check_consistency(self) -> None:
         """
         Checks whether all frames have the same number of atoms (and only this)
         :return: None
@@ -1853,7 +1867,7 @@ class Traj:
             raise RuntimeError(f"Not all structures have the same number of atoms, "
                                f"with {[len(pdb.atoms) for pdb in self.structures]}")
 
-    def as_string(self, end="ENDMDL"):
+    def as_string(self, end: str = "ENDMDL") -> str:
         """
         A printer function to facilitate writing to PDBs
         :param end: how to end each MODEL entry, some softwares can be sensitive to this
@@ -1868,13 +1882,13 @@ class Traj:
             text = text + end + '\n'
         return text
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: int) -> "gml.Pdb":
         return self.structures[item]
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.structures)
 
-    def atom_properties_from(self, pdb: Union[str, "gml.Pdb"], names=True, indices=True, chains=True, resid=True):
+    def atom_properties_from(self, pdb: Union[str, "gml.Pdb"], names=True, indices=True, chains=True, resid=True) -> None:
         """
         Sets the properties of all atoms from a given trajectory based on a specified PDB;
         by default, atom names, atom indices, chains, and residue IDs will be copied
@@ -1899,7 +1913,25 @@ class Traj:
                 if resid:
                     af.resnum = ar.resnum
 
-    def equal_spacing(self):
+    def extrapolate(self) -> None:
+        """
+        Adds one structure before and after the trajectory (assuming the sequence represents a pathway)
+        through linear extrapolation (in-place)
+        :return: None
+        """
+        from copy import deepcopy
+        try:
+            import numpy as np
+        except ImportError:
+            raise RuntimeError("Needs numpy for extrapolating, try installing it")
+        initdiff = np.array(self.structures[0].get_coords()) - np.array(self.structures[1].get_coords())
+        enddiff = np.array(self.structures[-1].get_coords()) - np.array(self.structures[-2].get_coords())
+        self.add_frame(deepcopy(self.structures[0]), position=0)
+        self.add_frame(deepcopy(self.structures[-1]))
+        self.structures[0].set_coords(np.array(self.structures[1].get_coords()) + initdiff)
+        self.structures[-1].set_coords(np.array(self.structures[-2].get_coords()) + enddiff)
+
+    def equal_spacing(self) -> None:
         """
         A special function that converts a trajectory defining a conformational transition
         into a similar trajectory but (roughly) equally spaced in RMSD space; used for
@@ -1959,7 +1991,7 @@ class Traj:
             for struct, coords in zip(self.structures[1:-1], resampled_path[1:-1]):
                 struct.atoms[natom].set_coords(coords)
 
-    def save_traj_as_pdb(self, filename=None, end="ENDMDL"):
+    def save_traj_as_pdb(self, filename: Optional[str] = None, end: str = "ENDMDL") -> None:
         """
         Saves all frames to a single PDB file
         :param filename: str, name of the file; if not specified, will overwrite the source file
@@ -1970,7 +2002,7 @@ class Traj:
         with open(filename, 'w') as outfile:
             outfile.write(self.as_string(end))
 
-    def save_traj_as_many_pdbs(self, core_filename=None):
+    def save_traj_as_many_pdbs(self, core_filename: Optional[str] = None) -> None:
         """
         Saves all frames to individual PDB files
         :param core_filename: str, all filenames will be based on this name

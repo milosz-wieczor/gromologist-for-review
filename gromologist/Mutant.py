@@ -157,7 +157,7 @@ class ProteinMutant:
                    'HA': [('HA', 'HA1')],
                    'HB': ['HB2'],
                    'HD': [('HD2', 'HD12')],
-                   'BM': [('HA', 'HA2', 'HA1') 'CB', 'HB', 'CG2', 'HG21', 'HG22'],
+                   'BM': [('HA', 'HA2', 'HA1'), 'CB', 'HB', 'CG2', 'HG21', 'HG22'],
                    'SH': ['HB2', 'SG'],
                    'OH': [('HB2', 'CG2'), ('OG', 'OG1')],
                    'CO': ['HB2', 'CG', 'OD1'],

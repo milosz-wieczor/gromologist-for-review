@@ -114,6 +114,7 @@ class EntryBonded(Entry):
                  ('position_restraints', '1'): (float, float, float),
                  ('dihedral_restraints', '1'): (float, float, float),
                  ('constraints', '2'): (float,),
+                 ('constraints', '1'): (float,),
                  ('virtual_sites2', '1'): (float,),
                  ('virtual_sites3', '4'): (float, float, float),
                  ('settles', '1'): (float, float)}
@@ -369,8 +370,8 @@ class EntryAtom(Entry):
             self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge, self.mass = self.content[:8]
         except ValueError:
             self.num, self.type, self.resid, self.resname, self.atomname, _, self.charge = self.content[:7]
-            atomtypes = self.subsection.section.top.parameters.get_subsection('atomtypes')
-            matching = [atype for atype in atomtypes if isinstance(atype, EntryParam) and atype.types[0] == self.type]
+            atomtypes_scts = self.subsection.section.top.parameters.get_subsections('atomtypes')  # at this stage some sections can be not merged yet
+            matching = [atype for atomtypes in atomtypes_scts for atype in atomtypes if isinstance(atype, EntryParam) and atype.types[0] == self.type]
             try:
                 self.mass = float(matching[0].modifiers[1])
             except IndexError:
@@ -478,3 +479,4 @@ class EntryAtom(Entry):
         else:
             return fstring.format(self.num, self.type, self.resid, self.resname, self.atomname, self.num,
                                   self.charge, self.mass) + ' ' + self.comment + '\n'
+

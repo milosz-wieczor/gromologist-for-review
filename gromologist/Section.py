@@ -2267,6 +2267,7 @@ class SectionParam(Section):
         this fn merges them into single sections to avoid searching in all instances
         :return: None
         """
+        # TODO doesn't always reduce the number of subsections????
         subsection_labels = [sub.header for sub in self.subsections]
         duplicated_subsections = list({label for label in subsection_labels if subsection_labels.count(label) > 1})
         for sub in duplicated_subsections:

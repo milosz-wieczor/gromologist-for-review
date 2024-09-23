@@ -117,6 +117,9 @@ class EntryBonded(Entry):
                  ('constraints', '1'): (float,),
                  ('virtual_sitesn', '1'): (int,),
                  ('virtual_sites2', '1'): (float,),
+                 ('virtual_sites3', '1'): (float, float),
+                 ('virtual_sites3', '2'): (float, float),
+                 ('virtual_sites3', '3'): (float, float),
                  ('virtual_sites3', '4'): (float, float, float),
                  ('settles', '1'): (float, float)}
 

@@ -932,7 +932,7 @@ class Pdb:
     def _atoms_vec(at1: "gml.Atom", at2: "gml.Atom") -> tuple:
         return at2.x - at1.x, at2.y - at1.y, at2.z - at1.z
 
-    def _atoms_vec_pbc(self, at1: "gml.Atom", at2: "gml.Atom") -> list[float]:
+    def _atoms_vec_pbc(self, at1: "gml.Atom", at2: "gml.Atom") -> list:
         a = [self.gbox[0] * 10, self.gbox[3] * 10, self.gbox[4] * 10]
         b = [self.gbox[5] * 10, self.gbox[1] * 10, self.gbox[6] * 10]
         c = [self.gbox[7] * 10, self.gbox[8] * 10, self.gbox[2] * 10]
@@ -947,7 +947,7 @@ class Pdb:
                 min([v[2] for v in vecs], key=lambda x: abs(x))]
 
     @staticmethod
-    def _parse_contents(contents: list[str], qt: bool) -> tuple:
+    def _parse_contents(contents: list, qt: bool) -> tuple:
         """
         A parser to extract data from .pdb files
         and convert them to internal parameters
@@ -1074,7 +1074,7 @@ class Pdb:
         for atom in processed_residue:
             atom.resname = mutant.target_3l
 
-    def _vector(self, atnames: list[str], resid: int, chain: Optional[str], nopbc: bool = False) -> list[float]:
+    def _vector(self, atnames: list, resid: int, chain: Optional[str], nopbc: bool = False) -> list:
         """
         Defines a vector based on a number of atoms within a residue. There are 2 cases:
         (a) if 3 atoms are passed, the vector will be defining a missing 4th atom in an sp2 arrangement,
@@ -1172,7 +1172,7 @@ class Pdb:
         self.insert_atom(serial, name=vsname, hooksel=f"resid {resid} and name {name1}{chsel}",
                          vector=vec, atomname=vsname, bondlength=sum([vec[0] ** 2 + vec[1] ** 2 + vec[2] ** 2]) ** 0.5)
 
-    def interatomic_dist(self, resid1: int = 1, resid2: int = 2) -> list[float]:
+    def interatomic_dist(self, resid1: int = 1, resid2: int = 2) -> list:
         """
         Calculates all distances between atoms in two selected residues
         :param resid1: int, 1st residue to consider
@@ -1202,7 +1202,7 @@ class Pdb:
         thr_atoms = self.get_atoms('name CB and resname THR')
         self.check_chiral(thr_atoms, 'CG1 CG2', 'CA', 'HB', 'side chain chirality', nopbc=nopbc, fix=fix)
 
-    def check_chiral(self, cent_atoms_list: list["gml.Atom"], at1: str, at2: str, at3: str,
+    def check_chiral(self, cent_atoms_list: list, at1: str, at2: str, at3: str,
                      label: str = 'backbone chirality', printing: bool = True, nopbc: bool = False, fix: bool = False,
                      values_only: bool = False):
         """
@@ -1304,7 +1304,7 @@ class Pdb:
         return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]
 
     @staticmethod
-    def _normalize(v: Sequence[float]) -> list[float]:
+    def _normalize(v: Sequence) -> list:
         """
         Normalizes a vector
         :param v: iterable of floats, len 3
@@ -1314,7 +1314,7 @@ class Pdb:
         return [a / norm for a in v]
 
     @staticmethod
-    def _parse_contents_gro(contents: list[str]) -> tuple:
+    def _parse_contents_gro(contents: list) -> tuple:
         """
         A parser to extract data from .gro files
         and convert them to internal parameters
@@ -1349,7 +1349,7 @@ class Pdb:
         return atoms, tuple(box), remarks
 
     @staticmethod
-    def _parse_contents_cif(contents: list[str]) -> tuple:
+    def _parse_contents_cif(contents: list) -> tuple:
         """
         A parser to extract data from .cif files
         and convert them to internal parameters
@@ -1566,7 +1566,7 @@ class Pdb:
             else:
                 outfile.write((3 * "{:10.5f}" + "\n").format(*gbox[:3]))
 
-    def _calc_gro_box(self) -> list[float]:
+    def _calc_gro_box(self) -> list:
         """
         Converter function to the matrix-based .gro box definition
         :return: list of float, matrix entries
@@ -1585,7 +1585,7 @@ class Pdb:
             gbox[5] = self.box[1] / 10 * math.cos(self.box[5] * conv)
             return gbox
 
-    def get_coords(self, selection: Optional[str] = None) -> list[list[float]]:
+    def get_coords(self, selection: Optional[str] = None) -> list:
         """
         Returns all atomic coordinates
         :param selection: str, selection for the coordinates to be retreived

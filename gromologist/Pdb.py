@@ -929,7 +929,7 @@ class Pdb:
                     min([abs(at2.z - at1.z), self.box[2] - abs(at2.z - at1.z)]) ** 2) ** 0.5
 
     @staticmethod
-    def _atoms_vec(at1: "gml.Atom", at2: "gml.Atom") -> tuple[float]:
+    def _atoms_vec(at1: "gml.Atom", at2: "gml.Atom") -> tuple:
         return at2.x - at1.x, at2.y - at1.y, at2.z - at1.z
 
     def _atoms_vec_pbc(self, at1: "gml.Atom", at2: "gml.Atom") -> list[float]:
@@ -1284,7 +1284,7 @@ class Pdb:
         return math.atan2(y, x)
 
     @staticmethod
-    def _cross_product(v1: Sequence[float], v2: Sequence[float]) -> tuple[float]:
+    def _cross_product(v1: Sequence[float], v2: Sequence[float]) -> tuple:
         """
         Calculates a cross product between two vectors
         :param v1: iterable of floats, len 3

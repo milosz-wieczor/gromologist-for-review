@@ -115,6 +115,7 @@ class EntryBonded(Entry):
                  ('dihedral_restraints', '1'): (float, float, float),
                  ('constraints', '2'): (float,),
                  ('constraints', '1'): (float,),
+                 ('virtual_sitesn', '1'): (int,),
                  ('virtual_sites2', '1'): (float,),
                  ('virtual_sites3', '4'): (float, float, float),
                  ('settles', '1'): (float, float)}

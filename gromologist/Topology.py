@@ -630,6 +630,22 @@ class Top:
                 ignore_set.add(n)
         return ignore_set
 
+    def compare_two_ffparamsets(self, other_top, ffparams_only=False):
+        self_copy = deepcopy(self)
+        other = gml.obj_or_str(top=other_top)
+        self_copy.clear_ff_params()
+        other.clear_ff_params()
+        self_copy.clear_sections()
+        other.clear_sections()
+        self.print("Comparing ff parameters:")
+        own_entries = set([str(x) for param_subs in self_copy.parameters.subsections for x in param_subs if
+                           isinstance(x, gml.EntryParam)])
+        other_entries = set([str(x) for param_subs in other.parameters.subsections for x in param_subs if
+                             isinstance(x, gml.EntryParam)])
+        odd = own_entries.difference(other_entries).union(other_entries.difference(own_entries))
+        self.print(odd)
+
+
     def _resolve_ifdefs(self, ifdefs: list):
         continuing = True
         while continuing:

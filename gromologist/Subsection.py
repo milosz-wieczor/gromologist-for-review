@@ -144,7 +144,7 @@ class SubsectionBonded(Subsection):
     """
     n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'pairs_nb': 2,
                'cmap': 5, 'settles': 1, 'exclusions': 2, 'position_restraints': 1,
-               'virtual_sites2': 3, 'virtual_sites3': 4, 'constraints': 2}
+               'virtual_sites2': 3, 'virtual_sites3': 4, 'constraints': 2, 'virtual_sitesn': 1}
     
     def __init__(self, content: list, section: "gml.Section"):
         super().__init__(content, section)
@@ -800,7 +800,7 @@ class SubsectionAtom(Subsection):
     def __init__(self, content: list, section: "gml.SectionMol"):
         super().__init__(content, section)
         assert isinstance(self.section, gml.SectionMol)
-        self.fstring = "{:>6}{:>11}{:>7}{:>7}{:>7}{:>7}{:>11}{:>11}   ; " + '\n'
+        self.fstring = "{:>6} {:>11} {:>7} {:>7} {:>7} {:>7} {:>11} {:>11}   ; " + '\n'
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
 
     @property

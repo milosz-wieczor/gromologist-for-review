@@ -1,4 +1,5 @@
 import os
+from time import time
 from itertools import product, combinations
 from typing import Optional, Union
 from functools import reduce
@@ -66,7 +67,7 @@ class Section:
         until = content[0].index(']')
         header = content[0][:until].strip().strip('[]').strip()
         if header in {'bonds', 'pairs', 'angles', 'dihedrals', 'settles', 'exclusions', 'cmap', 'position_restraints',
-                      'virtual_sites2', 'virtual_sites3', 'constraints', 'pairs_nb'}:
+                      'virtual_sitesn', 'virtual_sites2', 'virtual_sites3', 'constraints', 'pairs_nb'}:
             return gml.SubsectionBonded(content, self)
         elif header == 'atoms':
             return gml.SubsectionAtom(content, self)
@@ -1976,18 +1977,51 @@ class SectionMol(Section):
                                          p1_sel='resid {} and name {}'.format(resid, ali),
                                          p2_sel='resid {} and name {}'.format(resid, hook), atomname=at)
 
-    def add_dummy_def(self, dummy_type: str):
+    def copy_atoms_to_vsn(self, selection: Optional[str] = None, type_basename: Optional[str] = None) -> dict:
+        """
+        Reproduces a Go-Martini-like structure where selected particles get
+        a virtual-site "ghost" twin that can have additional interactions
+        implemented through nonbond_params
+        :param selection: str, the optional selection of atoms that will be duplicated
+        :param type_basename: naming convention for the types
+        :return: dict matching atom numbers to VSn type
+        """
+        selected_atoms = self.get_atoms(selection) if selection is not None else self.atoms
+        type_basename = f"molecule_{self.top.molecules.index(self)}" if type_basename is None else type_basename
+        matchings = {}
+        for npart, atom in enumerate(selected_atoms, 1):
+            dumtype = f"{type_basename}_{npart}"
+            self.add_dummy_def(dumtype)
+            self.add_vsn(atom.num, atom.atomname, dumtype)
+            matchings[atom.num] = dumtype
+        return matchings
+
+    def add_dummy_def(self, dummy_type: str) -> None:
         """
         Adds a dummy type (charge 0, LJ 0) to atomtypes if needed
         :param dummy_type: str, name for the dummy type
         :return: None
         """
         params = self.top.parameters
-        atomtypes = params.get_subsection('atomtypes')
-        dummy_entries = [e for e in atomtypes if isinstance(e, gml.EntryParam) and e.types[0] == dummy_type]
-        if not dummy_entries:
-            atomtypes.add_entry(gml.EntryParam('   {}     0        1.008  0.0000  A  0.000000000000  0.0000  '
-                                               '\n'.format(dummy_type), atomtypes))
+        params.add_dummy_def(dummy_type)
+
+    def add_vsn(self, atom: int, atomname: str, atomtype: str) -> None:
+        """
+        Adds a duplication-type virtual site (on top of an atom) at the end of the molecule.
+        If the respective section does not exist in the topology, it will be created.
+        :param atom: int, serial numbers of the first atom
+        :param atomname: str, name of the new atom
+        :param atomtype: str, type of the new atom
+        :return: None
+        """
+        try:
+            ssect = self.get_subsection('virtual_sitesn')
+        except KeyError:
+            self.subsections.append(self._yield_sub(['[ virtual_sitesn ]']))
+            ssect = self.get_subsection('virtual_sitesn')
+        ref = self.atoms[atom-1]
+        self.add_atom(len(self.atoms) + 1, atomname, atomtype, resid=ref.resid, resname=ref.resname, mass=0.0)
+        ssect.add_entry(gml.EntryBonded(f'{len(self.atoms)} 1 {atom}\n', ssect))
 
     def add_vs2(self, atom1: int, atom2: int, fraction: float, atomname: str, atomtype: str):
         """
@@ -2346,6 +2380,7 @@ class SectionParam(Section):
         if not dummy_entries:
             atomtypes.add_entry(gml.EntryParam('   {}     0        1.008  0.0000  A  0.000000000000  0.0000  '
                                                '\n'.format(dummy_type), atomtypes))
+
     def find_used_ff_params(self, section: str = 'all') -> list:
         """
         Finds FF parameters that are used by the system
@@ -2499,6 +2534,8 @@ class SectionParam(Section):
         :param action_default: str, what to do if an NBFIX already exists (check prompt if that happens)
         :return: None
         """
+        # TODO has to be faster for Go-models
+        tt = time()
         atp = self.get_subsection('atomtypes')
         sigma1, eps1, sigma2, eps2 = [None] * 4
         for entry in atp:
@@ -2507,6 +2544,7 @@ class SectionParam(Section):
                     sigma1, eps1 = entry.params
                 if entry.types[0] == type2:
                     sigma2, eps2 = entry.params
+        print(time() - tt)
         if sigma1 is None:
             raise KeyError('Type {} was not found in the atomtype definitions'.format(type1))
         if sigma2 is None:
@@ -2531,6 +2569,7 @@ class SectionParam(Section):
             self.subsections.append(self._yield_sub(['[ nonbond_params ]']))
             nbsub = self.get_subsection('nonbond_params')
         comment = ''
+        print(time() - tt)
         # this part is only important if an entry already exists:
         for entry in nbsub:
             if isinstance(entry, gml.EntryParam):
@@ -2555,9 +2594,11 @@ class SectionParam(Section):
                         comment = entry.comment
                     # if action == 'r' we leave new_sig and new_eps as they are defined above
                     nbsub.remove_entry(entry)
+        print(time() - tt)
         entry_line = "{} {} 1 {} {} ; sigma chg by {}, eps chg by {} {}".format(type1, type2, new_sig, new_eps,
                                                                                 mod_sigma, mod_epsilon, comment)
         nbsub.add_entry(gml.Subsection.yield_entry(nbsub, entry_line))
+        print(time() - tt)
 
     def edit_atomtype(self, atomtype: str, mod_sigma: float = 0.0, mod_epsilon: float = 0.0,
                       new_sigma: Optional[float] = None, new_epsilon: Optional[float] = None):

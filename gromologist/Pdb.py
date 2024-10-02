@@ -17,7 +17,7 @@ class Pdb:
                 'A3': "A", 'G3': "G", 'C3': "C", 'U3': "U", "AN": "A", "GN": "G", "UN": "U", "CN": "C", "TN": "T"}
 
     def __init__(self, filename: str = None, top: Union[str, "gml.Top"] = None, altloc: str = 'A', qt: bool = False,
-                 **kwargs):
+                 keep_altlocs = False, **kwargs):
         """
         Initializes a Pdb instnace
         :param filename: str, name of the file (.gro or .pdb)
@@ -54,19 +54,30 @@ class Pdb:
         self._atom_format_gro = "{:>5d}{:5s}{:>5s}{:>5d}{:8.3f}{:8.3f}{:8.3f}\n"
         self._cryst_format = "CRYST1{:9.3f}{:9.3f}{:9.3f}{:7.2f}{:7.2f}{:7.2f} P 1           1\n"
         # clear altloc if all are identical
-        if self.atoms and  self.atoms[0].altloc.strip():
+        if self.atoms and self.atoms[0].altloc.strip():
             if all([a.altloc == self.atoms[0].altloc for a in self.atoms]):
                 for a in self.atoms:
                     a.altloc = ' '
+        if self.altlocs.strip() and not keep_altlocs:
+            print(f"Keeping atoms with altloc {self.altloc} only. If this is not what you want, set keep_altloc=True, "
+                  f"but be warned that atom indexing might work incorrectly")
+            self.keep_altloc(self.altloc)
 
     def __repr__(self) -> str:
         return "PDB file {} with {} atoms".format(self.fname, len(self.atoms))
 
     def __len__(self):
-        return len(self.atoms)
+        if self.altlocs == ' ':
+            return len(self.atoms)
+        else:
+            return len([a for a in self.atoms if a.altloc == self.altloc or not a.altloc.strip()])
 
     def __getitem__(self, item):
         return self.atoms[item]
+
+    @property
+    def altlocs(self):
+        return ''.join(sorted(list(set(a.altloc for a in self.atoms))))
 
     @property
     def _atom_format(self):
@@ -76,6 +87,14 @@ class Pdb:
         else:
             return "ATOM  {:>5d} {:4s}{:1s}{:4s}{:1s}{:>4d}{:1s}   " \
                    "{:8.3f}{:8.3f}{:8.3f}{:6.2f}{:6.2f}          {:>2s}\n"
+
+    def keep_altloc(self, chosen_altloc: str):
+        assert len(str(chosen_altloc)) == 1
+        all_altlocs = self.altlocs
+        if chosen_altloc not in all_altlocs:
+            raise RuntimeError(f"Altloc indicator {chosen_altloc} not found, there are: {self.altlocs}.")
+        new_list = [a for a in self.atoms if a.altloc == self.altloc or not a.altloc.strip()]
+        self.atoms = new_list
 
     def add_top(self, top: Union[str, "gml.Top"], **kwargs):
         """

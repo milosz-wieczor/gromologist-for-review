@@ -1,7 +1,9 @@
 import gromologist as gml
 from collections import defaultdict
+from copy import deepcopy
 from typing import Optional, Union, Iterable, Sized, Sequence
 import math
+import numpy as np
 
 
 class Pdb:
@@ -544,12 +546,16 @@ class Pdb:
         if atom.beta > 1000:
             atom.beta %= 1000
         if pdb:
+            if len(atom.atomname) < 4:
+                atname = ' ' + atom.atomname
+            else:
+                atname = atom.atomname
             if self.qt:
-                return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain,
+                return self._atom_format.format(atom.serial, atname, atom.altloc, atom.resname, atom.chain,
                                                 atom.resnum, atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta,
                                                 atom.q, atom.type)
             else:
-                return self._atom_format.format(atom.serial, atom.atomname, atom.altloc, atom.resname, atom.chain,
+                return self._atom_format.format(atom.serial, atname, atom.altloc, atom.resname, atom.chain,
                                                 atom.resnum, atom.insert, atom.x, atom.y, atom.z, atom.occ, atom.beta,
                                                 atom.element)
         else:
@@ -682,14 +688,14 @@ class Pdb:
         if p1_sel is not None and p2_sel is not None:
             p1_xyz = coords[self.get_atom_index(p1_sel)]
             p2_xyz = coords[self.get_atom_index(p2_sel)]
-            vec = [x2 - x1 for x1, x2 in zip(p1_xyz, p2_xyz)]
+            vec = p2_xyz - p1_xyz
         elif vector is not None:
             vec = vector
         else:
             raise RuntimeError("In repositioning, please use either p1/p2 selections or specify the vector")
         movable = self.get_atom(atomsel)
         hook_xyz = coords[self.get_atom_index(hooksel)]
-        vec_len = sum([x ** 2 for x in vec]) ** 0.5
+        vec_len = np.linalg.norm(vec)
         scale = bondlength / vec_len
         movable.set_coords([h + scale * v for h, v in zip(hook_xyz, vec)])
 
@@ -893,42 +899,30 @@ class Pdb:
         Returns a set of all atoms contained within the specified radius of a selection
         :param query_iter: iterable of int, indices of the atoms in the query
         :param threshold: float, a distance within which atoms will be included
-        :param nopbc: bool, whether to include PBC in the distance calculation
+        :param nopbc: bool, whether to include PBC in the distance calculation (much faster)
         :return: set, a broadened list of atom indices
         """
         new_list = []
-        use_numpy = False
-        dist_array = None
-        try:
-            import numpy as np
-        except ImportError:
-            pass
-        else:
-            use_numpy = True
-            dist_array = np.array(self.get_coords())
-        for n, atom in enumerate(self.atoms):
-            if nopbc:
-                if not use_numpy:
-                    if any([self._atoms_dist(atom, self.atoms[query]) <= threshold for query in query_iter]):
-                        new_list.append(n)
-            else:
-                if any([self._atoms_dist_pbc(atom, self.atoms[query]) <= threshold for query in query_iter]):
-                    new_list.append(n)
-        if nopbc and use_numpy:
+        dist_array = np.array(self.get_coords())
+        if nopbc:
             for n in query_iter:
                 vecs = np.linalg.norm(dist_array - dist_array[n, :], axis=1)
                 new_list.extend(list(np.where(vecs <= threshold)[0]))
+        else:
+            for n, atom in enumerate(self.atoms):
+                if any([self._atoms_dist_pbc(atom, self.atoms[query]) <= threshold for query in query_iter]):
+                    new_list.append(n)
         return set(new_list)
 
     @staticmethod
-    def _atoms_dist(at1, at2):
+    def _atoms_dist(at1: "gml.Atom", at2: "gml.Atom") -> float:
         """
         Calculates the (non-PBC-corrected) distance between atoms at1 and at2
         :param at1: Atom, 1st atom defining the distance
         :param at2: Atom, 2nd atom defining the distance
         :return: float, distance
         """
-        return ((at2.x - at1.x) ** 2 + (at2.y - at1.y) ** 2 + (at2.z - at1.z) ** 2) ** 0.5
+        return np.linalg.norm(at2.coords - at1.coords)
 
     def _atoms_dist_pbc(self, at1, at2):
         if not self.box[3] == self.box[4] == self.box[5] == 90.0:
@@ -948,10 +942,10 @@ class Pdb:
                     min([abs(at2.z - at1.z), self.box[2] - abs(at2.z - at1.z)]) ** 2) ** 0.5
 
     @staticmethod
-    def _atoms_vec(at1: "gml.Atom", at2: "gml.Atom") -> tuple:
-        return at2.x - at1.x, at2.y - at1.y, at2.z - at1.z
+    def _atoms_vec(at1: "gml.Atom", at2: "gml.Atom") -> np.array:
+        return np.array([at2.x - at1.x, at2.y - at1.y, at2.z - at1.z])
 
-    def _atoms_vec_pbc(self, at1: "gml.Atom", at2: "gml.Atom") -> list:
+    def _atoms_vec_pbc(self, at1: "gml.Atom", at2: "gml.Atom") -> np.array:
         a = [self.gbox[0] * 10, self.gbox[3] * 10, self.gbox[4] * 10]
         b = [self.gbox[5] * 10, self.gbox[1] * 10, self.gbox[6] * 10]
         c = [self.gbox[7] * 10, self.gbox[8] * 10, self.gbox[2] * 10]
@@ -961,9 +955,9 @@ class Pdb:
             for j in [-1, 0, 1]:
                 for k in [-1, 0, 1]:
                     vecs.append([(d[x] + a[x] * i + b[x] * j + c[x] * k) for x in range(3)])
-        return [min([v[0] for v in vecs], key=lambda x: abs(x)),
-                min([v[1] for v in vecs], key=lambda x: abs(x)),
-                min([v[2] for v in vecs], key=lambda x: abs(x))]
+        return np.array([min([v[0] for v in vecs], key=lambda x: abs(x)),
+                         min([v[1] for v in vecs], key=lambda x: abs(x)),
+                         min([v[2] for v in vecs], key=lambda x: abs(x))])
 
     @staticmethod
     def _parse_contents(contents: list, qt: bool) -> tuple:
@@ -1093,7 +1087,7 @@ class Pdb:
         for atom in processed_residue:
             atom.resname = mutant.target_3l
 
-    def _vector(self, atnames: list, resid: int, chain: Optional[str], nopbc: bool = False) -> list:
+    def _vector(self, atnames: list, resid: int, chain: Optional[str], nopbc: bool = False) -> np.array:
         """
         Defines a vector based on a number of atoms within a residue. There are 2 cases:
         (a) if 3 atoms are passed, the vector will be defining a missing 4th atom in an sp2 arrangement,
@@ -1114,7 +1108,7 @@ class Pdb:
             vecs = [self._atoms_vec_pbc(atoms[0], at2) for at2 in atoms[1:]]
         nv = len(vecs)
         f = -1 if nv == 3 else 1
-        return f * sum(v[0] for v in vecs) / nv, f * sum(v[1] for v in vecs) / nv, f * sum(v[2] for v in vecs) / nv
+        return np.array([f * sum(v[0] for v in vecs) / nv, f * sum(v[1] for v in vecs) / nv, f * sum(v[2] for v in vecs) / nv])
 
     def add_vsn(self, resid: int, name: str, vsname: str = 'Vn', serial: Optional[int] = None,
                 chain: Optional[str] = None) -> None:
@@ -1189,7 +1183,7 @@ class Pdb:
             mol = self._match_top_molecule(serial)
             mol.add_vs3out(serial, a1.serial, a2.serial, a3.serial, a, b, c, vsname, 'MW')
         self.insert_atom(serial, name=vsname, hooksel=f"resid {resid} and name {name1}{chsel}",
-                         vector=vec, atomname=vsname, bondlength=sum([vec[0] ** 2 + vec[1] ** 2 + vec[2] ** 2]) ** 0.5)
+                         vector=vec, atomname=vsname, bondlength=np.linalg.norm(vec))
 
     def interatomic_dist(self, resid1: int = 1, resid2: int = 2) -> list:
         """
@@ -1303,14 +1297,14 @@ class Pdb:
         return math.atan2(y, x)
 
     @staticmethod
-    def _cross_product(v1: Sequence[float], v2: Sequence[float]) -> tuple:
+    def _cross_product(v1: Sequence[float], v2: Sequence[float]) -> np.array:
         """
         Calculates a cross product between two vectors
         :param v1: iterable of floats, len 3
         :param v2: iterable of floats, len 3
         :return: list, vector of length 3
         """
-        return v1[1] * v2[2] - v1[2] * v2[1], v1[2] * v2[0] - v1[0] * v2[2], v1[0] * v2[1] - v1[1] * v2[0]
+        return np.cross(v1, v2)
 
     @staticmethod
     def _scalar_product(v1: Sequence[float], v2: Sequence[float]) -> float:
@@ -1320,17 +1314,16 @@ class Pdb:
         :param v2: iterable of floats, len 3
         :return: float
         """
-        return v1[0] * v2[0] + v1[1] * v2[1] + v1[2] * v2[2]
+        return np.dot(v1, v2)
 
     @staticmethod
-    def _normalize(v: Sequence) -> list:
+    def _normalize(v: np.array) -> np.array:
         """
         Normalizes a vector
         :param v: iterable of floats, len 3
         :return: list, vector of length 3
         """
-        norm = (v[0] ** 2 + v[1] ** 2 + v[2] ** 2) ** 0.5
-        return [a / norm for a in v]
+        return v / np.linalg.norm(v)
 
     @staticmethod
     def _parse_contents_gro(contents: list) -> tuple:
@@ -1417,26 +1410,21 @@ class Pdb:
         if pbc:
             self._conect_simple(cutoff, cutoff_h, pbc)
             return
-        try:
-            import numpy as np
-        except ImportError:
-            self._conect_simple(cutoff, cutoff_h, pbc)
-        else:
-            hs = self.get_atom_indices('element H')
-            coords = np.array(self.get_coords())
-            for n, atom in enumerate(self.atoms):
-                dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
-                if n not in hs:
-                    selected = [self.atoms[i].serial for i in
-                                list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0]) if i not in hs]
-                    selected_h = [self.atoms[i].serial for i in
-                                  list(np.where(np.logical_and(dists < cutoff_h, dists > 0.1))[0])
-                                  if i in hs]
-                    self.conect[atom.serial] = selected + selected_h
-                else:
-                    selected_h = [self.atoms[i].serial for i in
-                                  list(np.where(np.logical_and(dists < cutoff_h, dists > 0.1))[0])]
-                    self.conect[atom.serial] = selected_h
+        hs = self.get_atom_indices('element H')
+        coords = np.array(self.get_coords())
+        for n, atom in enumerate(self.atoms):
+            dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
+            if n not in hs:
+                selected = [self.atoms[i].serial for i in
+                            list(np.where(np.logical_and(dists < cutoff, dists > 0.1))[0]) if i not in hs]
+                selected_h = [self.atoms[i].serial for i in
+                              list(np.where(np.logical_and(dists < cutoff_h, dists > 0.1))[0])
+                              if i in hs]
+                self.conect[atom.serial] = selected + selected_h
+            else:
+                selected_h = [self.atoms[i].serial for i in
+                              list(np.where(np.logical_and(dists < cutoff_h, dists > 0.1))[0])]
+                self.conect[atom.serial] = selected_h
 
     def _conect_simple(self, cf1: float, cf2: float, pbc: bool):
         hs = self.get_atom_indices('element H')
@@ -1480,19 +1468,14 @@ class Pdb:
             if len(atoms) > 10000 and not ignore_mem:
                 raise RuntimeError("Try to restrict the number of atoms (e.g. selecting CA only), or you're risking "
                                    "running out of memory. To proceed anyway, run again with ignore_mem=True")
-            try:
-                import numpy as np
-            except ImportError:
-                print("Needs numpy for smoothing, try installing it")
-            else:
-                values = np.array(values)
-                atomnums = [n for n, atom in enumerate(self.atoms) if atom in atoms]
-                coords = np.array(self.get_coords())[atomnums]
-                for atom in self.atoms:
-                    dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
-                    weights = np.exp(-(dists ** 2 / (2 * smooth)))
-                    weights /= np.sum(weights)
-                    atom.beta = np.sum(values * weights)
+            values = np.array(values)
+            atomnums = [n for n, atom in enumerate(self.atoms) if atom in atoms]
+            coords = np.array(self.get_coords())[atomnums]
+            for atom in self.atoms:
+                dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
+                weights = np.exp(-(dists ** 2 / (2 * smooth)))
+                weights /= np.sum(weights)
+                atom.beta = np.sum(values * weights)
 
     def translate_selection(self, selection: str = 'all', vector: Sequence = (0, 0, 0)) -> None:
         """
@@ -1518,19 +1501,13 @@ class Pdb:
         :return: None (if write=True) or list of Pdb instances (if write=False)
         """
         inter = []
-        try:
-            import numpy as np
-            from copy import deepcopy
-        except ImportError:
-            raise RuntimeError("Needs numpy & deepcopy for interpolating, try installing it")
-        else:
-            self_atoms = np.array(self.get_coords())
-            other_atoms = np.array(other.get_coords())
-            for i in range(1, num_inter + 1):
-                incr = (other_atoms - self_atoms) / (num_inter + 1)
-                pdb = deepcopy(self)
-                pdb.set_coords(self_atoms + i * incr)
-                inter.append(pdb)
+        self_atoms = np.array(self.get_coords())
+        other_atoms = np.array(other.get_coords())
+        for i in range(1, num_inter + 1):
+            incr = (other_atoms - self_atoms) / (num_inter + 1)
+            pdb = deepcopy(self)
+            pdb.set_coords(self_atoms + i * incr)
+            inter.append(pdb)
         if write:
             for n, struct in enumerate([self] + inter + [other]):
                 struct.save_pdb(f'interpolated_structure_{n}.pdb')
@@ -1604,7 +1581,7 @@ class Pdb:
             gbox[5] = self.box[1] / 10 * math.cos(self.box[5] * conv)
             return gbox
 
-    def get_coords(self, selection: Optional[str] = None) -> list:
+    def get_coords(self, selection: Optional[str] = None) -> np.array:
         """
         Returns all atomic coordinates
         :param selection: str, selection for the coordinates to be retreived
@@ -1612,9 +1589,9 @@ class Pdb:
         """
         if selection is not None:
             subset = self.get_atom_indices(selection)
-            return [[a.x, a.y, a.z] for a in [self.atoms[q] for q in subset]]
+            return np.array([[a.x, a.y, a.z] for a in [self.atoms[q] for q in subset]])
         else:
-            return [[a.x, a.y, a.z] for a in self.atoms]
+            return np.array([[a.x, a.y, a.z] for a in self.atoms])
 
     def set_coords(self, new_coords: Iterable, selection: Optional[str] = None) -> None:
         """
@@ -1775,7 +1752,7 @@ class Atom:
         The coordinates of a given atom
         :return: list of float
         """
-        return [self.x, self.y, self.z]
+        return np.array([self.x, self.y, self.z])
 
     def set_coords(self, coords: Iterable) -> None:
         """
@@ -1955,10 +1932,6 @@ class Traj:
         :return: None
         """
         from copy import deepcopy
-        try:
-            import numpy as np
-        except ImportError:
-            raise RuntimeError("Needs numpy for extrapolating, try installing it")
         initdiff = np.array(self.structures[0].get_coords()) - np.array(self.structures[1].get_coords())
         enddiff = np.array(self.structures[-1].get_coords()) - np.array(self.structures[-2].get_coords())
         self.add_frame(deepcopy(self.structures[0]), position=0)
@@ -1973,10 +1946,6 @@ class Traj:
         the string method with "structural" intermediates
         :return: None
         """
-        try:
-            import numpy as np
-        except ImportError:
-            raise RuntimeError("This feature requires numpy")
 
         def compute_cumulative_distance(points):
             """Compute the cumulative distance along a path defined by 'points'."""

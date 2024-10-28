@@ -7,4 +7,5 @@ setup(name='gromologist',
       author_email='milafternoon@gmail.com',
       license='GNU GPLv3',
       packages=['gromologist'],
+      install_requires=['numpy>=1.10.0'],
       zip_safe=False)

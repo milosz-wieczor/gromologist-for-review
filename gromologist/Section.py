@@ -777,6 +777,38 @@ class SectionMol(Section):
                 dummies = [entry for entry in sub.entries_atom if entry.type[0] == "D" and entry.num in selected]
         self.update_dicts()
         self._check_correct()
+
+    def compare_molecules(self, other: "gml.SectionMol", threshold: float = 0.001):
+        self.top.add_ff_params()
+        other.top.add_ff_params()
+        own_sub = {sub.header for sub in self.subsections if isinstance(sub, gml.SubsectionBonded)}
+        other_sub = {sub.header for sub in other.subsections if isinstance(sub, gml.SubsectionBonded)}
+        if own_sub.symmetric_difference(other_sub):
+            print(f"The two molecules differ by sections: {own_sub.symmetric_difference(other_sub)}")
+        if self.natoms != other.natoms:
+            raise RuntimeError(f"Can't compare molecules with different numbers of atoms, {self.natoms} and {other.natoms}")
+        for sat, oat in zip(self.atoms, other.atoms):
+            if abs(sat.charge - oat.charge) > threshold:
+                print(f"Charges on atoms {sat} and {oat} differ by more than 0.001")
+            if abs(sat.mass - oat.mass) > threshold:
+                print(f"Masses on atoms {sat} and {oat} differ by more than 0.001")
+            if sat.type != oat.type:
+                print(f"Atom types differ for atoms {sat} and {oat}")
+        for sub in own_sub.intersection(other_sub):
+            owns = self.get_subsection(sub)
+            oths = other.get_subsection(sub)
+            ownparams = sorted(owns.entries_bonded)
+            othparams = sorted(oths.entries_bonded)
+            for wnp, thp in zip(ownparams, othparams):
+                if wnp.atom_numbers != thp.atom_numbers and wnp.atom_numbers != thp.atom_numbers[::-1]:
+                    if sub == 'dihedrals' and wnp.interaction_type in '42' and thp.interaction_type in '42' and not set(wnp.atom_numbers).symmetric_difference(set(thp.atom_numbers)):
+                        pass
+                    else:
+                        print(f"In section {sub}, topologies diverge between \n{str(wnp).strip()} and \n{str(thp).strip()}")
+                elif any([abs(a-b) > threshold for a, b in zip(wnp.params_state_a, thp.params_state_a)]):
+                    if sub == 'dihedrals' and wnp.params_state_a[1] == 0 and thp.params_state_a[1] == 0:
+                        continue
+                    print(f"In section {sub}, parameters have significantly different values between \n{str(wnp).strip()} and \n{str(thp).strip()}")
     
     def add_atom(self, atom_number: int, atom_name: str, atom_type: str, charge: float = 0.0,
                  resid: Optional[int] = None, resname: Optional[str] = None, mass: Optional[float] = None,

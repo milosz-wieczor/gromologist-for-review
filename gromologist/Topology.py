@@ -642,9 +642,14 @@ class Top:
                            isinstance(x, gml.EntryParam)])
         other_entries = set([str(x) for param_subs in other.parameters.subsections for x in param_subs if
                              isinstance(x, gml.EntryParam)])
-        odd = own_entries.difference(other_entries).union(other_entries.difference(own_entries))
-        self.print(odd)
-
+        odd_a = own_entries.difference(other_entries)
+        odd_b = other_entries.difference(own_entries)
+        self.print(f"Unmatched parameters in topology {self.fname}:")
+        for i in sorted(list(odd_a)):
+            self.print(i)
+        self.print(f"Unmatched parameters in topology {other.fname}:")
+        for i in sorted(list(odd_b)):
+            self.print(i)
 
     def _resolve_ifdefs(self, ifdefs: list):
         continuing = True

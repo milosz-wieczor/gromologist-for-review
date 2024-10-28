@@ -4,9 +4,7 @@ import gromologist as gml
 import os
 from math import ceil
 from shutil import copy
-from subprocess import call
 
-# optional?
 import numpy as np
 try:
     from scipy.integrate import simps

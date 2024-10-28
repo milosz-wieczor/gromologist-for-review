@@ -1,5 +1,6 @@
 from typing import Optional
 import gromologist as gml
+import numpy as np
 
 
 class Subsection:
@@ -586,7 +587,6 @@ class SubsectionParam(Subsection):
 
     def plot_term_energy(self, atomtypes, interaction_type=None, label=None, sep=False, color='C0'):
         import matplotlib.pyplot as plt
-        import numpy as np
         if isinstance(atomtypes, str):
             atomtypes = atomtypes.split()
         entries = self.get_entries_by_types(*atomtypes)

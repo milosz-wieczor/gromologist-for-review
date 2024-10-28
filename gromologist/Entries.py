@@ -158,6 +158,23 @@ class EntryBonded(Entry):
         else:
             return EntryBonded.fstr_suff[query]
 
+    @property
+    def sorter(self):
+        total = 0
+        anums = self.atom_numbers[::-1] if self.atom_numbers[0] < self.atom_numbers[-1] else self.atom_numbers
+        for n, i in enumerate(anums, 1):
+            total += i * 10**(2*n)
+        total += (int(self.interaction_type)%8) * 10**11  # trick to treat multiple dih 1 and dih 9 entries the same
+        for n, i in enumerate(self.params_state_a[::-1], 1):
+            try:
+                total += i * 10**(-2*n)
+            except:
+                pass
+        return total
+
+    def __lt__(self, other):
+        return self.sorter < other.sorter
+
     def explicit_defines(self):
         if self.params_state_a and isinstance(self.params_state_a[0], str):
             try:

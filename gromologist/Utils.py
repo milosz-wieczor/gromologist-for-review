@@ -2,15 +2,11 @@ import os
 from glob import glob
 from shutil import copy2, rmtree
 from itertools import permutations
-from copy import deepcopy
 
 import gromologist as gml
 from typing import Optional, Iterable, Union
 
-try:
-    import numpy as np
-except ImportError:
-    pass
+import numpy as np
 
 
 # TODO make top always optional between str/path and gml.Top
@@ -761,7 +757,6 @@ def calc_Coulomb_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], f
     :param force_from: selection of atoms that are exerting the forces
     :return: Nx3 np.array, where N is the length of the force_on selection
     """
-    import numpy as np
     k_coul = 138.9118  # in kJ/mol nm e²
     pdb = gml.obj_or_str(pdb=pdb)
     top = gml.obj_or_str(top=top)
@@ -794,7 +789,6 @@ def calc_LJ_force(top: Union[str, "gml.Top"], pdb: Union[str, "gml.Pdb"], force_
     :param force_from: selection of atoms that are exerting the forces
     :return: Nx3 np.array, where N is the length of the force_on selection
     """
-    import numpy as np
     pdb = gml.obj_or_str(pdb=pdb)
     top = gml.obj_or_str(top=top)
     fon_indices = pdb.get_atom_indices(force_on)

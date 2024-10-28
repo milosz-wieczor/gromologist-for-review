@@ -883,7 +883,6 @@ class ThermoDiff:
                                                                                               if counter[x] > 0]
 
     def bootstrap(self, orig_sample, n_resamples=100, weights=None):
-        import numpy as np
         sample = np.array(orig_sample)
         weights = np.ones(len(sample))/len(sample) if weights is None else weights/np.sum(weights)
         means = []

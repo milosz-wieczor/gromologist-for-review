@@ -9,10 +9,7 @@ try:
     from scipy.optimize import dual_annealing
 except ImportError:
     pass
-try:
-    import numpy as np
-except ImportError:
-    pass
+import numpy as np
 
 
 class DihOpt:
@@ -88,10 +85,6 @@ class DihOpt:
             _ = dual_annealing
         except NameError:
             raise ImportError("scipy needed to run dihedral optimization, run 'pip install scipy' in command line")
-        try:
-            _ = np.array
-        except NameError:
-            raise ImportError("numpy needed to run dihedral optimization, run 'pip install numpy' in command line")
 
     def check_dihopt(self):
         if len(self.orig_top) > 1:

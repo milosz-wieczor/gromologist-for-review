@@ -461,12 +461,13 @@ class SectionMol(Section):
         :return: None
         """
         for sub_name in [s.header for s in self.subsections if s.header != 'atoms']:
-            subsection = self.get_subsection(sub_name)
-            try:
-                for entry in subsection.entries_bonded:
-                    entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
-            except AttributeError:
-                continue
+            subsections = self.get_subsections(sub_name)
+            for subsection in subsections:
+                try:
+                    for entry in subsection.entries_bonded:
+                        entry.atom_numbers = tuple(n + (offset * (n >= startfrom)) for n in entry.atom_numbers)
+                except AttributeError:
+                    continue
 
     def add_disulfide(self, resid1: int, resid2: int, other: Optional["gml.SectionMol"] = None, rtp: Optional[str] = None):
         """
@@ -1003,21 +1004,22 @@ class SectionMol(Section):
         subsect_atoms.entries.remove(chosen)
     
     def _del_params(self, atom_number: int):
-        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap', 'position_restraints']:
+        for subs in [s.header for s in self.subsections if s.header != 'atoms']:
             try:
-                subsection = self.get_subsection(subs)
-                to_del = []
-                for entry in subsection.entries_bonded:
-                    if atom_number in entry.atom_numbers:
-                        to_del.append(entry)
-                for entry in to_del:
-                    subsection.entries.remove(entry)
+                subsections = self.get_subsections(subs)
+                for subsection in subsections:
+                    to_del = []
+                    for entry in subsection.entries_bonded:
+                        if atom_number in entry.atom_numbers:
+                            to_del.append(entry)
+                    for entry in to_del:
+                        subsection.entries.remove(entry)
             except KeyError:
                 pass
 
     def _check_correct(self):
         natoms = self.natoms
-        for subs in ['bonds', 'angles', 'pairs', 'dihedrals', 'cmap', 'position_restraints']:
+        for subs in [s.header for s in self.subsections if s.header != 'atoms']:
             try:
                 subsection = self.get_subsection(subs)
                 for entry in subsection.entries_bonded:

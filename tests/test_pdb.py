@@ -120,17 +120,17 @@ class BasicTopTest(unittest.TestCase):
         self.assertEqual(self.pdb.atoms[-1].atomname, 'OT2')
 
     def test_addvsn(self):
-        self.pdb.add_vsn(resid=5, name='C', vsname= 'VC')
+        self.pdb.add_vsn(resid=5, name='C', vsname='VC')
         self.assertEqual(self.pdb.atoms[-1].x, self.pdb.atoms[-4].x)
         self.assertEqual(self.pdb.natoms, 88)
 
     def test_addvs2(self):
-        self.pdb.add_vs2(resid=5, name1='OT1', name2='OT2', vsname= 'VO')
+        self.pdb.add_vs2(resid=5, name1='OT1', name2='OT2', vsname='VO')
         self.assertEqual(self.pdb.atoms[-1].x, 0.5 * (self.pdb.atoms[-2].x + self.pdb.atoms[-3].x))
         self.assertEqual(self.pdb.natoms, 88)
 
     def test_addvs3(self):
-        self.pdb.add_vs3out(resid=5, name1='C', name2='OT1', name3='OT2', vsname= 'VCT', c=0.4)
+        self.pdb.add_vs3out(resid=5, name1='C', name2='OT1', name3='OT2', vsname='VCT', c=0.4)
         self.assertAlmostEqual(self.pdb._atoms_dist(self.pdb.atoms[84], self.pdb.atoms[85]), 4.0)
         self.assertEqual(self.pdb.natoms, 88)
 

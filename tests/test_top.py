@@ -110,7 +110,6 @@ class BasicTopTest(unittest.TestCase):
         os.remove('test.top')
         self.assertAlmostEqual(new_ener, ref_ener)
 
-
     def test_init_valid_file(self):
         self.assertIsInstance(self.top, gml.Top)
 
@@ -124,35 +123,28 @@ class BasicTopTest(unittest.TestCase):
         self.top.add_pdb('pentapeptide.pdb')
         self.assertIsInstance(self.top.pdb, gml.Pdb)
 
-#    def test_init_ignore_ifdef(self):
-#        top = gml.Top('pentapeptide.top', ignore_ifdef=True)
-#        self.assertTrue(self.top.ignore_ifdef)
-
     def test_init_define(self):
         top = gml.Top('pentapeptide.top', define={'TEST': 1})
         self.assertEqual(top.defines['TEST'], 1)
-
-#    def test_init_keep_all(self):
-#        top = gml.Top('pentapeptide.top', keep_all=True)
-#        self.assertTrue(top.keep_all)
 
     def test_init_suppress(self):
         top = gml.Top('pentapeptide.top', suppress=True)
         self.assertTrue(top.suppress)
 
-#    def test_init_amber(self):
-#        top = gml.Top('', amber=True)
-#        self.assertTrue('#define _FF_AMBER' in top._contents[0])
-#
-#    def test_init_charmm(self):
-#        top = gml.Top('', charmm=True)
-#        self.assertTrue('#define _FF_CHARMM' in top._contents[0])
-#
-#    def test_from_selection_valid(self):
-#        selection = 'resid 1'
-#        subtop = self.top.from_selection(selection)
-#        self.assertIsInstance(subtop, gml.Top)
-#
+    def test_init_amber(self):
+        top = gml.Top('', amber=True)
+        self.assertTrue('#define _FF_AMBER' in top._contents[0])
+
+    def test_init_charmm(self):
+        top = gml.Top('', charmm=True)
+        self.assertTrue('#define _FF_CHARMM' in top._contents[0])
+
+    def test_from_selection_valid(self):
+        self.top.clear_sections()
+        subtop = self.top.from_selection('backbone')
+        self.assertIsInstance(subtop, gml.Top)
+        self.assertEqual(subtop.natoms, 28)
+
 #    def test_from_selection_invalid(self):
 #        selection = 'invalid selection'
 #        with self.assertRaises(RuntimeError):

@@ -770,7 +770,8 @@ class Pdb:
         atomsel = f'{chsel}name {name} and resid {base_atom.resnum} and resname {rname}'
         if (atomsel is not None and hooksel is not None and bondlength is not None and
                 ((p1_sel is not None and p2_sel is not None) or vector is not None)):
-            self.reposition_atom_from_hook(atomsel, hooksel, bondlength, p1_sel, p2_sel, vector)
+            if bondlength > 0:
+                self.reposition_atom_from_hook(atomsel, hooksel, bondlength, p1_sel, p2_sel, vector)
 
     def delete_atom(self, serial: int, renumber: bool = False):
         """

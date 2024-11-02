@@ -84,12 +84,59 @@ class BasicTopTest(unittest.TestCase):
 
     def test_residue(self):
         self.assertEqual(len(self.pdb.residues), 5)
+        self.pdb.add_chains()
         self.assertEqual(self.pdb.residues[2].selection, 'resid 3 and resname PHE and chain A')
 
     def test_protein_seq(self):
         self.assertEqual(self.pdb.print_protein_sequence(), [''])
         self.pdb.add_chains()
         self.assertEqual(self.pdb.print_protein_sequence()[0], 'ALFIV')
+
+    def test_from_sel(self):
+        newpdb = self.pdb.from_selection('backbone')
+        self.assertEqual(newpdb.natoms, 28)
+        self.assertEqual(newpdb.fname, 'NewGmlStructure')
+
+    def test_interres_distances(self):
+        self.assertEqual(self.pdb.interatomic_dist(1, 2)[-3:], [2.2464416306683774, 3.990150373106257, 4.774526154499522])
+
+    def test_chain_swap(self):
+        self.pdb.add_chains(cutoff=3.578)
+        self.pdb.permute_chains([1, 0])
+        self.assertEqual(str(self.pdb.residues[-1]), 'ALA1B')
+
+    def test_noh(self):
+        self.pdb.remove_hydrogens()
+        self.assertEqual(self.pdb.natoms, 40)
+
+    def test_renumbering(self):
+        self.pdb.renumber_atoms(selection='resid 4 5')
+        self.assertEqual(self.pdb.atoms[-1].serial, 36)
+
+    def test_namefromtop(self):
+        self.pdb.atoms[-1].atomname = "OOO"
+        self.pdb.add_top('pentapeptide.top')
+        self.pdb.names_from_top()
+        self.assertEqual(self.pdb.atoms[-1].atomname, 'OT2')
+
+    def test_addvsn(self):
+        self.pdb.add_vsn(resid=5, name='C', vsname= 'VC')
+        self.assertEqual(self.pdb.atoms[-1].x, self.pdb.atoms[-4].x)
+        self.assertEqual(self.pdb.natoms, 88)
+
+    def test_addvs2(self):
+        self.pdb.add_vs2(resid=5, name1='OT1', name2='OT2', vsname= 'VO')
+        self.assertEqual(self.pdb.atoms[-1].x, 0.5 * (self.pdb.atoms[-2].x + self.pdb.atoms[-3].x))
+        self.assertEqual(self.pdb.natoms, 88)
+
+    def test_addvs3(self):
+        self.pdb.add_vs3out(resid=5, name1='C', name2='OT1', name3='OT2', vsname= 'VCT', c=0.4)
+        self.assertAlmostEqual(self.pdb._atoms_dist(self.pdb.atoms[84], self.pdb.atoms[85]), 4.0)
+        self.assertEqual(self.pdb.natoms, 88)
+
+    def test_coord_setter_getter(self):
+        self.pdb.set_coords(2 * self.pdb.get_coords())
+        self.assertEqual(list(self.pdb.atoms[-1].coords), [20.1, 9.88, 28.12])
 
 
 if __name__ == "__main__":

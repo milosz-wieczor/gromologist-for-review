@@ -121,7 +121,7 @@ def read_xvg(fname: str, cols: Optional[list] = None) -> list:
             content = [line[cols[0]] for line in content]
         else:
             content = [[line[x] for x in cols] for line in content]
-    return content
+    return np.array(content)
 
 
 def get_legend(gmx: str, fname: str) -> dict:
@@ -273,7 +273,7 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
                 os.remove(filename)
             except:
                 pass
-    values = {term: [o[onum] for o in out] for term, onum in zip(terms, range(len(out[0])))}
+    values = {term: out[:,onum] for term, onum in zip(terms, range(len(out[0])))}
     if sum_output:
         nframes = len(values[list(values.keys())[0]])
         values['sum'] = [sum([values[k][n] for k in values.keys()]) for n in range(nframes)]
@@ -289,7 +289,7 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
 
 
 def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bool = False,
-                  cleanup: bool = True, abs_path = '', **kwargs) -> list:
+                  cleanup: bool = True, abs_path='', **kwargs) -> list:
     """
     Calculates selected energy terms given a structure/topology pair or structure/topology/trajectory set.
     :param struct: str, path to the structure file

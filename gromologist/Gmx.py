@@ -1,5 +1,6 @@
 from subprocess import run, PIPE
 import os
+import numpy as np
 from shutil import copy2
 import gromologist as gml
 from typing import Optional, Iterable, Union

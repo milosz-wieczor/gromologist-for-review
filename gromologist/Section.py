@@ -2228,7 +2228,7 @@ class SectionMol(Section):
         charge = 0
         for atom in self.atoms:
             charge += atom.charge
-            atom.comment = f'qtot {charge:.3f}'
+            atom.comment = f' ; qtot {charge:.3f}'
 
     def set_pairs_fudge(self, fudge_LJ=None, fudge_QQ=None, selection=None):
         """

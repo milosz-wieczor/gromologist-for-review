@@ -1310,7 +1310,7 @@ class SectionMol(Section):
             else:
                 subsection.add_type_labels()
 
-    def hydrogen_mass_repartitioning(self, hmass: float = 4.032):
+    def hydrogen_mass_repartitioning(self, hmass: float = 3.024):
         """
         Repartitions the masses from heavy atoms to hydrogens to ensure that each
         hydrogen has the desired mass; this enables the use of a 4-fs time step in

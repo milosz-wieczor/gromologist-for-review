@@ -440,6 +440,11 @@ class SectionMol(Section):
         self._offset_atoms(offset, startfrom)
         self._offset_params(offset, startfrom)
 
+    def offset_residues(self, offset: int, startfrom: int = 0):
+        for a in self.atoms:
+            if a.num >= startfrom:
+                a.resid += offset
+
     def _offset_atoms(self, offset: int, startfrom: int):
         """
         Offsets atoms in the [ atoms ] section
@@ -1059,7 +1064,7 @@ class SectionMol(Section):
         """
         return [self.atoms[i-1] for i in self.select_atoms_bonded_to(serial)]
 
-    def merge_two(self, other: "gml.SectionMol", anchor_own: int, anchor_other: int):
+    def merge_two(self, other: "gml.SectionMol", anchor_own: int, anchor_other: int, offset_resid: bool = False):
         """
         Creates a new bond by either merging two distinct
         molecules (both being part of the same topology)
@@ -1069,6 +1074,7 @@ class SectionMol(Section):
         :param other: an SectionMol instance, the other molecule that participates in the bond (can be self)
         :param anchor_own: int, number of the atom that will form the new bond in self
         :param anchor_other: int, number of the atom that will form the new bond in other (or self, if other is self)
+        :param offset_resid: bool, whether the second molecule's resid should be offset by # of first molecule's residues
         :return: None
         """
         for anch, mol in zip([anchor_own, anchor_other], [self, other]):
@@ -1079,16 +1085,23 @@ class SectionMol(Section):
         if other is not self:
             other.offset_numbering(self.natoms)
             anchor_other += self.natoms
+            if offset_resid:
+                other.offset_residues(len(self.residues))
             if self.top.pdb:
-                print("WARNING: if merging molecules that are not consecutive, make sure to adjust your PDB numbering")
+                self.top.print("WARNING: if merging molecules that are not consecutive, "
+                               "make sure to adjust your PDB numbering")
         if anchor_own > 0:
             self._make_bond(anchor_own, anchor_other, other)
         if other is not self:
             self._merge_fields(other)
+        if other.mol_name != self.mol_name:
             self.top.sections.remove(other)
             # the stuff below works but is terribly ugly, we need to have API for manipulating content of Top.system
             system_setup = self.top.sections[-1].get_subsection('molecules')
             system_setup.entries = [e for e in system_setup if other.mol_name not in e]
+        else:
+            self.top.print("WARNING: Merged two molecules with the same names, make sure you adjust "
+                           "your [ system ] section manually")
 
     def merge_molecules(self, other: "gml.SectionMol"):
         other.offset_numbering(self.natoms)

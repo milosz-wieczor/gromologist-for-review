@@ -213,19 +213,20 @@ class Top:
         mol2 = self.molecules[molname2] if isinstance(molname2, int) else self.get_molecule(molname2)
         mol1.merge_two(mol2, -1, -1)
 
-    def explicit_multiple_molecules(self, molname: Union[str, int]):
+    def explicit_multiple_molecules(self, molname: Union[str, int], renumber_residues: bool = True):
         """
         If a molecule has multiple copies, this transforms it to an explicit
         representation where each copy has its individual residue ID and can
         be specifically modified
         :param molname: the molecule to "unpack"
+        :param renumber_residues: whether to renumber residues e.g. to enable individual selections
         :return: None
         """
         mol = self.molecules[molname] if isinstance(molname, int) else self.get_molecule(molname)
         target_num = [x for x in self.system if x[0] == mol.mol_name][0][1]
         other = deepcopy(mol)
         for i in range(target_num - 1):
-            mol.merge_two(other, -1, -1, True)
+            mol.merge_two(other, -1, -1, renumber_residues)
         system_setup = self.sections[-1].get_subsection('molecules')
         for e in system_setup.entries:
             if mol.mol_name in e.content:

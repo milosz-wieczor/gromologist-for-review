@@ -31,6 +31,7 @@ For a growing base of common applications, workflows and use cases, check out [t
         * [Adding NBFIX terms](#adding-nbfix-terms)
         * [Adding H-mass repartitioning](#adding-hmass-repartitioning)
         * [Explicitly listing parameters in topology & finding missing parameters](#explicitly-listing-parameters-in-topology---finding-missing-parameters)
+        * [Explicitly listing identical molecules in topology](#explicitly-listing-identical-molecules-in-topology)
         * [Making .rtp entries](#making-rtp-entries)
         * [Preparing REST2 topologies](#preparing-rest2-topologies)
     + [Dihedral optimization](#dihedral-optimization)
@@ -689,6 +690,29 @@ by using:
 ```
 
 This does not affect the energy of the system in any way, and only serves for informative purposes.
+##### Explicitly listing identical molecules in topology
+<a name="explicitly-listing-identical-molecules-in-topology"/>
+
+In cases where a homodimer (-trimer, -oligomer) is defined as a single molecule with multiple 
+occurrences, e.g. a homotrimer like this:
+
+```
+[ system ]
+Protein_chain_A   3
+```
+
+one can convert it into a single molecule containing all three copies explicitly listed, so that
+each copy can be edited/modified separately:
+
+```
+t.explicit_multiple_molecules('Protein_chain_A')
+# or, alternatively:
+t.explicit_multiple_molecules(0)  # molecule ID when printing t.molecules
+```
+
+By default, residues will be renumbered to allow for precise selections, but this can be prevented
+by setting `renumber_residues=False`.
+
 
 ##### Making .rtp entries
 <a name="making-rtp-entries"/>

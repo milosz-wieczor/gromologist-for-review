@@ -543,7 +543,7 @@ class Top:
         for mol in self.molecules:
             mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy, once=once)
 
-    def hydrogen_mass_repartitioning(self, hmass: float = 4.032):
+    def hydrogen_mass_repartitioning(self, hmass: float = 3.024):
         """
         Repartitions the masses from heavy atoms to hydrogens in the entire system to ensure that each
         hydrogen has the desired mass; this enables the use of a 4-fs time step in

@@ -1328,7 +1328,7 @@ class SectionMol(Section):
         Repartitions the masses from heavy atoms to hydrogens to ensure that each
         hydrogen has the desired mass; this enables the use of a 4-fs time step in
         standard MD simulations
-        :param hmass: float, desired mass of the hydrogen atom; default is 4.032 (as set by -heavyh in pdb2gmx)
+        :param hmass: float, desired mass of the hydrogen atom; default is 3.024
         :return: None
         """
         for atom in self.atoms:

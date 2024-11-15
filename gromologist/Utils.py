@@ -66,13 +66,17 @@ def generate_dftb3_aa(top: Union[str, "gml.Top"], selection: str, pdb: Optional[
                 top.pdb.add_vs2(resid, 'CA', 'CB', 'LIN', fraction=0.72, serial=last_atom, chain=chain)
 
 
-def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, outfile: str = 'inp.gau', charge: int = 0,
-                            multiplicity: int = 1, group_a: Optional[str] = None, group_b: Optional[str] = None):
+def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: Optional[str] = None, outfile: str = 'inp.gau',
+                            charge: int = 0, directives: Optional[dict] = None, parameters: Optional[str] = None,
+                            multiplicity: int = 1, group_a: Optional[str] = None, group_b: Optional[str] = None,
+                            extras: Optional[str] = None):
     """
     From a .pdb file and an existing Gaussian input, produces a new .gau input
     with correct atom names, coordinates, and possibly fragment assignment
     :param pdb: gml.Pdb or str, the structure object/file containing the desired coordinates
     :param directive_file: str, an existing Gaussian input from which the %- and #-prefixed lines will be taken
+    :param directives: alternatively, a dictionary can be provided that will specify e.g. "mem": "2GB"
+    :param parameters: the 1st line (including the #) specifying run parameters, if directive_file is not given
     :param outfile: str, a file to which the new input will be written
     :param charge: int, charge of the system (by default 0)
     :param multiplicity: int, multiplicity of the system (by default 1)
@@ -80,7 +84,10 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, out
     :param group_b: str, selection to define 2nd fragment if the counterpoise correction is used
     :return: None
     """
-    gau_content = [line for line in open(directive_file)]
+    if directive_file is not None:
+        gau_content = [line for line in open(directive_file)]
+    else:
+        gau_content = [f"%{k}={v}\n" for k, v in directives.items()] + [f"{parameters}\n"]
     pdb = gml.obj_or_str(pdb=pdb)
     pdb.add_elements()
     with open(outfile, 'w') as outf:
@@ -100,7 +107,16 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: str, out
         else:
             raise RuntimeError('Specify either both group_a and group_b, or neither')
         outf.write("\n")
+        if extras is not None:
+            outf.write(extras)
+            outf.write("\n")
 
+
+# def get_charges_nucleotide(pdb, cap_hatoms, multiplicity: int = 1, charge: int = -2):
+#     for hat in cap_hatoms:
+#         pdb.h_to_ch3(hat)
+#     gml.generate_gaussian_input(pdb, directives={'nprocs': 4, 'mem': '2GB', 'chk': 'esp.chk'},
+#                                 parameters='#hf/6-31g* Test Pop=MK iop(6/50=1) opt=loose')
 
 # TODO move REST2 preparation here
 

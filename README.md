@@ -840,6 +840,16 @@ To use the PDB's beta column for color-mapping of observables e.g. in VMD, use t
 By adding the `smooth=...` parameter to `Pdb.set_beta`, data can be spatially smoothed
 using a Gaussian kernel with a specified standard deviation (in A).
 
+In addition, if you want to map some property of the atom defined in the topology onto
+the beta column (e.g. charge or sigma), you can use this method of `gml.Top`:
+
+```
+>>> t.map_property_on_structure('charge')
+>>> t.pdb.save_pdb('struct_with_charges_in_beta.pdb')
+```
+
+This way, you can visualize e.g. charge, epsilon, mass, and sigma.
+
 
 ##### Renumbering atoms, residues or chains in a structure
 <a name="renumbering-atoms-or-residues-in-a-structure"/>

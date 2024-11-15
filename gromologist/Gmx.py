@@ -196,14 +196,14 @@ def ndx(struct: gml.Pdb, selections: list, fname: Optional[str] = None, append: 
     return grnames
 
 
-def frames_count(trajfile: str, gmx: Optional[str] = 'gmx') -> int:
+def frames_count(trajfile: str, gmx: Optional[str] = 'gmx', quiet: bool = True) -> int:
     """
     Runs gmx check to calculate the number of frames in a specified trajectory
     :param trajfile: str, path to/name of the trajectory
     :param gmx: str, optionally the name of the Gromacs executable
     :return: int, number of frames found
     """
-    output = gml.gmx_command(gmx, 'check', f=trajfile, answer=True).split('\n')
+    output = gml.gmx_command(gmx, 'check', f=trajfile, answer=True, quiet=quiet).split('\n')
     return [int(x.split()[1]) for x in output if len(x.split()) > 1 and x.split()[0] == "Coords"][0]
 
 

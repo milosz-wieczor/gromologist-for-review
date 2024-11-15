@@ -916,21 +916,24 @@ class Top:
         else:
             raise AttributeError("No PDB file has been bound to this topology")
 
-    def map_property_on_structure(self, property='charge'):
+    def map_property_on_structure(self, property: str = 'charge', field: str = 'beta'):
         """
         Creates an atom-by-atom list of a chosen property and puts it in
         the beta column of the associated structure to be visualized
         :param property: str, name of the property (typically: charge, epsilon, mass, num, resid, sigma)
+        :param field: str, 'beta' or 'occupancy' (both can be used to hold a property)
         :return: None
         """
         a = self.atoms[0]
         avail_prop = [x for x in dir(a) if isinstance(getattr(a, x), (int, float)) and not isinstance(getattr(a, x), bool)]
+        if field not in ['beta', 'occupancy']:
+            raise ValueError(f'"field" has to be "beta" or "occupancy", but is {field}')
         if self.pdb:
             if property not in avail_prop:
                 raise AttributeError(
                     f"Atoms don't have the numerical property {property}, available ones are {avail_prop}")
-            self.pdb.set_beta([getattr(a, property) for a in self.atoms])
-            self.print(f'{property}s are now assigned to the beta-column in the associated structure, '
+            self.pdb.set_beta([getattr(a, property) for a in self.atoms], set_occupancy=(field == 'occupancy'))
+            self.print(f'{property}s are now assigned to the {field}-column in the associated structure, '
                        f'save it as a PDB file in order to visualize')
         else:
             raise AttributeError("No PDB file has been bound to this topology")

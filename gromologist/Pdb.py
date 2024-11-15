@@ -1443,7 +1443,7 @@ class Pdb:
                 self.conect[atom.serial] = selected
 
     def set_beta(self, values: Sequence, selection: str = None, smooth: Optional[float] = None,
-                 ignore_mem: bool = False) -> None:
+                 ignore_mem: bool = False, set_occupancy: bool = False) -> None:
         """
         Enables user to write arbitrary values to the beta field
         of the PDB entry
@@ -1451,6 +1451,7 @@ class Pdb:
         :param selection: str, optional; can be used to specify a subset of atoms
         :param smooth: if float, defines sigma (in Angstrom) for beta-value smoothing
         :param ignore_mem: bool, allows to ignore memory warnings
+        :param set_occupancy: bool, instead write to the "Occupancy" column (allows to hold two different datasets)
         :return: None
         """
         if any([v > 999 for v in values]):
@@ -1463,7 +1464,10 @@ class Pdb:
         index = 0
         if smooth is None:
             for atom in atoms:
-                atom.beta = values[index]
+                if not set_occupancy:
+                    atom.beta = values[index]
+                else:
+                    atom.occ = values[index]
                 index += 1
         else:
             if len(atoms) > 10000 and not ignore_mem:
@@ -1476,7 +1480,10 @@ class Pdb:
                 dists = np.linalg.norm(coords - np.array(atom.coords), axis=1)
                 weights = np.exp(-(dists ** 2 / (2 * smooth)))
                 weights /= np.sum(weights)
-                atom.beta = np.sum(values * weights)
+                if not set_occupancy:
+                    atom.beta = np.sum(values * weights)
+                else:
+                    atom.occ = values[index]
 
     def translate_selection(self, selection: str = 'all', vector: Sequence = (0, 0, 0)) -> None:
         """

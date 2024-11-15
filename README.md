@@ -841,10 +841,11 @@ By adding the `smooth=...` parameter to `Pdb.set_beta`, data can be spatially sm
 using a Gaussian kernel with a specified standard deviation (in A).
 
 In addition, if you want to map some property of the atom defined in the topology onto
-the beta column (e.g. charge or sigma), you can use this method of `gml.Top`:
+the beta or occupancy column (e.g. charge or sigma), you can use this method of `gml.Top`:
 
 ```
 >>> t.map_property_on_structure('charge')
+>>> t.map_property_on_structure('sigma', field='occupancy')
 >>> t.pdb.save_pdb('struct_with_charges_in_beta.pdb')
 ```
 

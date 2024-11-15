@@ -929,7 +929,7 @@ class Top:
             if property not in avail_prop:
                 raise AttributeError(
                     f"Atoms don't have the numerical property {property}, available ones are {avail_prop}")
-            self.pdb.set_beta([a.__getattr__(property) for a in self.atoms])
+            self.pdb.set_beta([getattr(a, property) for a in self.atoms])
             self.print(f'{property}s are now assigned to the beta-column in the associated structure, '
                        f'save it as a PDB file in order to visualize')
         else:

@@ -5,57 +5,9 @@ Gromologist is a package designed to facilitate handling, editing and manipulati
 
 For a growing base of common applications, workflows and use cases, check out [the Gromologist wiki](https://gitlab.com/KomBioMol/gromologist/-/wikis/Tutorials).
 
-- [Gromologist](#gromologist)
-  * [Installation](#installation)
-  * [How to cite](#how-to-cite)
-  * [Usage](#usage)
-    + [Basic features](#basic-features)
-        * [Reading and writing files](#reading-and-writing-files)
-        * [File inspection, checks and printing](#file-inspection--checks-and-printing)
-        * [Producing lightweight files](#producing-lightweight-files)
-        * [Creating subsets of existing systems](#creating-subsets-of-existing-systems)
-        * [Dealing with unspecified 'define' keywords in topologies](#dealing-with-unspecified--define--keywords-in-topologies)
-    + [Editing topologies](#editing-topologies)
-        * [Adding mutations to proteins](#adding-mutations-to-proteins)
-        * [Adding or removing bonds within or between molecules](#adding-or-removing-bonds-within-or-between-molecules)
-        * [Adding disulfide bonds and coordination bonds with transition metals](#adding-disulfide-bonds-and-coordination-bonds-with-transition-metals)
-        * [Adding and removing atoms while maintaining ordered numbering](#adding-and-removing-atoms-while-maintaining-ordered-numbering)
-        * [Adding alchemical B-states (including altered protonation)](#adding-alchemical-b-states)
-        * [Adding position restraints](#adding-position-restraints)
-        * [Removing or swapping alchemical states](#removing-or-swapping-alchemical-states)
-        * [Duplicating and reassigning types](#duplicating-and-reassigning-types)
-        * [Setting custom 1-4 fudge factors](#setting-custom-1-4-fudge-factors)
-        * [Adding parameters or molecules from other topology files](#adding-external-params)
-        * [Editing the contents of the system](#editing-contents-system)
-        * [Modifying Lennard-Jones parameters](#modifying-lj-terms)
-        * [Adding NBFIX terms](#adding-nbfix-terms)
-        * [Adding H-mass repartitioning](#adding-hmass-repartitioning)
-        * [Explicitly listing parameters in topology & finding missing parameters](#explicitly-listing-parameters-in-topology---finding-missing-parameters)
-        * [Explicitly listing identical molecules in topology](#explicitly-listing-identical-molecules-in-topology)
-        * [Making .rtp entries](#making-rtp-entries)
-        * [Preparing REST2 topologies](#preparing-rest2-topologies)
-    + [Dihedral optimization](#dihedral-optimization)
-    + [Editing structures](#editing-structures)
-        * [Adding atoms along a vector specified by other atoms, and deleting them](#adding-atoms-along-a-vector-specified-by-other-atoms--and-deleting-them)
-        * [Interpolating between two pre-aligned structures](#interpolating-between-two-pre-aligned-structures)
-        * [Filling beta-values with custom data (for visualization)](#filling-beta-values-with-custom-data--for-visualization-)
-        * [Renumbering atoms or residues in a structure](#renumbering-atoms-or-residues-in-a-structure)
-        * [Adding chain, CONECT, QT or element information](#adding-chain--conect-qt-or-element-information)
-        * [Moving a subset of atoms to a different periodic image](#moving-a-subset-of-atoms-to-a-different-periodic-image)
-        * [Converting a 3-point water model to a 4-point one](#converting-a-3-point-water-model-to-a-4-point-one)
-    + [Selection language syntax](#selection-language-syntax)
-        * [Creating index groups](#creating-index-groups)
-    + [Access to Gromacs utilities](#access-to-gromacs-utilities)
-        * [Energy decomposition for a structure or trajectory](#energy-decomposition-for-a-structure-or-trajectory)
-        * [Automated system preparation](#automated-system-preparation)
-        * [Miscellanous](#miscellanous)
-    * [Sensitivity analysis](#sensitivity-analysis)
-    * [Importing Amber parameters into Gromacs force fields](#importing-amber-parameters)
-
-<small><i><a href='http://ecotrust-canada.github.io/markdown-toc/'>Table of contents generated with markdown-toc</a></i></small>
+Ongoing development is happening on https://gitlab.com/KomBioMol/gromologist.
 
 ## Installation
-<a name="installation"/>
 
 The latest "official" release can be obtained directly through `pip` by typing `pip install gromologist`.
 
@@ -67,16 +19,13 @@ Note that Gromologist has no explicit dependencies, although a few specific func
 basic scientific libraries such as `numpy` or `sklearn`.
 
 ## How to cite
-<a name="how-to-cite"/>
 
 If you found Gromologist useful, cite our preprint! [Gromologist: a Gromacs-Oriented Utility Library for Structure and Topology Manipulation
 ](https://chemrxiv.org/engage/chemrxiv/article-details/628bf40843d1f07e2e36c6e1)
 
 ## Usage
-<a name="usage"/>
 
 ##### Reading and writing files
-<a name="reading-and-writing-files"/>
 
 `Top` and `Pdb` are the core classes of the library, and are supposed to provide representation
 for topology and structure objects, respectively. To initialize them, a path to the file
@@ -126,7 +75,6 @@ After changes have been made, modified files can be saved:
 ```
 
 ##### File inspection, checks and printing
-<a name="file-inspection--checks-and-printing"/>
 
 If `Pdb` is bound to `Top`, a number of diagnostic and fixing options are available,
 including name consistency checks:
@@ -231,7 +179,6 @@ and to simply print atoms in the structure (optionally: atoms corresponding to a
 ```
 
 ##### Producing lightweight files
-<a name="producing-lightweight-files"/>
 
 If the topology contains too many parts irrelevant to the system at hand,
 a leaner version can be produced that lacks unused molecule definitions:
@@ -255,7 +202,6 @@ use the `split` parameter of `Top.save_top`:
 ```
 
 ##### Creating subsets of existing systems
-<a name="creating-subsets-of-existing-systems"/>
 
 Gromologist features dedicated functions to create/save both topologies and structures 
 of subsets of existing ones, where the subset can be defined with a simple text-based selection.
@@ -282,7 +228,6 @@ molecules, and all the bonded terms will be processed correctly, yielding a simu
 Molecules and parameters not relevant to the new subsystem will be removed.
 
 ##### Dealing with unspecified 'define' keywords in topologies
-<a name="dealing-with-unspecified--define--keywords-in-topologies"/>
 
 If some FF terms are assumed to be defined elsewhere, e.g. in .mdp files, their values
 can be explicitly specified at construction:
@@ -305,7 +250,6 @@ values (like `0.0 0.8158800 1`) in the topology at hand, use:
 ```
 
 ### Editing topologies
-<a name="editing-topologies"/>
 
 Let's start with a generic topology file:
 
@@ -314,7 +258,6 @@ Let's start with a generic topology file:
 ```
 
 ##### Adding mutations to proteins
-<a name="adding-mutations-to-proteins"/>
 
 For certain complex systems, having to pass through pdb2gmx or CHARMM-GUI 
 for every mutant is a major drawback. To avoid this, Gromologist allows to insert
@@ -350,7 +293,6 @@ dynamics (note the double precision version of Gromacs, `gmx_d`, works better fo
 that almost overlap in space).
 
 ##### Adding or removing bonds within or between molecules
-<a name="adding-or-removing-bonds-within-or-between-molecules"/>
 
 One useful application of Gromologist is adding bonds (and, automatically, other bonded terms)
 either within a molecule or between them:
@@ -380,7 +322,6 @@ protein.remove_bond(at1=5, at2=6)
 ```
 
 ##### Adding disulfide bonds and coordination bonds with transition metals
-<a name="adding-disulfide-bonds-and-coordination-bonds-with-transition-metals"/>
 
 To fix issues with Gromacs' specbonds directives, Gromologist can automatically add disulfide
 bonds between two cysteine residues. An .rtp file is required (either selected interactively
@@ -413,7 +354,6 @@ the resulting bonds can be very long and generate high energies/forces when simu
 what you are doing!
 
 ##### Adding and removing atoms while maintaining ordered numbering
-<a name="adding-and-removing-atoms-while-maintaining-ordered-numbering"/>
 
 When an atom is removed, other atom numbers are modified accordingly, something that has to be
 considered when removing multiple atoms. For instance, one can remove the first three atoms
@@ -441,7 +381,6 @@ If residue data is not specified, Gromologist will attempt to guess the residue 
 neighboring atoms.
 
 ##### Adding alchemical B-states (including altered protonation)
-<a name="adding-alchemical-b-states"/>
 
 To generate alchemical states for a subset of atoms, one can use `gen_state_b`:
 
@@ -471,7 +410,6 @@ You will be asked for an .rtp file that contains the respective protonated/depro
 residue pair, and Gromologist will try to make residue number 31 alchemical.
 
 ##### Adding position restraints
-<a name="adding-position-restraints"/>
 
 If you want to specify new position restrains for your molecule (or you deleted them previously),
 use:
@@ -495,7 +433,6 @@ of force constants can be supplied to specify restraints differently in X, Y and
 will apply an unconditional restraint in the XY plane to heavy atoms of residues 47-83 in `protein`. 
 
 ##### Removing or swapping alchemical states
-<a name="removing-or-swapping-alchemical-states"/>
 
 To make an alchemical topology non-alchemical again, one has two options:
 
@@ -518,7 +455,6 @@ If you want to invert the direction of the alchemical change by swapping states 
 ```
 
 ##### Duplicating and reassigning types
-<a name="duplicating-and-reassigning-types"/>
 
 Often it's useful to duplicate an atomtype exactly, i.e., assign it a different name while
 retaining all bonded and nonbonded parameters of the original. This can be done easily with:
@@ -541,7 +477,6 @@ To then set e.g. all CA atoms in the 1st molecule to the new type, run the follo
 ```
 
 ##### Setting custom 1-4 fudge factors
-<a name="setting-custom-1-4-fudge-factors"/>
 
 If a different 1-4 scaling fudge factor has to be introduced for a single molecule (as e.g. the case
 with the GLYCAM force field), one can automatically generate parameters for the `[ pairs ]` section 
@@ -562,7 +497,6 @@ only set modified 1-4 pairs for atoms that are *both* in this selection:
 
 
 ##### Adding parameters or molecules from other topology files
-<a name="adding-external-params"/>
 
 To incorporate and merge parameters from another topology (e.g. a ligand parametrization
 generated elsewhere), use the following:
@@ -579,7 +513,6 @@ To "import" molecule definitions in the same way, go for:
 ```
 
 ##### Editing the contents of the system
-<a name="editing-contents-system"/>
 
 To add a specified number of molecules to the system (note, this is different than 
 just adding molecule definitions!), use:
@@ -595,7 +528,6 @@ you can use:
 ```
 
 ##### Modifying Lennard-Jones parameters
-<a name="modifying-lj-terms"/>
 
 To change the values of sigma or epsilon for a given type, use:
 
@@ -604,7 +536,6 @@ To change the values of sigma or epsilon for a given type, use:
 ```
 
 ##### Adding NBFIX terms
-<a name="adding-nbfix-terms"/>
 
 To generate an NBFIX (custom combination rule) entry, use the following snippet:
 
@@ -616,7 +547,6 @@ This will introduce a term modifying the CT-HA Lennard-Jones interaction, increa
 (Lorenz-Berthelot) sigma by 0.01 nm, and decreasing the default epsilon by 0.1 kJ/mol.
 
 ##### Adding H-mass repartitioning
-<a name="adding-hmass-repartitioning"/>
 
 Hydrogen mass repartitioning is a popular method of extending the timestep in atomistic molecular
 simulations to 4 fs by shifting the mass from heavy atoms to hydrogens, thereby slowing down the 
@@ -634,7 +564,6 @@ The method skips all molecules with up to 5 atoms (intended not to affect water 
 
 
 ##### Explicitly listing parameters in topology & finding missing parameters
-<a name="explicitly-listing-parameters-in-topology---finding-missing-parameters"/>
 
 To explicitly include all parameters in sections `[ bonds ]`, `[ angles ]` and `[ dihedrals ]`,
 one can use:
@@ -690,8 +619,8 @@ by using:
 ```
 
 This does not affect the energy of the system in any way, and only serves for informative purposes.
+
 ##### Explicitly listing identical molecules in topology
-<a name="explicitly-listing-identical-molecules-in-topology"/>
 
 In cases where a homodimer (-trimer, -oligomer) is defined as a single molecule with multiple 
 occurrences, e.g. a homotrimer like this:
@@ -715,7 +644,6 @@ by setting `renumber_residues=False`.
 
 
 ##### Making .rtp entries
-<a name="making-rtp-entries"/>
 
 To convert a residue (possibly defined in an .itp file coming from a parametrization tool) 
 into an .rtp entry (that can be used by `gmx pdb2gmx`), you can load the topology and use:
@@ -729,7 +657,6 @@ Then copy the entry to the .rtp database of your chosen force field. Do not forg
 `residuetypes.dat`! 
 
 ##### Preparing REST2 topologies
-<a name="preparing-rest2-topologies"/>
 
 To prepare a molecule for replica exchange/solute tempering simulations, one can use the 
 top-level Top object:
@@ -746,7 +673,6 @@ instead, and specify a selection for the "hot" subsystem:
 ```
 
 ### Dihedral optimization
-<a name="dihedral-optimization"/>
 
 With a completed Gaussian dihedral scan results at hand (.log file), we can use Gromologist
 to run dihedral fitting. To select dihedral terms for refinement, add the `DIHOPT` keyword
@@ -780,7 +706,6 @@ the structural aspects of the optimization (actively optimized dihedrals are hig
 along with a plot of the energy values.
 
 ### Editing structures
-<a name="editing-structures"/>
 
 Let's start by reading a PDB file:
 
@@ -789,7 +714,6 @@ Let's start by reading a PDB file:
 ```
 
 ##### Adding atoms along a vector specified by other atoms, and deleting them
-<a name="adding-atoms-along-a-vector-specified-by-other-atoms--and-deleting-them"/>
 
 To add e.g. a hydrogen atom "hooked" to an existing atom CB in residue 2, with a bond length of 1 A in the direction
 specified by a vector from atom C to atom CA, one can use:
@@ -813,7 +737,6 @@ Atoms can be easily deleted with `Pdb.delete_atom()` using the serial number, wi
 automatically removes all hydrogen atoms from the structure.
 
 ##### Interpolating between two pre-aligned structures
-<a name="interpolating-between-two-pre-aligned-structures"/>
 
 To generate intermediate structures emulating a continuous conformational transition,
 try the following snippet:
@@ -828,7 +751,6 @@ This will create a total of 52 structures (1 starting + 50 intermediate + 1 fina
 `interpolated_structure_{0..51}.pdb` that sample the transition through linear interpolation.
 
 ##### Filling beta-values with custom data (for visualization)
-<a name="filling-beta-values-with-custom-data--for-visualization-"/>
 
 To use the PDB's beta column for color-mapping of observables e.g. in VMD, use the following:
 
@@ -853,7 +775,6 @@ This way, you can visualize e.g. charge, epsilon, mass, and sigma.
 
 
 ##### Renumbering atoms, residues or chains in a structure
-<a name="renumbering-atoms-or-residues-in-a-structure"/>
 
 `Pdb.renumber_atoms()` and `Pdb.renumber_residues()` serve to easily reset the numbering
 of atoms or residues, respectively. The renumbering can be modified with the `offset` 
@@ -873,7 +794,6 @@ For when it is desirable to change the order of chains in a system, use `Pdb.per
 This will put chain nr 3 first, then nr 2, and then nr 1 (C, B, A if they were originally A, B, C).
 
 ##### Adding chain, CONECT, QT or element information
-<a name="adding-chain--conect-qt-or-element-information"/>
 
 When chain information goes missing (common issue with conversion between .pdb and .gro),
 this information can be easily recovered with `Pdb.add_chains()`. Note: if the `Pdb` instance
@@ -921,7 +841,6 @@ a chemical bond. Note that this last feature uses a faster subroutine when `nump
 the slower algorithm if asked to include PBC in distance calculations (`p.add_conect(pbc=True)`).
 
 ##### Moving a subset of atoms to a different periodic image
-<a name="moving-a-subset-of-atoms-to-a-different-periodic-image"/>
 
 For cases where default PBC treatment does not provide desired results, or where no topology is available
 at the time, a selected group of atoms can be shifted by a desired combination of box vectors 
@@ -935,7 +854,6 @@ This command will shift residues 1-5 by a sum of box vectors **b** and **c**. If
 the whole structure will be translated.
 
 ##### Converting a 3-point water model to a 4-point one
-<a name="converting-a-3-point-water-model-to-a-4-point-one"/>
 
 If your system was prepared e.g. with TIP3P water and you want to change it to OPC (or other 4-point)
 without rerunning `gmx pdb2gmx`, the following function will do the job:
@@ -948,7 +866,6 @@ The default `offset` parameter is set to 0.147722363, typical for OPC; for TIP4P
 `offset=0.128012065`, and in general check the `[ virtual_sites3 ]` section in the solvent's .itp file.
 
 ### Selection language syntax
-<a name="selection-language-syntax"/>
 
 The custom selection language was meant to be as similar as possible to that 
 available in VMD: 
@@ -964,7 +881,6 @@ Examples:
 + "chain A B D and not solvent"
 
 ##### Creating index groups
-<a name="#creating-index-groups"/>
 
 When the capabilities of `gmx make_ndx` are not sufficient, Gromologist allows to create groups based on its 
 selection syntax described above (VMD-like):
@@ -990,10 +906,8 @@ For quick printing of selections in .ndx-compatible format, use the `Pdb.get_ato
 
 
 ### Access to Gromacs utilities
-<a name="access-to-gromacs-utilities"/>
 
 ##### Energy decomposition for a structure or trajectory
-<a name="energy-decomposition-for-a-structure-or-trajectory"/>
 
 To perform energy decomposition using the Gromacs rerun module, use the
 `calc_gmx_energy()` utility function:
@@ -1020,7 +934,6 @@ to a file `energies.dat`.
 
 
 ##### Automated system preparation
-<a name="automated-system-preparation"/>
 
 To prepare a standard simulation box starting from a .pdb structure, it is enough to run:
 
@@ -1057,7 +970,6 @@ hydrogen mass repartitioning).
 
 
 ##### Miscellanous
-<a name="miscellanous"/>
 
 `gml.frames_count('file.xtc')` quickly returns the number of frames in an .xtc file.
 
@@ -1070,7 +982,6 @@ two topologies yield identical potential energies when evaluated with a chosen s
 
 
 ### Sensitivity analysis
-<a name="sensitivity-analysis"/>
 To perform a full sensitivity analysis in the NBFIX space, start by calculating
 the energy derivatives for each frame for each possible NBFIX:
 
@@ -1091,7 +1002,6 @@ the energy derivatives for each frame for each possible NBFIX:
 
 
 ### Importing Amber parameters into Gromacs force fields
-<a name="importing-amber-parameters"/>
 
 Gromologist allows to read Amber-style `leaprc` files that source residue libraries and parameter datasets to 
 create Gromacs-style `.ff` directories that can be used to prepare systems through `gmx pdb2gmx`.

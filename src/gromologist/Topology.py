@@ -1,3 +1,29 @@
+"""
+Module: Top.py
+Author: Miłosz Wieczór <milosz.wieczor@irbbarcelona.org>
+License: GPL 3.0
+
+Description:
+    This module implements the high-level Top object, representing a GROMACS topology.
+
+Contents:
+    Classes:
+        Top:
+            Represents the topology (parameters, molecule definitions, and system components) of a molecular system.
+
+Usage:
+    This module is intended to be imported as part of the library. It is not
+    meant to be run as a standalone script. Example:
+
+        import gromologist as gml
+        topology = gml.Top("topol.top")
+
+Notes:
+    The "Top" class is also capable of reading and processing .itp files, as long as they contain
+    valid subsections.
+"""
+
+
 import os
 import platform
 import datetime
@@ -83,10 +109,9 @@ class Top:
         for mol_to_remove in mols_to_remove:
             new_top.remove_molecule(mol_to_remove)
         new_top.parameters.sort_dihedrals()
-        new_top.clear_ff_params()
         return new_top
 
-    def save_from_selection(self, selection: str, filename: str = 'subsystem.top'):
+    def save_from_selection(self, selection: str, filename: str = 'subsystem.top') -> None:
         """
         Generates and saves a new .top file corresponding to the specified selection
         :param selection: str, a Gromologist-compatible selection
@@ -95,6 +120,9 @@ class Top:
         """
         new_top = self.from_selection(selection)
         new_top.save_top(filename)
+
+    def clone(self) -> "gml.Top":
+        return deepcopy(self)
 
     @property
     def system(self) -> list:
@@ -111,7 +139,7 @@ class Top:
         return (f"Topology with {self.natoms} atoms, total charge {self.charge:.3f}, "
                 f"and {len(self.molecules)} molecules defined")
 
-    def print(self, *args):
+    def print(self, *args) -> None:
         """
         A custom Print function that can be turned out with suppress=True
         """
@@ -160,6 +188,10 @@ class Top:
         return [s for s in self.sections if isinstance(s, gml.SectionParam)][0]
 
     @property
+    def has_partner(self) -> bool:
+        return True if self.pdb is not None else False
+
+    @property
     def atoms(self) -> list:
         """
         A property attribute that returns a list of all atoms in the system
@@ -187,7 +219,7 @@ class Top:
             return {'nbfunc': int(def_values[0]), 'comb-rule': int(def_values[1]), 'gen-pairs': def_values[2],
                     'fudgeLJ': 1.0, 'fudgeQQ': 1.0}
 
-    def remove_molecule(self, molname: str):
+    def remove_molecule(self, molname: str) -> None:
         """
         Removes a molecule definition and the corresponding entry from the system
         definition (e.g. SOL to remove the solvent)
@@ -202,7 +234,7 @@ class Top:
         for entry in entries_to_del:
             system_subsection.entries.remove(entry)
 
-    def merge_molecules(self, molname1: Union[str, int], molname2: Union[str, int]):
+    def merge_molecules(self, molname1: Union[str, int], molname2: Union[str, int]) -> None:
         """
         Combines two molecules into a single [ moleculetype ]
         :param molname1: str or int, name of molecule 1 or index of molecule 1
@@ -213,7 +245,7 @@ class Top:
         mol2 = self.molecules[molname2] if isinstance(molname2, int) else self.get_molecule(molname2)
         mol1.merge_two(mol2, -1, -1)
 
-    def explicit_multiple_molecules(self, molname: Union[str, int], renumber_residues: bool = True):
+    def explicit_multiple_molecules(self, molname: Union[str, int], renumber_residues: bool = True) -> None:
         """
         If a molecule has multiple copies, this transforms it to an explicit
         representation where each copy has its individual residue ID and can
@@ -280,7 +312,7 @@ class Top:
         """
         return {ent.types[0] for ent in self.parameters.atomtypes.entries_param}
 
-    def find_undefined_types(self):
+    def find_undefined_types(self) -> None:
         """
         Checks if any atom types required by some bonded or nonbonded parameters are missing in [ atomtypes ] definition
         :return: None
@@ -289,10 +321,13 @@ class Top:
         for ssect in self.parameters.subsections:
             types = {t for e in ssect.entries_param for t in e.types}
             if types.difference(deftyp):
-                print(f"WARNING: atomtypes {types.difference(deftyp)} required in {ssect.header} not found "
-                      f"in [ atomtypes ]")
+                for atype in list(types.difference(deftyp)):
+                    if ssect.header == 'cmaptypes' and '-' in atype and atype.split('-')[0] in deftyp:
+                        continue
+                    print(f"WARNING: atomtype {atype} required in {ssect.header} not found "
+                          f"in [ atomtypes ]")
 
-    def list_molecules(self):
+    def list_molecules(self) -> None:
         """
         Prints out a list of molecules contained in the System
         :return: None
@@ -300,7 +335,7 @@ class Top:
         for mol_count in self.system:
             print("{:20s}{:>10d}".format(mol_count[0], mol_count[1]))
 
-    def remove_all_comments(self):
+    def remove_all_comments(self) -> None:
         """
         Removes comments from all topology lines (useful e.g. for comparing with diff)
         :return: None
@@ -310,7 +345,7 @@ class Top:
                 for entry in ssub.entries:
                     entry.comment = ''
 
-    def clear_ff_params(self, section: str = 'all'):
+    def clear_ff_params(self, section: str = 'all') -> None:
         """
         Removes all FF parameters included in the topology that are not used by the defined molecules
         :param section: str, 'all' if applied to all parameters, else as specified
@@ -330,7 +365,7 @@ class Top:
         used_params.extend(self.parameters.find_used_ff_params(section=section))
         self.parameters.clean_unused(used_params, section=section)
 
-    def add_pdb(self, pdbfile: Union[str, "gml.Pdb"]):
+    def add_pdb(self, pdbfile: Union[str, "gml.Pdb"]) -> None:
         """
         Allows to pair a PDB file with the topology after the instance was initialized
         :param pdbfile: str, path to PDB file, or gml.Pdb object
@@ -342,7 +377,7 @@ class Top:
             self.pdb = pdbfile
             self.pdb.add_top(self)
 
-    def add_ff_params(self, section: str = 'all', external_paramsB: Optional["gml.SectionParam"] = None):
+    def add_ff_params(self, section: str = 'all', external_paramsB: Optional["gml.SectionParam"] = None) -> None:
         """
         Explicitly puts FF parameters in sections 'bonds', 'angles',
         'dihedrals' so that the resulting topology is independent of
@@ -355,7 +390,7 @@ class Top:
         for mol in self.molecules:
             mol.add_ff_params(add_section=section, external_paramsB=external_paramsB)
 
-    def load_frcmod(self, frcmod: str):
+    def load_frcmod(self, frcmod: str) -> None:
         """
         Loads an Amber frcmod file, adding parameters to an existing Gromacs topology
         (note that type names will not always match!)
@@ -365,7 +400,7 @@ class Top:
         gml.load_frcmod(self, frcmod)
 
     def add_molecule_from_file(self, filename: str, molnames: Optional[list] = None, molcount: Optional[list] = None,
-                               prefix_type: Optional[str] = None):
+                               prefix_type: Optional[str] = None) -> None:
         """
         Adds a molecule from an external file (can be .itp or .top) to the current topology
         :param filename: name of the file containing the molecule to be added
@@ -416,7 +451,7 @@ class Top:
                 self.print(f"Added {mc} instances of molecule {mname}")
 
     def add_parameters_from_file(self, filename: str, sections: Optional[list] = None, overwrite: bool = False,
-                                 prefix_type: Optional[str] = None):
+                                 prefix_type: Optional[str] = None) -> None:
         """
         Adds parameters from an external file
         :param filename: name of the file containing the parameters to be added
@@ -458,7 +493,7 @@ class Top:
                         own_subs = self.parameters.get_subsection(subsection.header)
                 own_subs._combine_entries(subsection, overwrite)
 
-    def add_molecules_to_system(self, molname: str, nmol: int):
+    def add_molecules_to_system(self, molname: str, nmol: int) -> None:
         """
         Adds a specified number of molecules to the system (specified
         in the [ molecules ] section at the end of the .top file)
@@ -482,7 +517,7 @@ class Top:
             system_subsection = system_subsection[0]
         system_subsection.add_entry(gml.Entry(f"{molname} {nmol}", system_subsection))
 
-    def extract_explicit_parameters(self, molname: Optional[str] = None):
+    def extract_explicit_parameters(self, molname: Optional[str] = None) -> None:
         """
         Takes the parameters explicitly defined in sections [ bonds ], [ angles ], [ dihedrals ]
         and puts them in [ bondtypes ], ...
@@ -509,7 +544,7 @@ class Top:
             self.parameters.add_bonded_param(entry[0], list(entry[1]), entry[2])
         self.parameters.fix_zero_periodicity()
 
-    def prefix_types(self, prefix: str, types_list: Optional[list] = None):
+    def prefix_types(self, prefix: str, types_list: Optional[list] = None) -> None:
         """
         Add a prefix to all types in the topology, to make it compatible with any other topology
         :param prefix: str, will be added in front of the atomtype to modify it
@@ -525,7 +560,7 @@ class Top:
             self.parameters.rename_type(atype, prefix=prefix)
 
     def find_missing_ff_params(self, section: str = 'all', fix_by_analogy: bool = False, fix_B_from_A: bool = False,
-                               fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):
+                               fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False) -> None:
         """
         Identifies FF parameters that are not defined in sections
         'bondtypes', angletypes', ...; if required, will attempt to
@@ -543,19 +578,20 @@ class Top:
         for mol in self.molecules:
             mol.find_missing_ff_params(section, fix_by_analogy, fix_B_from_A, fix_A_from_B, fix_dummy, once=once)
 
-    def hydrogen_mass_repartitioning(self, hmass: float = 3.024):
+    def hydrogen_mass_repartitioning(self, hmass: float = 3.024, methionine=False) -> None:
         """
         Repartitions the masses from heavy atoms to hydrogens in the entire system to ensure that each
         hydrogen has the desired mass; this enables the use of a 4-fs time step in
         standard MD simulations. Skips molecules up to 5 atoms (e.g. water).
-        :param hmass: float, desired mass of the hydrogen atom; default is 4.032 (as set by -heavyh in pdb2gmx)
+        :param hmass: float, desired mass of the hydrogen atom; default is 3.024 (as set by -heavyh in pdb2gmx)
+        :param methionine: bool, whether to add repartitioning for methionine (might crash in CHARMM otherwise)
         :return: None
         """
         for mol in self.molecules:
             if len(mol.atoms) > 5:
-                mol.hydrogen_mass_repartitioning(hmass)
+                mol.hydrogen_mass_repartitioning(hmass, methionine)
 
-    def add_posres(self, keyword: Union[str, None] = 'POSRES', value: int = 1000, selection=None):
+    def add_posres(self, keyword: Union[str, None] = 'POSRES', value: int = 1000, selection=None) -> None:
         """
         Adds a (conditional) position restraint entry for each molecule in the system
         (only heavy atoms); optionally, POSRES can be set for a subset defined by a selection
@@ -571,7 +607,7 @@ class Top:
             if len(mol.atoms) > 5:
                 mol.add_posres(keyword, value, selection)
 
-    def add_params_file(self, paramfile: str):
+    def add_params_file(self, paramfile: str) -> None:
         prmtop = Top._from_text('#include {}\n'.format(paramfile))
         own_defentry = [e for e in self.sections[0].subsections[0].entries if isinstance(e, gml.EntryParam)][0]
         other_defentry = [e for e in prmtop.sections[0].subsections[0].entries if isinstance(e, gml.EntryParam)][0]
@@ -585,7 +621,7 @@ class Top:
         paramsect_own.subsections.extend(paramsect_other.subsections)
         paramsect_own._merge()
 
-    def _include_all(self, ign_ifdef: bool):
+    def _include_all(self, ign_ifdef: bool) -> None:
         """
         includes all .itp files in the .top file to facilitate processing
         :return: None
@@ -603,7 +639,7 @@ class Top:
             lines = [i for i in range(len(self._contents)) if self._contents[i].startswith("#include")
                      and i not in ignore_lines]
 
-    def _preprocess_conditional_includes(self, ifdef: list):
+    def _preprocess_conditional_includes(self, ifdef: list) -> None:
         """
         Because of the implementation of CHARMM36m/CHARMM36 in gmx,
         the two variants are chosen depending on a preprocessing conditional
@@ -649,7 +685,7 @@ class Top:
                 ignore_set.add(n)
         return ignore_set
 
-    def compare_two_ffparamsets(self, other_top, ffparams_only=False):
+    def compare_two_ffparamsets(self, other_top, ffparams_only=False) -> None:
         self_copy = deepcopy(self)
         other = gml.obj_or_str(top=other_top)
         self_copy.clear_ff_params()
@@ -670,7 +706,7 @@ class Top:
         for i in sorted(list(odd_b)):
             self.print(i)
 
-    def _resolve_ifdefs(self, ifdefs: list):
+    def _resolve_ifdefs(self, ifdefs: list) -> None:
         continuing = True
         while continuing:
             remove_lines = []
@@ -732,7 +768,7 @@ class Top:
             else:
                 continuing = False
 
-    def clear_sections(self):
+    def clear_sections(self) -> None:
         """
         Removes all SectionMol instances that are not part
         of the system definition in [ system ]
@@ -790,7 +826,7 @@ class Top:
                     content[nline] = newline
         return content
 
-    def _parse_sections(self):
+    def _parse_sections(self) -> None:
         """
         Cuts the content in sections as defined by the position
         of special headers, and builds the self.sections list
@@ -874,7 +910,7 @@ class Top:
     def nmol(self, name: Optional[str] = None) -> int:
         return sum([x[1] for x in self.system if name is None or x[0] == name])
 
-    def explicit_defines(self):
+    def explicit_defines(self) -> None:
         """
         Changes pre-defined keywords in parameter sets
         according to #define entries in FF params
@@ -900,7 +936,7 @@ class Top:
             raise RuntimeError("Molecule {} is duplicated in topology".format(mol_name))
         return mol[0]
 
-    def check_pdb(self, maxwarn: Optional[int] = None, fix_pdb: bool = False, fix_top: bool = False):
+    def check_pdb(self, maxwarn: Optional[int] = None, fix_pdb: bool = False, fix_top: bool = False) -> None:
         """c2r.gro
         Compares the topology with a PDB object to check
         for consistency, just as gmx grompp does;
@@ -916,7 +952,7 @@ class Top:
         else:
             raise AttributeError("No PDB file has been bound to this topology")
 
-    def map_property_on_structure(self, property: str = 'charge', field: str = 'beta'):
+    def map_property_on_structure(self, property: str = 'charge', field: str = 'beta') -> None:
         """
         Creates an atom-by-atom list of a chosen property and puts it in
         the beta column of the associated structure to be visualized
@@ -938,7 +974,7 @@ class Top:
         else:
             raise AttributeError("No PDB file has been bound to this topology")
 
-    def save_top(self, outname: str = 'merged.top', split: bool = False):
+    def save_top(self, outname: str = 'merged.top', split: bool = False) -> None:
         """
         Saves the combined topology to the specified file
         :param outname: str, file name for output
@@ -964,31 +1000,48 @@ class Top:
                     self._write_section(outfile, section)
         outfile.close()
 
-    def patch_alchemical(self):
+    def patch_alchemical(self) -> None:
         for mol in self.molecules:
             if mol.is_alchemical:
                 mol._patch_alch()
 
-    def swap_states(self, **kwargs):
+    def swap_states(self, **kwargs) -> None:
         for mol in self.alchemical_molecules:
             mol.swap_states(**kwargs)
 
-    def drop_state_a(self, **kwargs):
+    def drop_state_a(self, remove_dummies: bool = False) -> None:
+        """
+        Collapses alchemical A states in the whole topology, making state B
+        the new non-alchemical default state A
+        :param remove_dummies: remove_dummies: bool, whether to remove A-state dummies
+        :return:
+        """
         for mol in self.alchemical_molecules:
-            mol.drop_state_a(**kwargs)
+            mol.drop_state_a(remove_dummies)
 
-    def drop_state_b(self, **kwargs):
+    def drop_state_b(self, remove_dummies: bool = False) -> None:
+        """
+        Collapses alchemical B states in the whole topology, making state A
+        the (only) non-alchemical state
+        :param remove_dummies: remove_dummies: bool, whether to remove B-state dummies
+        :return:
+        """
         for mol in self.alchemical_molecules:
-            mol.drop_state_b(**kwargs)
+            mol.drop_state_b(remove_dummies)
 
-    def rename_dummies(self):
+    def rename_dummies(self) -> None:
+        """
+        If dummies are converted to atoms in topology manipulations, this allows to
+        give them reasonable names so that they can be visualized without issues
+        :return: None
+        """
         for mol in self.molecules:
             for a in mol.atoms:
                 if a.atomname.startswith('D'):
                     a.atomname = a.atomname.replace('DH', 'Hx').replace('DO', 'Ox').replace('DN', 'Nx').\
                         replace('DC', 'Cx').replace('DS', 'Sx')
 
-    def recalculate_qtot(self):
+    def recalculate_qtot(self) -> None:
         """
         Inserts the "qtot" cumulative-charge counter in atoms' comments
         :return: None
@@ -996,7 +1049,7 @@ class Top:
         for mol in self.molecules:
             mol.recalc_qtot()
 
-    def solute_tempering(self, temperatures: list, molecules: list):
+    def solute_tempering(self, temperatures: list, molecules: list) -> None:
         """
         Prepares .top files for REST2
         :param temperatures: list of float, set of "fake" temperatures for REST2 (lowest should be first)
@@ -1013,7 +1066,7 @@ class Top:
             mod.save_top(self.fname.replace('.top', f'-rest{temperatures[0]/t:.3f}.top'))
 
     @staticmethod
-    def _write_section(outfile: TextIO, section):
+    def _write_section(outfile: TextIO, section) -> None:
         """
         Writes a single section to the output file
         :param outfile: an open file in/out object, links to the output file
@@ -1024,13 +1077,16 @@ class Top:
         for subsection in section.subsections:
             outfile.write('\n[ {} ]\n'.format(subsection.header))
             for entry in subsection:
-                if subsection.header == 'cmaptypes':
-                    str_entry = str(entry).rstrip() + '\n\n'
+                if not entry.comment and not entry.content:
+                    continue
                 else:
-                    str_entry = str(entry).rstrip() + '\n'
-                outfile.write(str_entry)
+                    if subsection.header == 'cmaptypes':
+                        str_entry = str(entry).rstrip() + '\n\n'
+                    else:
+                        str_entry = str(entry).rstrip() + '\n'
+                    outfile.write(str_entry)
 
-    def _write_header(self, outfile: TextIO):
+    def _write_header(self, outfile: TextIO) -> None:
         """
         Writes the header to a newly generated file
         :param outfile: an open file in/out object, links to the output file

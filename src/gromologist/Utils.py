@@ -1,3 +1,51 @@
+"""
+Module: Utils.py
+Author: Miłosz Wieczór <milosz.wieczor@irbbarcelona.org>
+License: GPL 3.0
+
+Description:
+    This module includes utilities linking Gromacs to external tools,
+    e.g. QM software, the Amber suite, Plumed, or force field development tools
+
+Contents:
+    Functions:
+        generate_dftb3_aa
+        generate_gaussian_input
+        parse_frcmod
+        load_frcmod
+        read_lib
+        write_rtp
+        dict_filter
+        fix_rtp
+        find_leap_files
+        amber2gmxFF
+        reorder_amber_impropers
+        dih_match
+        read_addAtomTypes
+        guess_element_properties
+        read_prep_impropers
+        prep_to_rtp
+        calc_Coulomb_force
+        calc_LJ_force
+        plumed_maker
+        process_xyz
+    Classes:
+        ConvergeLambdas:
+            Creates a protocol for optimizing lambda-spacing in
+            alchemical simulations (equilibrium TI/HREX)
+
+Usage:
+    This module is intended to be imported as part of the library. It is not
+    meant to be run as a standalone script. Example:
+
+        import gromologist as gml
+        _ = gml.generate_gaussian_input("complex.pdb", "template.gau", "inp.gau")
+
+Notes:
+    If you wish to include dedicated Gromologist utilities here, contact the author.
+"""
+
+
 import os
 from glob import glob
 from shutil import copy2, rmtree
@@ -12,7 +60,7 @@ import numpy as np
 # TODO make top always optional between str/path and gml.Top
 
 
-def generate_dftb3_aa(top: Union[str, "gml.Top"], selection: str, pdb: Optional[Union[str, "gml.Pdb"]] = None):
+def generate_dftb3_aa(top: Union[str, "gml.Top"], selection: str, pdb: Optional[Union[str, "gml.Pdb"]] = None) -> None:
     """
     Prepares a DFT3B-compatible topology and structure, setting up amino acids
     for QM/MM calculations (as defined by the selection)
@@ -110,6 +158,28 @@ def generate_gaussian_input(pdb: Union["gml.Pdb", str], directive_file: Optional
         if extras is not None:
             outf.write(extras)
             outf.write("\n")
+
+
+def generate_orca_input(pdb: Union["gml.Pdb", str], directive_file: str, outfile: str = 'inp.gau', charge: int = 0,
+                        multiplicity: int = 1, replace: Optional[dict] = None):
+    orca_content = [line for line in open(directive_file)]
+    if replace is not None:
+        new_content = []
+        for linen in range(len(orca_content)):
+            line = orca_content[linen]
+            for k, v in replace.items():
+                line = line.replace(k, v)
+            new_content.append(line)
+        orca_content = new_content
+    pdb = gml.obj_or_str(pdb=pdb)
+    pdb.add_elements()
+    with open(outfile, 'w') as outf:
+        for line in orca_content:
+            outf.write(line)
+        outf.write(f"* xyz {charge} {multiplicity}\n")
+        for atom in pdb.atoms:
+            outf.write(f" {atom.element}   {atom.x}  {atom.y}  {atom.z}\n")
+        outf.write(f"*\n")
 
 
 # def get_charges_nucleotide(pdb, cap_hatoms, multiplicity: int = 1, charge: int = -2):
@@ -258,7 +328,7 @@ def load_frcmod(top: Union[str, "gml.Top"], filename: str, return_cmap: bool = F
             ca = [adata[1] for adata in pro_atoms[k[1]] if adata[0] == "CA"][0]
         except KeyError:
             cc, na, ca = "C", "N", "CA"
-        cmaptypes[k].append(f'{cc} {na} {ca} {cc} {na}'.split())
+        cmaptypes[k].append(f'{cc}-* {na}-{k[-1]} {ca}-{k[-1]} {cc}-{k[-1]} {na}-*'.split())
     params = top.parameters
     for at in atomtypes.keys():
         params.add_atomtype(at, *atomtypes[at], action_default='r')
@@ -278,7 +348,7 @@ def load_frcmod(top: Union[str, "gml.Top"], filename: str, return_cmap: bool = F
             print(f"Skipping NBFIX {n} as at least one of the types is not defined; if you want to keep it, "
                   "create/load the type and run this command again.")
     for c in cmaptypes.keys():
-        params.add_bonded_param(cmaptypes[c][-1], [c[1], cmaptypes[c][:-1]], 1, action_default='a')
+        params.add_bonded_param(cmaptypes[c][-1], [cmaptypes[c][:-1]], 1, action_default='a')
     if return_cmap:
         return cmaptypes
     else:
@@ -421,7 +491,7 @@ def fix_rtp(rtp_dict: dict, impr: bool = False, rna: bool = False) -> dict:
                                 rtp_dict[res][n][m] = 'OC2'
                             elif atname == "OXT":
                                 rtp_dict[res][n][m] = 'OC1'
-            for mid in ["A", "B", "G", "D", "E", "G1", "Z"]:
+            for mid in ["A", "B", "G", "D", "E", "G1"]:
                 if f"H{mid}3" in [e[0] for e in rtp_dict[res]] and f"H{mid}1" not in [e[0] for e in rtp_dict[res]]:
                     for n, ent in enumerate(rtp_dict[res]):
                         if ent[0] == f"H{mid}3":
@@ -926,14 +996,25 @@ class ConvergeLambdas:
             self.set_lambdas('dyn.mdp', self.lambdas, i)
 
     @staticmethod
-    def pick_from_xtc(grofile, xtc, initial, final):
-        import mdtraj as md
-        traj = md.load(xtc, top=grofile)
-        nframes = final - initial
-        frames = np.linspace(initial, final, nframes + 1).astype(int)[1:]
-        for num, fr in enumerate(frames, initial):
-            curr = traj[fr]
-            curr.save_gro('mygro{}.gro'.format(num))
+    def pick_from_xtc(grofile: str, xtc: str, initial: int, final: int) -> None:
+        """
+        When starting from an equilibrium trajectory, picks equally chosen samples
+        to seed individual windows
+        :param grofile: str, path to the structure file
+        :param xtc: str, path to the trajectory file
+        :param initial: int, ID of the first .gro file to produce
+        :param final: int, ID of the last .gro file to produce
+        :return: None
+        """
+        nframes = gml.frames_count(xtc)
+        nsamples = final - initial
+        skip = int(nframes / nsamples)
+        gmx = gml.find_gmx_dir()
+        gml.gmx_command(gmx[1], 'trjconv', f=xtc, o='tmp_cvgl.pdb', skip=skip, s=grofile, pass_values=[0])
+        traj = gml.Traj('tmp_cvgl.pdb')
+        for num, fr in enumerate(traj.structures, initial):
+            fr.save_gro('mygro{}.gro'.format(num))
+        os.remove('tmp_cvgl.pdb')
 
     @staticmethod
     def clear_files(final=False):
@@ -1056,3 +1137,17 @@ def plumed_maker(struct: "gml.Pdb", selections: list, label_core: str, command: 
     for n, sel in enumerate(selections):
         atoms = struct.get_atom_indices(sel, as_plumed=True)
         print(f"{label_core}{n}: {command} {atoms} {params}")
+
+
+def process_xyz(xyz: str):
+    """
+    Reads an xyz file and returns just the coords
+    :param xyz: str, filename
+    :return: np.array, 3-dimensional (frames, atoms, coordinates)
+    """
+    content = [line.strip().split() for line in open(xyz)]
+    natoms = int(content[0][0])
+    assert len(content) % (natoms + 2) == 0
+    nframes = len(content) // (natoms + 2)
+    coords = np.array([np.array([[float(x) for x in at[1:]] for at in content[fr*(natoms+2)+2:(fr+1)*(natoms+2)]]) for fr in range(nframes)])
+    return coords

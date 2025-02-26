@@ -1,3 +1,29 @@
+"""
+Module: Crooks.py
+Author: Miłosz Wieczór <milosz.wieczor@irbbarcelona.org>
+License: GPL 3.0
+
+Description:
+    This module allows to run non-equilibrium alchemical
+    free energy calculations, starting from alchemical topologies
+    and equilibrated trajectories
+
+Contents:
+    Classes:
+        CrooksPool:
+            Creates an ensemble (pool) of workers that each run and analyze
+            their own non-equilibrium MD from lambda 0->1 and 1->0
+        Crooks:
+            Represents a single worker running a fast-growth simulation
+
+Usage:
+    This module is intended to be employed as described in the tutorial; see:
+        https://gitlab.com/KomBioMol/gromologist/-/wikis/Running-nonequilibrium-alchemical-free-energy-calculations
+
+Notes:
+    For advanced use, such as inserting mutations on-the-fly with pmx, contact the author.
+"""
+
 from concurrent.futures import ProcessPoolExecutor
 import multiprocessing
 import gromologist as gml

@@ -1,3 +1,32 @@
+"""
+Module: Mutant.py
+Author: Miłosz Wieczór <milosz.wieczor@irbbarcelona.org>
+License: GPL 3.0
+
+Description:
+    This module implements a mutant library that allows to introduce amino acid
+    substitutions without re-creating the topology from scratch
+
+Contents:
+    Classes:
+        ProteinMutant:
+            Defines all the rules for growing and trimming amino acids to
+            create the minimal substitution between any two amino acids
+
+Usage:
+    This module is intended to be imported as part of the library. It is not
+    meant to be run as a standalone script. Example:
+
+        import gromologist as gml
+        m = gml.Top("complex.top").molecules[0]
+        m.mutate_protein_residue(5, "F")
+
+Notes:
+    Protonation changes can be introduced by referencing non-standard names:
+    O for neutral lysine, B for protonated aspartic acid, and J for protonated glutamic acid
+"""
+
+
 from typing import Tuple
 
 class ProteinMutant:
@@ -214,7 +243,7 @@ class ProteinMutant:
                  'KH': [['CD', 'CE'], ['CE', 'HE1'], ['CE', 'HE2'], ['CE', 'NZ'], ['NZ', 'HZ1'], ['NZ', 'HZ2'],
                         ['NZ', 'HZ3']],
                  'KN': [['CD', 'CE'], ['CE', 'HE1'], ['CE', 'HE2'], ['CE', 'NZ'], ['NZ', 'HZ1'], ['NZ', 'HZ2']],
-                 'PH': [['N', 'H']],
+                 'PH': [['N', ('H', 'HN')]],
                  'HZ': [['CZ', 'HZ']],
                  'HA': [['CA', 'HA2']],
                  'HB': [['CB', 'HB3']],

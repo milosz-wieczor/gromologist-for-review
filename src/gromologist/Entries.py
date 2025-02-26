@@ -1,3 +1,40 @@
+"""
+Module: Entries.py
+Author: Miłosz Wieczór <milosz.wieczor@irbbarcelona.org>
+License: GPL 3.0
+
+Description:
+    This module implements the lowest hierarchical layer of the topology file,
+    corresponding to single lines (e.g. individual atoms, bonds, parameters)
+    or multi-line parameter definitions
+
+Contents:
+    Classes:
+        Entry:
+            Base class, represents a single line with a content and comment.
+        EntryBonded:
+            Represents a bonded term, such as a bond, angle, 1-4 pair, or dihedral,
+            possibly with their corresponding alchemical state.
+        EntryParam:
+            Contains a force field parameter - can be multi-line, e.g. type 9 dihedrals
+            or CMAP entries.
+        EntryAtom:
+            Contains properties of individual atoms in the molecule.
+
+Usage:
+    This module is intended to be imported as part of the library. It is not
+    meant to be run as a standalone script. Example:
+
+        import gromologist as gml
+        t = gml.Top('mol.top')
+        print([a.charge for a in t.molecules[0].atoms])
+
+Notes:
+    Certain interaction types are also used by other software or specialized CG models.
+    Not all interaction types available in Gromacs are implemented, but the list is growing.
+"""
+
+
 import gromologist as gml
 
 
@@ -75,7 +112,7 @@ class Entry:
             return False
         return True
     
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> str:
         return self.content[item]
 
     def is_header(self) -> bool:
@@ -99,10 +136,13 @@ class EntryBonded(Entry):
     """
     fstr_suff = {('bonds', '1'): (float, float),
                  ('bonds', '2'): (float, float),
+                 ('bonds', '21'): (float, float),  # for GENESIS
                  ('pairs_nb', '1'): (float, float, float, float),
                  ('pairs', '2'): (float, float, float, float, float),
                  ('angles', '1'): (float, float),
                  ('angles', '2'): (float, float),
+                 ('angles', '21'): (float, float, float),  # for GENESIS
+                 ('angles', '22'): (),  # for GENESIS
                  ('angles', '5'): (float, float, float, float),
                  ('angles', '10'): (float, float),
                  ('dihedrals', '9'): (float, float, int),
@@ -110,12 +150,18 @@ class EntryBonded(Entry):
                  ('dihedrals', '1'): (float, float, int),
                  ('dihedrals', '3'): (float, float, float, float, float, float),
                  ('dihedrals', '2'): (float, float),
+                 ('dihedrals', '21'): (float, float, float),  # for GENESIS
+                 ('dihedrals', '22'): (),  # for GENESIS
+                 ('dihedrals', '32'): (float, float, int),  # for GENESIS
+                 ('dihedrals', '41'): (float, float, float),  # for GENESIS
+                 ('dihedrals', '52'): (),  # for GENESIS
                  ('cmap', '1'): (float,),
                  ('position_restraints', '1'): (float, float, float),
                  ('dihedral_restraints', '1'): (float, float, float),
                  ('constraints', '2'): (float,),
                  ('constraints', '1'): (float,),
                  ('virtual_sitesn', '1'): (int,),
+                 ('virtual_sitesn', '2'): (int, int, int, int),
                  ('virtual_sites2', '1'): (float,),
                  ('virtual_sites3', '1'): (float, float),
                  ('virtual_sites3', '2'): (float, float),
@@ -123,7 +169,7 @@ class EntryBonded(Entry):
                  ('virtual_sites3', '4'): (float, float, float),
                  ('settles', '1'): (float, float)}
 
-    def __init__(self, content, subsection):
+    def __init__(self, content: str, subsection: "gml.Subsection"):
         super().__init__(content, subsection)
         if subsection.header == 'exclusions':
             self.atoms_per_entry = len(self.content) - 1
@@ -152,14 +198,14 @@ class EntryBonded(Entry):
                 raise e
         self.fstring = " ".join("{:>5d}" for _ in range(self.atoms_per_entry)) + " {:>5s}"
 
-    def _fstr_suff(self, query):
+    def _fstr_suff(self, query) -> list:
         if self.fstr_mod:
             return self.fstr_mod
         else:
             return EntryBonded.fstr_suff[query]
 
     @property
-    def sorter(self):
+    def sorter(self) -> int:
         total = 0
         anums = self.atom_numbers[::-1] if self.atom_numbers[0] < self.atom_numbers[-1] else self.atom_numbers
         for n, i in enumerate(anums, 1):
@@ -172,10 +218,14 @@ class EntryBonded(Entry):
                 pass
         return total
 
-    def __lt__(self, other):
+    def __lt__(self, other) -> bool:
         return self.sorter < other.sorter
 
-    def explicit_defines(self):
+    def explicit_defines(self) -> None:
+        """
+        Converts all KEY entries based on #define KEY lines
+        :return: None
+        """
         if self.params_state_a and isinstance(self.params_state_a[0], str):
             try:
                 self.params_state_a = self.subsection.section.top.defines[self.params_state_a[0]]
@@ -183,7 +233,7 @@ class EntryBonded(Entry):
             except:
                 pass
 
-    def read_types(self):
+    def read_types(self) -> None:
         atoms_sub = self.subsection.section.get_subsection('atoms')
         atoms_sub.get_dicts()
         num_to_type_a = atoms_sub.num_to_type
@@ -194,7 +244,7 @@ class EntryBonded(Entry):
         self.types_state_b = types_state_b if types_state_b != self.types_state_a else None
         self.atom_names = tuple(num_to_name[num] for num in self.atom_numbers)
 
-    def parse_bonded_params(self, excess_params):
+    def parse_bonded_params(self, excess_params) -> None:
         try:
             _ = EntryBonded.fstr_suff[(self.subsection.header, self.interaction_type)]
         except KeyError:
@@ -233,7 +283,7 @@ class EntryBonded(Entry):
             else:
                 raise RuntimeError("Cannot process: ", excess_params)
 
-    def __str__(self):
+    def __str__(self) -> str:
         fmt_suff = ""
         for params in [self.params_state_a, self.params_state_b]:
             for parm in params:
@@ -301,6 +351,10 @@ class EntryParam(Entry):
         self.identifier = self.subsection.header + '-' + '-'.join(self.types) + '-' + self.interaction_type
             
     def format(self) -> str:
+        """
+        Specifies the format for each subsection
+        :return: str, format specifier with formatted placeholders
+        """
         fmt = {('bondtypes', '1'): "{:>8s} {:>8s} {:>6s} {:>13.8f} {:>13.2f} ",
                ('angletypes', '5'): "{:>8s} {:>8s} {:>8s} {:>6s} {:>13.6f} {:>13.6f} {:>13.8f} {:>13.2f} ",
                ('angletypes', '1'): "{:>8s} {:>8s} {:>8s} {:>6s} {:>13.8f} {:>13.2f} ",
@@ -405,7 +459,7 @@ class EntryAtom(Entry):
             self.type_b, self.charge_b, self.mass_b = None, None, None
         self.fstring = "{:>6d} {:>11s} {:>7d}{:>7s}{:>7s}{:>7d}"
 
-    def __eq__(self, other):
+    def __eq__(self, other) -> bool:
         if not isinstance(other, gml.EntryAtom):
             return False
         for attr in ['atomname', 'num', 'resid', 'resname', 'charge', 'mass', 'type', 'type_b', 'charge_b', 'mass_b', 'molname']:
@@ -413,7 +467,7 @@ class EntryAtom(Entry):
                 return False
         return True
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.type_b is not None:
             extra = f"(A)/{self.type_b}(B)"
         else:
@@ -431,6 +485,10 @@ class EntryAtom(Entry):
 
     @property
     def element(self) -> str:
+        """
+        Returns the (1-letter) element of the atom
+        :return: str, element code
+        """
         return [x for x in self.atomname if not x.isdigit()][0]
 
     @property
@@ -476,12 +534,24 @@ class EntryAtom(Entry):
         return float(entry.params[1])
 
     @property
-    def bound_atoms(self) -> list:
+    def bound_atoms(self) -> list["gml.EntryAtom"]:
+        """
+        Returns the atoms covalently bonded to this one
+        :return: list of gml.EntryAtom, bonded partners
+        """
         bonds = self.subsection.section.list_bonds(by_num=True, returning=True)
         bonds_involving_self = [b for b in bonds if self.num in b]
         bonds_indices = [i for b in bonds_involving_self for i in b if i != self.num]
         molatoms = self.subsection.section.atoms
         return [molatoms[i-1] for i in bonds_indices]
+
+    @property
+    def numbonds(self) -> int:
+        """
+        Returns the number of bonds this atom is involved in
+        :return: int, number of bonds
+        """
+        return len(self.bound_atoms)
 
     def _get_atomtype_entry(self):
         atomtypes = self.subsection.section.top.parameters.get_subsection('atomtypes')
@@ -490,7 +560,7 @@ class EntryAtom(Entry):
         except IndexError:
             raise RuntimeError(f"Couldn't find non-bonded parameters for atomtype {self.type}")
 
-    def __str__(self):
+    def __str__(self) -> str:
         fstring = self.fstring + self.float_fmt(self.charge) + self.float_fmt(self.mass) + '   '
         if self.type_b:
             alch_fstring = "{:>11s}" + self.float_fmt(self.charge_b) + self.float_fmt(self.mass_b)

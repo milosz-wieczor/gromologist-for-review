@@ -1,3 +1,25 @@
+"""
+Module: Parser.py
+Author: Miłosz Wieczór <milosz.wieczor@irbbarcelona.org>
+License: GPL 3.0
+
+Description:
+    This module defines a selection parser with a VMD-like syntax and recursive calla
+
+Contents:
+    Classes:
+        SelectionParser:
+            Processes a selection to yield the atom indices corresponding to
+
+Usage:
+    This module is only used by other components of the library, such as the gml.Top and gml.Pdb objects.
+
+Notes:
+    The parser works on both structures and topologies, enabling different selections
+    depending on the associated object (e.g. vicinity for structures, bonded atoms for topologies).
+"""
+
+
 from .Entries import EntryAtom
 
 
@@ -8,7 +30,7 @@ class SelectionParser:
             self.nat = self.master.natoms
         except AttributeError:
             raise TypeError("Can only parse selections with PDB or topology data")
-        
+
     @staticmethod
     def ispdb(obj) -> bool:
         try:
@@ -17,7 +39,7 @@ class SelectionParser:
             return False
         else:
             return True
-    
+
     def __call__(self, selection_string: str) -> list:
         while "  " in selection_string:
             selection_string = selection_string.replace("  ", " ")
@@ -40,7 +62,7 @@ class SelectionParser:
         selection_string = selection_string.replace('dna', dna_selection)
         selection_string = selection_string.replace('rna', rna_selection)
         selection_string = selection_string.replace('all', all_selection)
-        return sorted(list(self._select_set_atoms(selection_string)))
+        return sorted(list(self._select_set_atoms(selection_string))) if 'dihedral' not in selection_string else list(self._select_set_atoms(selection_string))
     
     def _select_set_atoms(self, selection_string: str) -> set:
         """
@@ -125,43 +147,99 @@ class SelectionParser:
     def _find_atoms(self, sel_string: str, rev: bool = False) -> set:
         chosen = []
         keyw = sel_string.split()[0]
+        matchings_pdb = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
+                         "chain": "chain", "resname": "resname", "serial": "serial", "x": "x", "y": "y", "z": "z"}
+        matchings_top = {"name": "atomname", "resid": "resid", "resnum": "resid", "mass": "mass", "element": "element",
+                         "resname": "resname", "serial": "num", "type": "type", "molecule": "molname",
+                         "numbonds": "numbonds"}
         if self.ispdb(self.master):
-            matchings = {"name": "atomname", "resid": "resnum", "resnum": "resnum", "element": "element",
-                         "chain": "chain", "resname": "resname", "serial": "serial"}
+            matchings = matchings_pdb
         else:
-            matchings = {"name": "atomname", "resid": "resid", "resnum": "resid", "mass": "mass", "element": "element",
-                         "resname": "resname", "serial": "num", "type": "type", "molecule": "molname"}
+            matchings = matchings_top
+        atomlist = self.master.atoms
+        if keyw == 'dihedral':
+            return self.master.dihedral(sel_string.split()[1])
         try:
             vals = {int(x) for x in sel_string.split()[1:]}
+            for n, a in enumerate(atomlist):
+                if not rev:
+                    if a.__getattribute__(matchings[keyw]) in vals:
+                        chosen.append(n)
+                else:
+                    if a.__getattribute__(matchings[keyw]) not in vals:
+                        chosen.append(n)
         except ValueError:
             if " to " in sel_string:
-                beg = int(sel_string.split()[1])
-                end = int(sel_string.split()[3])
-                vals = range(beg, end + 1)
+                try:
+                    beg = int(sel_string.split()[1])
+                except ValueError:
+                    beg = float(sel_string.split()[1])
+                try:
+                    end = int(sel_string.split()[3])
+                except ValueError:
+                    end = float(sel_string.split()[3])
+                for n, a in enumerate(atomlist):
+                    if not rev:
+                        if beg <= float(a.__getattribute__(matchings[keyw])) <= end:
+                            chosen.append(n)
+                    else:
+                        if not (beg <= float(a.__getattribute__(matchings[keyw])) <= end):
+                            chosen.append(n)
             elif "<=" in sel_string:
-                beg = 0
-                end = int(sel_string.split('<=')[1].strip())
-                vals = range(beg, end + 1)
+                try:
+                    end = int(sel_string.split('<=')[1].strip())
+                except ValueError:
+                    end = float(sel_string.split('<=')[1].strip())
+                for n, a in enumerate(atomlist):
+                    if not rev:
+                        if float(a.__getattribute__(matchings[keyw])) < end:
+                            chosen.append(n)
+                    else:
+                        if float(a.__getattribute__(matchings[keyw])) >= end:
+                            chosen.append(n)
             elif ">=" in sel_string:
-                beg = int(sel_string.split('>=')[1].strip())
-                end = 10**7
-                vals = range(beg, end)
+                try:
+                    beg = int(sel_string.split('>=')[1].strip())
+                except ValueError:
+                    beg = float(sel_string.split('>=')[1].strip())
+                for n, a in enumerate(atomlist):
+                    if not rev:
+                        if float(a.__getattribute__(matchings[keyw])) >= beg:
+                            chosen.append(n)
+                    else:
+                        if float(a.__getattribute__(matchings[keyw])) < beg:
+                            chosen.append(n)
             elif "<" in sel_string:
-                beg = 0
-                end = int(sel_string.split('<')[1].strip())
-                vals = range(beg, end)
+                try:
+                    end = int(sel_string.split('<')[1].strip())
+                except ValueError:
+                    end = float(sel_string.split('<')[1].strip())
+                for n, a in enumerate(atomlist):
+                    if not rev:
+                        if float(a.__getattribute__(matchings[keyw])) < end:
+                            chosen.append(n)
+                    else:
+                        if float(a.__getattribute__(matchings[keyw])) >= end:
+                            chosen.append(n)
             elif ">" in sel_string:
-                beg = int(sel_string.split('>')[1].strip())
-                end = 10**7
-                vals = range(beg+1, end)
+                try:
+                    beg = int(sel_string.split('>')[1].strip())
+                except ValueError:
+                    beg = float(sel_string.split('>')[1].strip())
+                for n, a in enumerate(atomlist):
+                    if not rev:
+                        if float(a.__getattribute__(matchings[keyw])) > beg:
+                            chosen.append(n)
+                    else:
+                        if float(a.__getattribute__(matchings[keyw])) <= beg:
+                            chosen.append(n)
             else:
                 vals = set(sel_string.split()[1:])
-        atomlist = self.master.atoms
-        for n, a in enumerate(atomlist):
-            if not rev:
-                if a.__getattribute__(matchings[keyw]) in vals:
-                    chosen.append(n)
-            else:
-                if a.__getattribute__(matchings[keyw]) not in vals:
-                    chosen.append(n)
+                for n, a in enumerate(atomlist):
+                    if not rev:
+                        if a.__getattribute__(matchings[keyw]) in vals:
+                            chosen.append(n)
+                    else:
+                        if a.__getattribute__(matchings[keyw]) not in vals:
+                            chosen.append(n)
         return set(chosen)

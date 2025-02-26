@@ -1,3 +1,49 @@
+"""
+Module: Gmx.py
+Author: Miłosz Wieczór <milosz.wieczor@irbbarcelona.org>
+License: GPL 3.0
+
+Description:
+    This module includes wrappers and convenience functions that make use
+    of Gromacs utilities, facilitating energy calculations, system preparation,
+    force field development, and debugging
+
+Contents:
+    Functions:
+        gmx_command
+        gen_mdp
+        find_gmx_dir
+        read_xvg
+        get_legend
+        get_residuetypes
+        ndx
+        frames_count
+        calc_gmx_energy
+        calc_gmx_dhdl
+        compare_topologies_by_energy
+        prepare_system
+        extract_warnings
+        get_groups
+        get_solute_group
+        obj_or_str
+        process_trajectories
+        analytical_forces
+        numerical_forces
+
+Usage:
+    This module is intended to be imported as part of the library. It is not
+    meant to be run as a standalone script. Example:
+
+        import gromologist as gml
+        gml.prepare_system("complex.pdb")
+
+Notes:
+    The "gmx_command" function acts as a generic wrapper for GROMACS tools,
+    and can be used to build custom Python workflows if needed
+"""
+
+
+from copy import deepcopy
 from subprocess import run, PIPE
 import os
 import numpy as np
@@ -109,12 +155,12 @@ def find_gmx_dir(suppress: bool = False, mpi: bool = False) -> (str, str):
         return False, False
 
 
-def read_xvg(fname: str, cols: Optional[list] = None) -> list:
+def read_xvg(fname: str, cols: Optional[list] = None) -> np.array:
     """
     Reads an .xvg file into a 2D list
     :param fname: str, .xvg file to read
     :param cols: list of int, columns to select
-    :return: list of lists, numeric data from the .xvg file
+    :return: np.array, numeric data from the .xvg file
     """
     content = [[float(x) for x in line.split()[1:]] for line in open(fname) if not line.startswith(('#', '@'))]
     if cols is not None:
@@ -210,6 +256,7 @@ def frames_count(trajfile: str, gmx: Optional[str] = 'gmx', quiet: bool = True) 
 def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = False, traj: Optional[str] = None,
                     terms: Optional[Union[str, list]] = None, cleanup: bool = True, group_a: Optional[str] = None,
                     group_b: Optional[str] = None, sum_output: bool = False, savetxt: Optional[str] = None,
+                    nb_cutoff: Optional[float] = 2.0, mdp: Optional[str] = None, set_omp: Optional[bool] = None,
                     **kwargs) -> dict:
     """
     Calculates selected energy terms given a structure/topology pair or structure/topology/trajectory set.
@@ -223,6 +270,10 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
     :param group_a: str, selection defining group A to calculate interactions between group A and B (or only energetics of group A if group_b is left unspecified)
     :param group_b: str, selection defining group B to calculate interactions between group A and B
     :param sum_output: bool, whether to add a term "sum" that will contain all terms added up
+    :param savetxt:
+    :param nb_cutoff: float, cutoff for non-bonded interactions (Coulomb and VdW), default 1.2 nm
+    :param mdp: str, use it to specify a custom .mdp file
+    :param set_omp: bool, will set OMP threads to 1
     :param kwargs: dict, options that will be added to the .mdp file
     :return: dict of lists, one list of per-frame values per each selected term
     """
@@ -241,17 +292,28 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
         tempfiles = True
     if group_a and group_b:
         group_names = ndx(gml.Pdb(struct), [group_a, group_b, 'all'])
-        gen_mdp('rerun.mdp', energygrps=f"{group_names[0]} {group_names[1]} ", **kwargs)
-        gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5, n='gml.ndx')
+        if mdp is None:
+            gen_mdp('rerun.mdp', energygrps=f"{group_names[0]} {group_names[1]} ", rlist=nb_cutoff,
+                    rcoulomb=nb_cutoff, rvdw=nb_cutoff, **kwargs)
+        else:
+            copy2(mdp, 'rerun.mdp')
+        gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5,
+                    n='gml.ndx')
         if terms is None:
             terms = ['coul-sr:g1-g2', 'lj-sr:g1-g2']
             sum_output = True
     else:
-        gen_mdp('rerun.mdp', **kwargs)
+        if mdp is None:
+            gen_mdp('rerun.mdp', rlist=nb_cutoff, rcoulomb=nb_cutoff, rvdw=nb_cutoff, **kwargs)
+        else:
+            copy2(mdp, 'rerun.mdp')
         gmx_command(gmx, 'grompp', quiet=quiet, f='rerun.mdp', p=topfile, c=struct, o='rerun', maxwarn=5)
         if terms is None:
             terms = 'potential'
-    gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj)
+    if set_omp is None:
+        gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj)
+    else:
+        gmx_command(gmx, 'mdrun', quiet=quiet, deffnm='rerun', rerun=struct if traj is None else traj, ntomp=1)
     legend = get_legend(gmx, 'rerun.edr')
     if terms == 'all':
         terms = list(legend.keys())
@@ -264,7 +326,9 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
     gmx_command(gmx, 'energy', quiet=quiet, pass_values=passv, f='rerun')
     out = read_xvg('energy.xvg')
     if cleanup:
-        to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.trr', 'rerun.edr', 'rerun.log', 'energy.xvg']
+        to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.edr', 'rerun.log', 'energy.xvg']
+        if 'nstfout' not in kwargs:
+            to_remove.append('rerun.trr')
         if group_a and group_b:
             to_remove.append('gml.ndx')
         if tempfiles:
@@ -280,7 +344,7 @@ def calc_gmx_energy(struct: str, topfile: str, gmx: str = '', quiet: bool = Fals
         values['sum'] = [sum([values[k][n] for k in values.keys()]) for n in range(nframes)]
     if savetxt is not None:
         nframes = len(values[list(values.keys())[0]])
-        header = ' '.join(values.keys())
+        header = "# " + ' '.join(values.keys())
         entries = [' '.join([f"{values[k][n]:12.5f}" for k in values.keys()]) for n in range(nframes)]
         with open(savetxt, 'w') as out:
             out.write(header + '\n')
@@ -329,7 +393,7 @@ def calc_gmx_dhdl(struct: str, topfile: str, traj: str, gmx: str = '', quiet: bo
 
 def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx: Optional[str] = 'gmx',
                                  traj: Optional[str] = None, quiet: Optional[bool] = True, group_a: Optional[str] = None,
-                                 group_b: Optional[str] = None) -> bool:
+                                 group_b: Optional[str] = None, criterion: Optional[float] = 1e-5) -> bool:
     """
     Given two topologies and a structure file, checks if both yield
     the same potential energy
@@ -340,21 +404,22 @@ def compare_topologies_by_energy(struct: str, topfile1: str, topfile2: str, gmx:
     :param quiet: bool, optional to silence gmx output
     :param group_a: str, 1st selection for which pairwise interactions will be calculated, or selection for the subset that should be compared
     :param group_b: str, 2nd selection for which pairwise interactions will be calculated
+    :param criterion: float, what absolute difference should trigger an inconsistency message
     :return: bool, whether the energies are identical
     """
     en1 = calc_gmx_energy(struct, topfile1, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
     en2 = calc_gmx_energy(struct, topfile2, gmx, terms='all', quiet=quiet, traj=traj, group_a=group_a, group_b=group_b)
     print(f"Topology 1 has energy {en1['potential']}, topology 2 has energy {en2['potential']}")
-    if all([en1['potential'][i] == en2['potential'][i] for i in range(len(en1['potential']))]):
+    if all([np.abs(en1['potential'][i] - en2['potential'][i]) < criterion for i in range(len(en1['potential']))]):
         return True
     else:
         print("Found inconsistencies in terms:")
         for term in list(set(en1.keys()).intersection(en2.keys())):
-            if not all([en1[term][i] == en2[term][i] for i in range(len(en1['potential']))]):
+            if not all([np.abs(en1[term][i] - en2[term][i]) < criterion for i in range(len(en1['potential']))]):
                 print(f"  {term}: val1 = {en1[term]}, val2 = {en2[term]}")
         print("The respective differences are::")
         for term in list(set(en1.keys()).intersection(en2.keys())):
-            if not all([en1[term][i] == en2[term][i] for i in range(len(en1['potential']))]):
+            if not all([np.abs(en1[term][i] - en2[term][i]) < criterion for i in range(len(en1['potential']))]):
                 print(f"  {term}: diff = {[y - x for x, y in zip(en1[term], en2[term])]}")
 
 
@@ -472,7 +537,7 @@ def prepare_system(struct: str, ff: Optional[str] = None, water: Optional[str] =
         answer = gmx_command(gmx[1], 'genion', pass_values=['a'], s='ions', pname=cation, nname=anion, conc=ion_conc,
                              quiet=quiet, neutral=True, p="topol", o='test', answer=True)
         sol = int([line.split()[1] for line in answer.split('\n') if 'SOL' in line][0])
-        if nanion is not None or ncation is None:
+        if nanion is not None or ncation is not None:
             newkwargs = {}
             if nanion is not None:
                 newkwargs.update({'nname': anion, 'nn': nanion})
@@ -638,3 +703,95 @@ def process_trajectories(mask: str, tpr: str, group_cluster: str = 'Protein', gr
     gmx_command(gmx[1], 'trjcat', f=' '.join([f'whole_{traj}' for traj in mask]), o='gml_tmp0.xtc')
     gmx_command(gmx[1], 'trjconv', f='gml_tmp0.xtc', o='processed_traj.xtc', skip=stride)
     os.remove('gml_tmp0.xtc')
+
+
+def analytical_forces(struct: str, topfile: str, gmx: str = '', quiet: bool = True, cleanup: bool = True,
+                      traj: Optional[str] = None, selection: Optional[str] = None, savetxt: Optional[str] = None,
+                      nb_cutoff: Optional[float] = 1.2, mdp: Optional[str] = None, set_omp: Optional[bool] = None,
+                      **kwargs):
+    """
+    TODO has a different format than numerical
+    TODO selection not working
+    :param struct:
+    :param topfile:
+    :param gmx:
+    :param quiet:
+    :param cleanup:
+    :param selection:
+    :param savetxt:
+    :param nb_cutoff:
+    :param kwargs:
+    :return:
+    """
+    pdb = gml.obj_or_str(struct)
+    traj = pdb.fname if traj is None else traj
+    _ = gml.calc_gmx_energy(pdb.fname, topfile, gmx=gmx, quiet=quiet, traj=traj, terms='all', cleanup=False,
+                            nb_cutoff=nb_cutoff, constraints='None', nstfout=1, mdp=mdp, set_omp=set_omp, **kwargs)
+    if not gmx:
+        gmx = gml.find_gmx_dir()[1]
+    gmx_command(gmx, 'traj', f='rerun.trr', s='rerun.tpr', of='forces.xvg', pass_values='0 0', quiet=quiet)
+    forces = read_xvg('forces.xvg')
+    if cleanup:
+        to_remove = ['rerun.mdp', 'mdout.mdp', 'rerun.tpr', 'rerun.edr', 'rerun.log', 'energy.xvg', 'rerun.trr', 'forces.xvg']
+        for filename in to_remove:
+            try:
+                os.remove(filename)
+            except:
+                pass
+    if savetxt is not None:
+        np.savetxt(savetxt, forces, fmt='%12.5f')
+    return forces
+
+def numerical_forces(struct: str, topfile: str, gmx: str = '', quiet: bool = True, cleanup: bool = True,
+                     terms: Optional[Union[str, list]] = None, selection: Optional[str] = None, sum_output: bool = False,
+                     savetxt: Optional[str] = None, dx=0.001, nb_cutoff: Optional[float] = 1.2, **kwargs):
+    """
+    Calculates forces by creating a trajectory with small displacements and recalculating
+    energies over this trajectory, then using diff quotient to calculate forces
+    # TODO enable batches for trajectories?
+    :param struct:
+    :param topfile:
+    :param gmx:
+    :param quiet:
+    :param cleanup:
+    :param terms:
+    :param selection:
+    :param sum_output:
+    :param savetxt:
+    :param dx:
+    :param nb_cutoff: cutoff for non-bonded interactions (Coulomb and VdW), default 1.2 nm
+    :param kwargs:
+    :return:
+    """
+    pdb = gml.obj_or_str(struct)
+    traj = gml.Traj([pdb])
+    sel = pdb.get_atom_indices(selection) if selection is not None else list(range(len(pdb.atoms)))
+    for dim in range(3*len(sel)):
+        for step in [dx, -dx]:
+            p = deepcopy(pdb)
+            coords = p.get_coords()
+            coords[sel[dim//3], dim%3] += 10*step  # orig in nm, here in A
+            p.set_coords(coords)
+            traj.add_frame(p)
+    traj.save_traj_as_pdb('tmp_traj.pdb')
+    en = gml.calc_gmx_energy(pdb.fname, topfile, gmx, quiet, 'tmp_traj.pdb', 'all', cleanup,
+                             sum_output=sum_output, nb_cutoff=nb_cutoff, constraints='None', **kwargs)
+    frckeys = ['bond', 'angle', 'proper-dih.', 'improper-dih.', 'per.-imp.-dih.', 'lj-14', 'coulomb-14', 'lj-(sr)', 'coulomb-(sr)', 'potential']
+    frc = {}
+    for k in frckeys:
+        if k in en.keys():
+            frc[k] = -(en[k][1::2] - en[k][2::2])/(2*dx)  # unit will be kJ/molnm
+    if terms is None:
+        terms = ['potential']
+    if isinstance(terms, str):
+        if terms == 'all':
+            terms = [k for k in frckeys if k in en.keys()]
+        else:
+            terms = [terms]
+    forces = np.vstack([frc[i] for i in terms]).T
+    if savetxt is not None:
+        header = "# " + ' '.join(frc.keys())
+        np.savetxt(savetxt, forces, fmt='%12.5f', header=header)
+    if cleanup:
+        os.remove('tmp_traj.pdb')
+    return forces

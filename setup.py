@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 
 setup(name='gromologist',
-      version='0.320',
+      version='0.321',
       description='Library to handle various GROMACS-related stuff',
       author='Milosz Wieczor',
       author_email='milafternoon@gmail.com',

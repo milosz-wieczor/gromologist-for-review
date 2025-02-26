@@ -1,3 +1,37 @@
+"""
+Module: ThDiff.py
+Author: Miłosz Wieczór <milosz.wieczor@irbbarcelona.org>
+License: GPL 3.0
+
+Description:
+    This module implements a force field sensitivity calculation that can be used
+    to identify FF terms responsible for certain interactions, patterns, or structures
+
+Contents:
+    Classes:
+        Mod:
+            Base class that implements a generic FF modification/parameter sensitivity
+        ModAtom:
+            Subclass representing a modification of the property of a single
+            atom, or group of atoms (e.g. charges, sigma, epsilon)
+        ModNbfix:
+            Subclass representing a modification of the LJ parameters between a pair
+            of atoms, or atom types
+        ModParam:
+            Subclass representing a modification of the bonded parameter, such as a bond,
+            angle, or a dihedral angle
+        ThermoDiff:
+            The main module that performs and analyzes reruns, and summarizes the outcome
+
+Usage:
+    This module should be used as described in the tutorial for Gromologist (...)
+
+Notes:
+    This tool has been transferred from a standalone library and is still being developed.
+    Please contact the author if you encounter technical problems.
+"""
+
+
 import os
 
 import numpy as np

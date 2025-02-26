@@ -1,4 +1,43 @@
-from typing import Optional
+"""
+Module: Subsection.py
+Author: Miłosz Wieczór <milosz.wieczor@irbbarcelona.org>
+License: GPL 3.0
+
+Description:
+    This module represents a single [ subsection ] in Gromacs topology,
+    as delineated by the square bracket notation
+
+Contents:
+    Classes:
+        Subsection:
+            Base class, represents any subsection and implements basic
+            bookkeeping + getters/setters
+        SubsectionBonded:
+            Subclass, represents subsections such as [ bonds ] or [ dihedrals ]
+            that describe bonded terms in a molecule
+        SubsectionParam:
+            Subclass, represents parameter-containing subsections such as
+            [ dihedraltypes ] or [ angletypes ]
+        SubsectionAtom:
+            A special subclass reserved just for the [ atoms ] subsection
+            defining atoms in a given molecule
+
+Usage:
+    This module is intended to be imported as part of the library. It is not
+    meant to be run as a standalone script. Example:
+
+        import gromologist as gml
+        t = gml.Top("complex.top")
+        print([(sub.header, sub.prmtypes) for sub in t.parameters.subsections])
+
+Notes:
+    Some subsections are labeled as conditional if they are entirely embedded within
+    an #if/#endif clause; problems might arise if such clauses don't encompass entire
+    subsections (e.g. in case of entry sorting, or rewriting).
+"""
+
+
+from typing import Optional, Union
 import gromologist as gml
 import numpy as np
 
@@ -84,7 +123,7 @@ class Subsection:
         except IndexError:
             raise StopIteration
 
-    def add_entry(self, new_entry: "gml.Entry", position: Optional[int] = None):
+    def add_entry(self, new_entry: "gml.Entry", position: Optional[int] = None) -> None:
         """
         Adds a single entry to the subsection, either at the end
         or in a specified position
@@ -99,7 +138,7 @@ class Subsection:
         else:
             self.entries.append(new_entry)
     
-    def add_entries(self, new_entries_list: list, position: Optional[int] = None):
+    def add_entries(self, new_entries_list: list, position: Optional[int] = None) -> None:
         """
         Adds multiple entries to the subsection, either at the end
         or in a specified position
@@ -117,7 +156,7 @@ class Subsection:
         else:
             self.entries.extend(new_entries_list)
     
-    def set_entry(self, line_number: int, new_line: str):
+    def set_entry(self, line_number: int, new_line: str) -> None:
         """
         Sets content of a specified entry
         :param line_number: int, which entry to modify
@@ -144,10 +183,10 @@ class SubsectionBonded(Subsection):
     e.g., bonds or dihedrals; should be included in SectionMol
     """
     n_atoms = {'bonds': 2, 'pairs': 2, 'angles': 3, 'dihedrals': 4, 'pairs_nb': 2,
-               'cmap': 5, 'settles': 1, 'exclusions': 2, 'position_restraints': 1,
+               'cmap': 5, 'settles': 1, 'exclusions': 2, 'position_restraints': 1, 'dihedral_restraints': 4,
                'virtual_sites2': 3, 'virtual_sites3': 4, 'constraints': 2, 'virtual_sitesn': 1}
     
-    def __init__(self, content: list, section: "gml.Section"):
+    def __init__(self, content: list, section: "gml.SectionMol"):
         super().__init__(content, section)
         self.bkp_entries = None
         self.atoms_per_entry = SubsectionBonded.n_atoms[self.header]
@@ -177,7 +216,7 @@ class SubsectionBonded(Subsection):
         """
         self.entries.sort(key=self._sorting_fn)
 
-    def change_interaction_type(self, change_from, change_to):
+    def change_interaction_type(self, change_from, change_to) -> None:
         """
         Changes interaction type of the whole section
         :param change_from: str/int, original interaction type
@@ -205,7 +244,7 @@ class SubsectionBonded(Subsection):
         val = sum([i * 10**(4*(self.atoms_per_entry - n)) for n, i in enumerate(entry.atom_numbers)])
         return val
 
-    def explicit_defines(self):
+    def explicit_defines(self) -> None:
         """
         Substitutes predefined fields with their corresponding values
         as specified by the #DEFINE preprocessor commands
@@ -292,7 +331,7 @@ class SubsectionBonded(Subsection):
                                 pass
         return entries
 
-    def find_missing_ff_params(self, fix_by_analogy: bool = False, fix_B_from_A: bool = False,
+    def find_missing_ff_params(self, fix_by_analogy: Optional[dict] = None, fix_B_from_A: bool = False,
                                fix_A_from_B: bool = False, fix_dummy: bool = False, once: bool = False):
         """
         Identifies FF parameters that cannot by matched to the existing set of
@@ -520,9 +559,13 @@ class SubsectionBonded(Subsection):
         for entry in self.entries_bonded:
             if entry.interaction_type not in types:
                 types.append(entry.interaction_type)
-        return ['-1'] if not types else types
+        return ['1'] if not types else types
 
-    def add_type_labels(self):
+    def add_type_labels(self) -> None:
+        """
+        Adds type annotations in the comment of entry
+        :return: None
+        """
         for entry in self.entries_bonded:
             self._add_type_label(entry)
 
@@ -544,7 +587,7 @@ class SubsectionParam(Subsection):
     n_atoms = {'pairtypes': 2, 'bondtypes': 2, 'constrainttypes': 2, 'angletypes': 3, 'dihedraltypes': 4,
                'nonbond_params': 2, 'defaults': 0, 'atomtypes': 1, 'implicit_genborn_params': 1, 'cmaptypes': 5}
     
-    def __init__(self, content, section):
+    def __init__(self, content: list, section: "gml.Section"):
         super().__init__(content, section)
         self.atoms_per_entry = SubsectionParam.n_atoms[self.header]
         self.prmtypes = self._check_parm_type()
@@ -553,13 +596,13 @@ class SubsectionParam(Subsection):
         if self.header == 'cmaptypes':
             self._process_cmap()
         
-    def __repr__(self):
+    def __repr__(self) -> str:
         if self.prmtypes[0] != '-1' or self.header not in ('atomtypes', 'implicit_genborn_params'):
             return "Subsection {} with interaction type {}".format(self.header, ' '.join(self.prmtypes))
         else:
             return "Subsection {}".format(self.header)
     
-    def __add__(self, other):
+    def __add__(self, other: "gml.SubsectionParam") -> "gml.SubsectionParam":
         """
         Added for the purpose of merging subsections with
         identical headers
@@ -573,7 +616,12 @@ class SubsectionParam(Subsection):
                                                                                                 other.header))
         return SubsectionParam(["[ {} ]\n".format(self.header)] + self.entries + other.entries, self.section)
 
-    def get_entries_by_types(self, *types):
+    def get_entries_by_types(self, *types) -> list:
+        """
+        Returns all parameters defined by the specified sequence of types
+        :param types: list of str, atom types
+        :return: list of gml.EntryParam
+        """
         found = []
         for entry in self.entries_param:
             if len(types) != len(entry.types):
@@ -585,7 +633,17 @@ class SubsectionParam(Subsection):
             raise RuntimeError(f"No entry found with types: {types}")
         return found
 
-    def plot_term_energy(self, atomtypes, interaction_type=None, label=None, sep=False, color='C0'):
+    def plot_term_energy(self, atomtypes: Union[str, list], interaction_type=None, label: str = None,
+                         sep: bool = False, color: str = 'C0') -> None:
+        """
+        Plots the dihedral contribution (requires matplotlib)
+        :param atomtypes: str (4 space-separated atom types) or list of 4 atom types
+        :param interaction_type:
+        :param label: str, whether to label the term in the legend
+        :param sep: bool, whether to plot individual periodicities separately
+        :param color: str, a matplotlib-compatible color directive
+        :return: None
+        """
         import matplotlib.pyplot as plt
         if isinstance(atomtypes, str):
             atomtypes = atomtypes.split()
@@ -622,10 +680,10 @@ class SubsectionParam(Subsection):
                 raise NotImplementedError
 
     @property
-    def entries_param(self):
+    def entries_param(self) -> list["gml.EntryParam"]:
         return [e for e in self.entries if isinstance(e, gml.EntryParam)]
 
-    def sort(self):
+    def sort(self) -> None:
         """
         In case we want to sort entries after some are added at the end of the section
         :return: None
@@ -641,7 +699,7 @@ class SubsectionParam(Subsection):
                 self.ordering[str(entry)] = n - 10**6
         self.entries.sort(key=self._sorting_fn)
 
-    def reorder_improper(self, types: tuple, new_order: str):
+    def reorder_improper(self, types: tuple, new_order: str) -> None:
         try:
             entry = [ent for ent in self.get_entries_by_types(*types) if ent.interaction_type in '24'][0]
         except RuntimeError:
@@ -650,7 +708,12 @@ class SubsectionParam(Subsection):
             entry.types = (entry.types[int(new_order[0])], entry.types[int(new_order[1])],
                            entry.types[int(new_order[2])], entry.types[int(new_order[3])])
 
-    def find_used_ff_params(self):
+    def find_used_ff_params(self) -> list[str]:
+        """
+        Finds all FF params that are used in this subsection, listing them by
+        a generic string identifier
+        :return: list of str, identifiers of used parameters
+        """
         used_parm_entries = []
         used_atomtypes_a = {a.type for mol in self.section.top.molecules for a in mol.atoms}
         used_atomtypes_b = {a.type_b for mol in self.section.top.molecules for a in mol.atoms if a.type_b is not None}
@@ -660,7 +723,7 @@ class SubsectionParam(Subsection):
                 used_parm_entries.append(entry.identifier)
         return used_parm_entries
 
-    def _combine_entries(self, other_subsection: "gml.SubsectionParam", overwrite: bool = False):
+    def _combine_entries(self, other_subsection: "gml.SubsectionParam", overwrite: bool = False) -> None:
         """
         When merging parameter sets, makes sure there are no duplications, and in these cases resolves conflicts
         :param other_subsection: the gml.Subsection instance from which entries will be added to merge files
@@ -726,14 +789,14 @@ class SubsectionParam(Subsection):
                       for entry in self.entries_param})
         return '-1' if not types else types
 
-    def get_opt_dih(self, types=False):
+    def get_opt_dih(self, types: bool = False) -> list:
         dopts = [entry for entry in self.entries_param if 'DIHOPT' in entry.comment]
         if not types:
             return [e.params[x] for e in dopts for x in [0, 1]]
         else:
             return [(*e.types, e.params[2]) for e in dopts]
 
-    def get_opt_dih_indices(self):
+    def get_opt_dih_indices(self) -> list[int]:
         dopts = [entry for entry in self.entries_param if 'DIHOPT' in entry.comment]
         self.section.top.add_ff_params()
         indices = set()
@@ -743,13 +806,13 @@ class SubsectionParam(Subsection):
                     indices.add(j.atom_numbers)
         return list(indices)
 
-    def set_opt_dih(self, values):
+    def set_opt_dih(self, values) -> None:
         dopts = [entry for entry in self.entries_param if 'DIHOPT' in entry.comment]
         for e, ang, k in zip(dopts, values[::2], values[1::2]):
             e.params[0] = ang
             e.params[1] = k
 
-    def _remove_symm(self, prefix):
+    def _remove_symm(self, prefix) -> None:
         for n in range(len(self.entries)):
             if n >= len(self.entries):
                 break
@@ -770,7 +833,7 @@ class SubsectionParam(Subsection):
                                 and self.entries[n].params == self.entries[other].params:
                             _ = self.entries.pop(other)
     
-    def _process_cmap(self):
+    def _process_cmap(self) -> None:
         """
         Reads a multiline entry from the [ cmaptypes ] section
         and converts it into an array that can be later properly printed
@@ -804,10 +867,14 @@ class SubsectionAtom(Subsection):
         self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = None, None, None, None
 
     @property
-    def entries_atom(self):
+    def entries_atom(self) -> list["gml.EntryAtom"]:
+        """
+        Returns all atoms as gml.EntryAtom objects
+        :return: list
+        """
         return [e for e in self.entries if isinstance(e, gml.EntryAtom)]
 
-    def get_dicts(self, force_update=False):
+    def get_dicts(self, force_update: bool = False) -> None:
         """
         dicts are not always needed and are costly to calculate,
         so only fill in the values when explicitly asked to
@@ -817,7 +884,11 @@ class SubsectionAtom(Subsection):
         if not self.name_to_num or force_update:
             self.name_to_num, self.num_to_name, self.num_to_type, self.num_to_type_b = self._mol_type_nums()
 
-    def check_defined_types(self):
+    def check_defined_types(self) -> set:
+        """
+        Checks if any atom has a type not defined in the parameters section
+        :return: set, all missing atom types
+        """
         missing = set()
         typelist = self.section.top.defined_atomtypes
         for atom in self.entries_atom:
